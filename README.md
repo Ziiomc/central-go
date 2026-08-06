@@ -15,25 +15,13 @@ Central GO es una plataforma web de gestión y despacho para centrales de radiot
 
 > Esta versión utiliza datos simulados y está pensada para demostración comercial. No almacena información real ni reemplaza todavía un backend de producción.
 
-## Ejecutar localmente
+## Despliegue en Vercel
 
-Requisitos: Node.js 20 o superior.
+El repositorio está preparado para importarse directamente en Vercel. La compilación ejecuta `npm run build`, reconstruye el código fuente incluido en el repositorio y genera la carpeta `dist`.
 
-```bash
-npm install
-npm run dev
-```
+Configuración esperada:
 
-La aplicación estará disponible normalmente en `http://localhost:3000`.
-
-## Compilar
-
-```bash
-npm run build
-```
-
-El resultado se genera en la carpeta `dist`.
-
-## Despliegue
-
-El proyecto está preparado para desplegarse en Vercel. No requiere claves de API para ejecutar esta demostración.
+- Framework: Vite
+- Build Command: `npm run build`
+- Output Directory: `dist`
+- Node.js: 20 o superior
