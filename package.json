@@ -1,13 +1,13 @@
 {
   "name": "central-go",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "module",
   "scripts": {
-    "dev": "node bootstrap.mjs && vite --port=3000 --host=0.0.0.0",
-    "build": "node bootstrap.mjs && vite build",
+    "dev": "node bootstrap.mjs && node network-bootstrap.mjs && vite --port=3000 --host=0.0.0.0",
+    "build": "node bootstrap.mjs && node network-bootstrap.mjs && vite build",
     "preview": "vite preview --host=0.0.0.0",
-    "lint": "node bootstrap.mjs && tsc --noEmit"
+    "lint": "node bootstrap.mjs && node network-bootstrap.mjs && tsc --noEmit"
   },
   "dependencies": {
     "leaflet": "^1.9.4",
