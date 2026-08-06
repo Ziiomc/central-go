@@ -126,12 +126,14 @@ const replacements = {
 for (const [file, fileReplacements] of Object.entries(replacements)) {
   let content = readFileSync(file, 'utf8');
   for (const [oldText, newText] of fileReplacements) {
-    if (content.includes(newText)) continue;
-    if (!content.includes(oldText)) {
+    if (content.includes(oldText)) {
+      content = content.split(oldText).join(newText);
+      continue;
+    }
+    if (!content.includes(newText)) {
       console.error(`No se encontró el bloque esperado para mejorar ${file}.`);
       process.exit(1);
     }
-    content = content.split(oldText).join(newText);
   }
   writeFileSync(file, content);
 }
