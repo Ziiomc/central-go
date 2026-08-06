@@ -137,12 +137,91 @@ for (const [oldText, newText] of replacements) {
   }
   header = header.replace(oldText, newText);
 }
+
+const hiddenOwnerReplacements = [
+  [
+    "import React, { useState } from 'react';",
+    "import React, { useEffect, useRef, useState } from 'react';"
+  ],
+  [
+    "  const [ownerUnlocked, setOwnerUnlocked] = useState(false);\n",
+    "  const [ownerUnlocked, setOwnerUnlocked] = useState(false);\n  const ownerTapCount = useRef(0);\n  const ownerTapTimer = useRef<number | null>(null);\n"
+  ],
+  [
+    "  const rolesList: { role: UserRole; label: string; icon: any; color: string }[] = [\n    { role: 'operator', label: 'Central Operadora', icon: Headphones, color: 'text-blue-400' },\n    { role: 'driver', label: 'Conductor (PWA)', icon: Car, color: 'text-emerald-400' },\n    { role: 'company_admin', label: 'Admin de Central', icon: Building2, color: 'text-amber-400' },\n    { role: 'sales_partner', label: 'Partner Comercial', icon: Handshake, color: 'text-cyan-400' },\n    { role: 'regional_partner', label: 'Partner Regional', icon: MapPinned, color: 'text-purple-400' },\n    { role: 'super_admin', label: ownerUnlocked || currentRole === 'super_admin' ? 'Superadmin Global' : 'Acceso propietario', icon: ownerUnlocked || currentRole === 'super_admin' ? ShieldCheck : LockKeyhole, color: 'text-fuchsia-400' },\n  ];",
+    "  const publicRoles: { role: UserRole; label: string; icon: any; color: string }[] = [\n    { role: 'operator', label: 'Central Operadora', icon: Headphones, color: 'text-blue-400' },\n    { role: 'driver', label: 'Conductor (PWA)', icon: Car, color: 'text-emerald-400' },\n    { role: 'company_admin', label: 'Admin de Central', icon: Building2, color: 'text-amber-400' },\n    { role: 'sales_partner', label: 'Partner Comercial', icon: Handshake, color: 'text-cyan-400' },\n    { role: 'regional_partner', label: 'Partner Regional', icon: MapPinned, color: 'text-purple-400' },\n  ];\n  const rolesList = ownerUnlocked || currentRole === 'super_admin'\n    ? [...publicRoles, { role: 'super_admin' as UserRole, label: 'Superadmin Global', icon: ShieldCheck, color: 'text-fuchsia-400' }]\n    : publicRoles;"
+  ],
+  [
+    "  const enterRole = (role: UserRole) => {",
+    `  const openOwnerAccess = () => {
+    setRoleMenuOpen(false);
+    setOwnerPin('');
+    setOwnerAccessError('');
+    setOwnerAccessOpen(true);
+  };
+
+  useEffect(() => {
+    const handleOwnerShortcut = (event: KeyboardEvent) => {
+      if (event.ctrlKey && event.altKey && event.key.toLowerCase() === 's') {
+        event.preventDefault();
+        openOwnerAccess();
+      }
+    };
+    window.addEventListener('keydown', handleOwnerShortcut);
+    return () => window.removeEventListener('keydown', handleOwnerShortcut);
+  }, []);
+
+  const handleOwnerLogoTap = () => {
+    ownerTapCount.current += 1;
+    if (ownerTapTimer.current) window.clearTimeout(ownerTapTimer.current);
+    if (ownerTapCount.current >= 5) {
+      ownerTapCount.current = 0;
+      openOwnerAccess();
+      return;
+    }
+    ownerTapTimer.current = window.setTimeout(() => {
+      ownerTapCount.current = 0;
+    }, 2500);
+  };
+
+  const enterRole = (role: UserRole) => {`
+  ],
+  [
+    "      setRoleMenuOpen(false);\n      setOwnerPin('');\n      setOwnerAccessError('');\n      setOwnerAccessOpen(true);\n      return;",
+    "      openOwnerAccess();\n      return;"
+  ],
+  [
+    "            <div className=\"relative\">\n              <img src={centralGoLogo} alt=\"Central GO\" className=\"w-10 h-10 md:w-11 md:h-11 rounded-xl border-2 border-amber-400/80 shadow-lg shadow-amber-500/30 object-cover bg-zinc-950 p-0.5\" />",
+    "            <button type=\"button\" onClick={handleOwnerLogoTap} className=\"relative\" aria-label=\"Central GO\">\n              <img src={centralGoLogo} alt=\"Central GO\" className=\"w-10 h-10 md:w-11 md:h-11 rounded-xl border-2 border-amber-400/80 shadow-lg shadow-amber-500/30 object-cover bg-zinc-950 p-0.5\" />"
+  ],
+  [
+    "              <span className=\"absolute -top-1 -right-1 flex h-3 w-3\"><span className=\"animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75\" /><span className=\"relative inline-flex rounded-full h-3 w-3 bg-amber-500\" /></span>\n            </div>",
+    "              <span className=\"absolute -top-1 -right-1 flex h-3 w-3\"><span className=\"animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75\" /><span className=\"relative inline-flex rounded-full h-3 w-3 bg-amber-500\" /></span>\n            </button>"
+  ],
+  [
+    "{rolesList.find((r) => r.role === currentRole)?.label}",
+    "{currentRole === 'super_admin' ? 'Superadmin Global' : rolesList.find((r) => r.role === currentRole)?.label}"
+  ],
+  [
+    "{role === 'super_admin' && !ownerUnlocked && currentRole !== 'super_admin' && <span className=\"rounded-md border border-fuchsia-500/20 bg-fuchsia-500/10 px-1.5 py-0.5 text-[9px] font-black uppercase text-fuchsia-300\">Bloqueado</span>}",
+    ""
+  ]
+];
+
+for (const [oldText, newText] of hiddenOwnerReplacements) {
+  if (!header.includes(oldText)) {
+    console.error('No se encontró un bloque esperado para ocultar el acceso propietario.');
+    process.exit(1);
+  }
+  header = header.replace(oldText, newText);
+}
+
 writeFileSync(headerPath, header);
 
 const serviceWorkerPath = 'public/sw.js';
 if (existsSync(serviceWorkerPath)) {
-  const serviceWorker = readFileSync(serviceWorkerPath, 'utf8').replace('centralgo-network-v1', 'centralgo-network-v2-owner-lock');
+  const serviceWorker = readFileSync(serviceWorkerPath, 'utf8').replace('centralgo-network-v1', 'centralgo-network-v3-hidden-owner');
   writeFileSync(serviceWorkerPath, serviceWorker);
 }
 
-console.log('Interfaz Central GO Network aplicada con acceso propietario protegido.');
+console.log('Interfaz Central GO Network aplicada con acceso propietario oculto.');
