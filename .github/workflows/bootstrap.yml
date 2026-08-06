@@ -1,0 +1,39 @@
+name: Preparar Central GO
+
+on:
+  push:
+    paths:
+      - '.bootstrap/part-*'
+      - '.github/workflows/bootstrap.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  preparar-proyecto:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Reconstruir el código
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .bootstrap/part-* | base64 --decode > /tmp/central-go.tar.xz
+          tar -xJf /tmp/central-go.tar.xz -C .
+          rm -rf .bootstrap
+          rm -f .github/workflows/bootstrap.yml
+
+      - name: Publicar código en la rama principal
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Publicar versión mejorada de Central GO"
+          git push origin HEAD:main
