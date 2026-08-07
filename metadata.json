@@ -1,0 +1,6 @@
+{
+  "name": "Central Go",
+  "description": "Demostración PWA de despacho simple, seguimiento GPS y gestión de carreras para centrales de radiotaxi.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": []
+}

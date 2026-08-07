@@ -1,0 +1,27 @@
+@import "tailwindcss";
+
+/* Leaflet map marker smooth movement animation */
+.leaflet-marker-icon.custom-taxi-pin {
+  transition: transform 1.2s cubic-bezier(0.25, 1, 0.5, 1) !important;
+  will-change: transform;
+}
+
+/* Headlight beam pulse animation */
+@keyframes headlightPulse {
+  0%, 100% { opacity: 0.6; transform: scale(1); }
+  50% { opacity: 0.85; transform: scale(1.08); }
+}
+
+.animate-headlights {
+  animation: headlightPulse 2s ease-in-out infinite;
+}
+
+/* Taxi Roof Sign Glow */
+@keyframes taxiSignGlow {
+  0%, 100% { box-shadow: 0 0 4px #facc15; }
+  50% { box-shadow: 0 0 10px #facc15, 0 0 15px #eab308; }
+}
+
+.animate-taxi-sign {
+  animation: taxiSignGlow 1.5s ease-in-out infinite;
+}

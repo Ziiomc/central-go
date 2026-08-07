@@ -1,0 +1,21 @@
+{
+  "id": "/",
+  "short_name": "CentralGo",
+  "name": "Central Go - Despacho de Radiotaxis",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "scope": "/",
+  "background_color": "#09090b",
+  "theme_color": "#fbbf24",
+  "display": "standalone",
+  "orientation": "any",
+  "lang": "es-CL",
+  "description": "Central de despacho simple, seguimiento de móviles y gestión de carreras para radiotaxis."
+}
