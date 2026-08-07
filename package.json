@@ -4,11 +4,10 @@
   "version": "1.4.0",
   "type": "module",
   "scripts": {
-    "dev": "node operations-pro-bootstrap.mjs && vite --port=3000 --host=0.0.0.0",
-    "build": "node operations-pro-bootstrap.mjs && vite build",
+    "dev": "node bootstrap.mjs && node network-bootstrap.mjs && node pricing-bootstrap.mjs && node operator-layout-bootstrap.mjs && node operations-pro-bootstrap.mjs && vite --port=3000 --host=0.0.0.0",
+    "build": "node bootstrap.mjs && node network-bootstrap.mjs && node pricing-bootstrap.mjs && node operator-layout-bootstrap.mjs && node operations-pro-bootstrap.mjs && vite build",
     "preview": "vite preview --host=0.0.0.0",
-    "clean": "rm -rf dist server.js",
-    "lint": "node operations-pro-bootstrap.mjs && tsc --noEmit"
+    "lint": "node bootstrap.mjs && node network-bootstrap.mjs && node pricing-bootstrap.mjs && node operator-layout-bootstrap.mjs && node operations-pro-bootstrap.mjs && tsc --noEmit"
   },
   "dependencies": {
     "leaflet": "^1.9.4",
@@ -18,15 +17,15 @@
     "recharts": "^3.10.1"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "^4.1.14",
     "@types/leaflet": "^1.9.22",
     "@types/node": "^22.14.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^5.0.4",
     "tailwindcss": "^4.1.14",
     "typescript": "~5.8.2",
-    "vite": "^6.2.3",
-    "@tailwindcss/vite": "^4.1.14",
-    "@vitejs/plugin-react": "^5.0.4",
-    "@types/react": "^19.0.0",
-    "@types/react-dom": "^19.0.0"
+    "vite": "^6.2.3"
   },
   "description": "Central GO Operations Pro: despacho operativo de alta densidad para centrales de radiotaxi.",
   "engines": {
