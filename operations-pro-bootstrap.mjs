@@ -36,4 +36,11 @@ if (result.status !== 0) {
   process.exit(result.status ?? 1);
 }
 
+const operatorConsolePath = 'src/components/modules/OperatorConsole.tsx';
+if (existsSync(operatorConsolePath)) {
+  const operatorConsole = readFileSync(operatorConsolePath, 'utf8')
+    .replaceAll('MessageSquareRadio', 'Radio');
+  writeFileSync(operatorConsolePath, operatorConsole);
+}
+
 console.log('Central GO Operations Pro aplicada correctamente.');
