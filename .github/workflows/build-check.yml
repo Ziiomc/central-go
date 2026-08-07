@@ -26,7 +26,9 @@ jobs:
       - name: Diagnosticar selección del mapa
         if: always()
         run: |
-          echo '--- ARCHIVOS DEL MAPA ---'
-          find src -type f \( -iname '*map*' -o -iname '*fleet*' -o -iname '*vehicle*' \) -print 2>/dev/null || true
-          echo '--- REFERENCIAS A SELECCIÓN ---'
-          grep -RniE 'selectedVehicle|selectedMobile|selectedDriver|setSelected|onVehicle|vehicle.*select|mobile.*select' src 2>/dev/null | head -n 160 || true
+          echo '--- OPERATOR CONSOLE 90-250 ---'
+          nl -ba src/components/modules/OperatorConsole.tsx | sed -n '90,250p' || true
+          echo '--- OPERATOR CONSOLE 300-500 ---'
+          nl -ba src/components/modules/OperatorConsole.tsx | sed -n '300,500p' || true
+          echo '--- LIVE MAP 300-560 ---'
+          nl -ba src/components/map/LiveMap.tsx | sed -n '300,560p' || true
