@@ -1,14 +1,14 @@
 {
   "name": "central-go",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.4.0",
   "type": "module",
   "scripts": {
-    "dev": "vite --port=3000 --host=0.0.0.0",
-    "build": "vite build",
+    "dev": "node operations-pro-bootstrap.mjs && vite --port=3000 --host=0.0.0.0",
+    "build": "node operations-pro-bootstrap.mjs && vite build",
     "preview": "vite preview --host=0.0.0.0",
     "clean": "rm -rf dist server.js",
-    "lint": "tsc --noEmit"
+    "lint": "node operations-pro-bootstrap.mjs && tsc --noEmit"
   },
   "dependencies": {
     "leaflet": "^1.9.4",
@@ -28,7 +28,7 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0"
   },
-  "description": "Central Go: demostración web de despacho operativo para centrales de radiotaxi.",
+  "description": "Central GO Operations Pro: despacho operativo de alta densidad para centrales de radiotaxi.",
   "engines": {
     "node": ">=20"
   }
