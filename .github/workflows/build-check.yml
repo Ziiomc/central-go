@@ -23,12 +23,3 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Compilar Central GO
         run: npm run build
-      - name: Diagnosticar selección del mapa
-        if: always()
-        run: |
-          echo '--- FUNCIONES DE FOCO 245-300 ---'
-          nl -ba src/components/modules/OperatorConsole.tsx | sed -n '245,300p' || true
-          echo '--- TABLA DE MOVILES 495-680 ---'
-          nl -ba src/components/modules/OperatorConsole.tsx | sed -n '495,680p' || true
-          echo '--- EVENTOS DE MARCADORES ---'
-          grep -nE "marker\.on|onSelectDriver|focusDriver" src/components/map/LiveMap.tsx src/components/modules/OperatorConsole.tsx | head -n 160 || true
