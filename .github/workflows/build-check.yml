@@ -23,3 +23,10 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Compilar Central GO
         run: npm run build
+      - name: Diagnosticar selección del mapa
+        if: always()
+        run: |
+          echo '--- ARCHIVOS DEL MAPA ---'
+          find src -type f \( -iname '*map*' -o -iname '*fleet*' -o -iname '*vehicle*' \) -print 2>/dev/null || true
+          echo '--- REFERENCIAS A SELECCIÓN ---'
+          grep -RniE 'selectedVehicle|selectedMobile|selectedDriver|setSelected|onVehicle|vehicle.*select|mobile.*select' src 2>/dev/null | head -n 160 || true
