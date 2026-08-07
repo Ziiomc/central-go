@@ -26,9 +26,9 @@ jobs:
       - name: Diagnosticar selección del mapa
         if: always()
         run: |
-          echo '--- OPERATOR CONSOLE 90-250 ---'
-          nl -ba src/components/modules/OperatorConsole.tsx | sed -n '90,250p' || true
-          echo '--- OPERATOR CONSOLE 300-500 ---'
-          nl -ba src/components/modules/OperatorConsole.tsx | sed -n '300,500p' || true
-          echo '--- LIVE MAP 300-560 ---'
-          nl -ba src/components/map/LiveMap.tsx | sed -n '300,560p' || true
+          echo '--- LIVE MAP API ---'
+          grep -nE 'interface.*LiveMap|type.*LiveMap|onSelectDriver|focusDriverId|L\.map|mapInstanceRef\.current' src/components/map/LiveMap.tsx | head -n 120 || true
+          echo '--- LIVE MAP 1-210 ---'
+          nl -ba src/components/map/LiveMap.tsx | sed -n '1,210p' || true
+          echo '--- LIVE MAP 210-330 ---'
+          nl -ba src/components/map/LiveMap.tsx | sed -n '210,330p' || true
