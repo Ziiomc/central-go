@@ -13,7 +13,27 @@ permissions:
 jobs:
   quality:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 18
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: centralgo_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d centralgo_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGDATABASE: centralgo_test
+      PGUSER: postgres
+      PGPASSWORD: postgres
+
     steps:
       - name: Descargar código
         uses: actions/checkout@v4
@@ -30,8 +50,106 @@ jobs:
       - name: TypeScript
         run: npm run lint
 
-      - name: Reglas comerciales
+      - name: Reglas comerciales estáticas
         run: npm run check:commercial
+
+      - name: Preparar compatibilidad Supabase en PostgreSQL de prueba
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          create role anon nologin;
+          create role authenticated nologin;
+          create schema auth;
+          create table auth.users (
+            id uuid primary key,
+            email text,
+            raw_user_meta_data jsonb not null default '{}'::jsonb
+          );
+          create or replace function auth.uid()
+          returns uuid
+          language sql
+          stable
+          as $$
+            select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid;
+          $$;
+          grant usage on schema auth to anon, authenticated;
+          grant execute on function auth.uid() to anon, authenticated;
+          create publication supabase_realtime;
+          SQL
+
+      - name: Ejecutar migraciones comerciales desde cero
+        shell: bash
+        run: |
+          set -euo pipefail
+          for migration in supabase/migrations/*.sql; do
+            echo "Aplicando $migration"
+            psql -v ON_ERROR_STOP=1 -f "$migration"
+          done
+
+      - name: Probar aislamiento RLS y anti-escalación
+        shell: bash
+        run: |
+          set -euo pipefail
+          OPERATOR_ID='11111111-1111-4111-8111-111111111111'
+          COMPANY_A='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+          COMPANY_B='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+
+          psql -v ON_ERROR_STOP=1 <<SQL
+          insert into auth.users (id, email, raw_user_meta_data)
+          values ('$OPERATOR_ID', 'operator@centralgo.test', '{"name":"Operadora QA"}');
+
+          insert into public.companies (id, name, code, active)
+          values
+            ('$COMPANY_A', 'Central QA A', 'QAA', true),
+            ('$COMPANY_B', 'Central QA B', 'QAB', true);
+
+          insert into public.company_memberships (company_id, user_id, role, active)
+          values ('$COMPANY_A', '$OPERATOR_ID', 'operator', true);
+
+          insert into public.clients (company_id, name, phone)
+          values
+            ('$COMPANY_A', 'Cliente visible', '+56000000001'),
+            ('$COMPANY_B', 'Cliente aislado', '+56000000002');
+          SQL
+
+          VISIBLE_COMPANIES=$(psql -qAt -v ON_ERROR_STOP=1 <<SQL
+          set role authenticated;
+          set request.jwt.claim.sub = '$OPERATOR_ID';
+          select count(*) from public.companies;
+          SQL
+          )
+          test "$VISIBLE_COMPANIES" = "1" || { echo "RLS FAIL: empresas visibles=$VISIBLE_COMPANIES"; exit 1; }
+
+          VISIBLE_CLIENTS=$(psql -qAt -v ON_ERROR_STOP=1 <<SQL
+          set role authenticated;
+          set request.jwt.claim.sub = '$OPERATOR_ID';
+          select count(*) from public.clients;
+          SQL
+          )
+          test "$VISIBLE_CLIENTS" = "1" || { echo "RLS FAIL: clientes visibles=$VISIBLE_CLIENTS"; exit 1; }
+
+          psql -v ON_ERROR_STOP=1 <<SQL
+          set role authenticated;
+          set request.jwt.claim.sub = '$OPERATOR_ID';
+          update public.profiles set name = 'Operadora QA Actualizada' where id = '$OPERATOR_ID';
+          select public.centralgo_write_audit('$COMPANY_A', 'CI_TEST', 'Prueba de auditoría autenticada');
+          SQL
+
+          if psql -q -v ON_ERROR_STOP=1 <<SQL
+          set role authenticated;
+          set request.jwt.claim.sub = '$OPERATOR_ID';
+          update public.profiles set global_role = 'super_admin' where id = '$OPERATOR_ID';
+          SQL
+          then
+            echo 'SECURITY FAIL: un usuario pudo autoasignarse super_admin.'
+            exit 1
+          else
+            echo 'Anti-escalación de privilegios: OK'
+          fi
+
+          AUDIT_COUNT=$(psql -qAt -v ON_ERROR_STOP=1 -c "select count(*) from public.audit_logs where action = 'CI_TEST';")
+          test "$AUDIT_COUNT" = "1" || { echo "AUDIT FAIL: registros=$AUDIT_COUNT"; exit 1; }
 
       - name: Compilar producción
         run: npm run build
