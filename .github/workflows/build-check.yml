@@ -151,5 +151,66 @@ jobs:
           AUDIT_COUNT=$(psql -qAt -v ON_ERROR_STOP=1 -c "select count(*) from public.audit_logs where action = 'CI_TEST';")
           test "$AUDIT_COUNT" = "1" || { echo "AUDIT FAIL: registros=$AUDIT_COUNT"; exit 1; }
 
+      - name: Probar aprovisionamiento y flujo de rechazo del conductor
+        shell: bash
+        run: |
+          set -euo pipefail
+          OPERATOR_ID='11111111-1111-4111-8111-111111111111'
+          SUPER_ID='22222222-2222-4222-8222-222222222222'
+          DRIVER_ID='33333333-3333-4333-8333-333333333333'
+          DRIVER_ROW='44444444-4444-4444-8444-444444444444'
+          TRIP_ID='55555555-5555-4555-8555-555555555555'
+          COMPANY_A='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+
+          psql -v ON_ERROR_STOP=1 <<SQL
+          insert into auth.users (id,email,raw_user_meta_data) values
+            ('$SUPER_ID','owner@centralgo.test','{"name":"Owner QA"}'),
+            ('$DRIVER_ID','driver@centralgo.test','{"name":"Driver QA"}');
+          update public.profiles set global_role='super_admin' where id='$SUPER_ID';
+          insert into public.company_memberships(company_id,user_id,role,active)
+            values('$COMPANY_A','$DRIVER_ID','driver',true);
+          insert into public.drivers(id,company_id,user_id,unit_number,display_name,license_number,status)
+            values('$DRIVER_ROW','$COMPANY_A','$DRIVER_ID','Móvil QA','Driver QA','LIC-QA','en_route');
+          insert into public.trips(
+            id,company_id,code,client_name,client_phone,origin_address,origin_lat,origin_lng,
+            destination_address,destination_lat,destination_lng,status,driver_id,driver_unit_number,driver_name,operator_name
+          ) values(
+            '$TRIP_ID','$COMPANY_A','QA-TRIP','Cliente QA','+56000000003','Origen QA',-35.84,-71.59,
+            'Destino QA',-35.85,-71.60,'assigned','$DRIVER_ROW','Móvil QA','Driver QA','Operadora QA'
+          );
+          SQL
+
+          if psql -q -v ON_ERROR_STOP=1 <<SQL
+          set role authenticated;
+          set request.jwt.claim.sub = '$OPERATOR_ID';
+          select public.centralgo_superadmin_create_company('Hack Central','HACK','Linares');
+          SQL
+          then
+            echo 'SECURITY FAIL: una operadora pudo registrar una central global.'
+            exit 1
+          else
+            echo 'Aprovisionamiento protegido para Superadmin: OK'
+          fi
+
+          NEW_COMPANY=$(psql -qAt -v ON_ERROR_STOP=1 <<SQL
+          set role authenticated;
+          set request.jwt.claim.sub = '$SUPER_ID';
+          select public.centralgo_superadmin_create_company('Central Piloto QA','PILOTO-QA','Linares','CL',null,null,'enterprise','annual',14,-35.845,-71.598);
+          SQL
+          )
+          test -n "$NEW_COMPANY" || { echo 'PROVISIONING FAIL: no se creó central'; exit 1; }
+          SUB_COUNT=$(psql -qAt -v ON_ERROR_STOP=1 -c "select count(*) from public.subscriptions where company_id='$NEW_COMPANY' and status='trialing';")
+          test "$SUB_COUNT" = "1" || { echo "PROVISIONING FAIL: suscripciones=$SUB_COUNT"; exit 1; }
+
+          psql -v ON_ERROR_STOP=1 <<SQL
+          set role authenticated;
+          set request.jwt.claim.sub = '$DRIVER_ID';
+          select (public.centralgo_driver_reject_trip('$TRIP_ID','No puedo tomar el servicio')).status;
+          SQL
+          TRIP_STATUS=$(psql -qAt -v ON_ERROR_STOP=1 -c "select status from public.trips where id='$TRIP_ID';")
+          DRIVER_STATUS=$(psql -qAt -v ON_ERROR_STOP=1 -c "select status from public.drivers where id='$DRIVER_ROW';")
+          test "$TRIP_STATUS" = "pending" || { echo "DRIVER REJECT FAIL: trip=$TRIP_STATUS"; exit 1; }
+          test "$DRIVER_STATUS" = "available" || { echo "DRIVER REJECT FAIL: driver=$DRIVER_STATUS"; exit 1; }
+
       - name: Compilar producción
         run: npm run build
