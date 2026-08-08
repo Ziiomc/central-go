@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { AppProvider, useApp } from './context/AppContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
 import { DashboardModule } from './components/modules/DashboardModule';
@@ -30,10 +31,12 @@ import { SOSAlertModal } from './components/modals/SOSAlertModal';
 import { TripDetailModal } from './components/modals/TripDetailModal';
 import { VHFDispatchModal } from './components/modals/VHFDispatchModal';
 import { NotificationsDrawer } from './components/notifications/NotificationsDrawer';
+import { LoginScreen } from './components/auth/LoginScreen';
 import { registerServiceWorker } from './lib/pwa';
 import { ErrorBoundary } from './components/system/ErrorBoundary';
 import { CommercialGate } from './components/system/CommercialGate';
-import { Menu, Car, Headphones, Smartphone, Monitor } from 'lucide-react';
+import { runtimeConfig } from './config/runtime';
+import { Menu, Car, Smartphone, Monitor, Loader2 } from 'lucide-react';
 
 const MainAppContent: React.FC = () => {
   const { currentRole, activeModule, setNewTripModalOpen } = useApp();
@@ -56,7 +59,6 @@ const MainAppContent: React.FC = () => {
     return () => window.removeEventListener('keydown', handleShortcut);
   }, [currentRole, setNewTripModalOpen]);
 
-  // Render Module router
   const renderModule = () => {
     switch (activeModule) {
       case 'dashboard':
@@ -64,121 +66,52 @@ const MainAppContent: React.FC = () => {
         if (currentRole === 'super_admin') return <GlobalAdminDashboard />;
         if (currentRole === 'regional_partner' || currentRole === 'sales_partner') return <PartnerDashboard />;
         return <DashboardModule />;
-      case 'network_centrals':
-        return <CentralsNetworkModule />;
-      case 'partners_network':
-        return <PartnersNetworkModule />;
-      case 'commissions_network':
-        return <CommissionsNetworkModule />;
-      case 'plans_network':
-        return <PlansNetworkModule />;
-      case 'network_support':
-        return <NetworkSupportModule />;
+      case 'network_centrals': return <CentralsNetworkModule />;
+      case 'partners_network': return <PartnersNetworkModule />;
+      case 'commissions_network': return <CommissionsNetworkModule />;
+      case 'plans_network': return <PlansNetworkModule />;
+      case 'network_support': return <NetworkSupportModule />;
       case 'live_map':
-        return (
-          <div className="space-y-4">
-            <h1 className="font-extrabold text-2xl text-white">Mapa en Tiempo Real</h1>
-            <LiveMap height="h-[calc(100vh-200px)]" />
-          </div>
-        );
-      case 'trips':
-        return <TripsModule />;
-      case 'drivers':
-        return <DriversModule />;
-      case 'vehicles':
-        return <VehiclesModule />;
-      case 'clients':
-        return <ClientsModule />;
-      case 'operators':
-        return <OperatorsModule />;
-      case 'companies':
-        return <CompaniesModule />;
-      case 'users':
-        return <UsersModule />;
-      case 'reports':
-        return <ReportsModule />;
-      case 'history':
-        return <HistoryModule />;
-      case 'settings':
-        return <SettingsModule />;
-      case 'profile':
-        return <ProfileModule />;
-      case 'help':
-        return <HelpModule />;
-      default:
-        return <DashboardModule />;
+        return <div className="space-y-4"><h1 className="font-extrabold text-2xl text-white">Mapa en Tiempo Real</h1><LiveMap height="h-[calc(100vh-200px)]" /></div>;
+      case 'trips': return <TripsModule />;
+      case 'drivers': return <DriversModule />;
+      case 'vehicles': return <VehiclesModule />;
+      case 'clients': return <ClientsModule />;
+      case 'operators': return <OperatorsModule />;
+      case 'companies': return <CompaniesModule />;
+      case 'users': return <UsersModule />;
+      case 'reports': return <ReportsModule />;
+      case 'history': return <HistoryModule />;
+      case 'settings': return <SettingsModule />;
+      case 'profile': return <ProfileModule />;
+      case 'help': return <HelpModule />;
+      default: return <DashboardModule />;
     }
   };
 
   return (
     <div className="min-h-screen bg-[#09090b] text-zinc-100 flex flex-col font-sans selection:bg-blue-500/30">
-      {/* Header */}
       <Header onToggleNotifications={() => setNotificationsOpen(!notificationsOpen)} />
 
-      {/* Driver Special PWA View Switcher Bar if currentRole is driver */}
       {currentRole === 'driver' ? (
         <div className="p-4 max-w-7xl mx-auto w-full">
           <div className="flex items-center justify-between bg-[#0d0d0f] p-2 rounded-xl border border-zinc-800 mb-4 shadow-xl">
-            <div className="flex items-center gap-2 text-xs text-blue-400 font-bold px-3 uppercase tracking-wider">
-              <Car className="w-4 h-4" />
-              <span>Rol Conductor Activo</span>
-            </div>
-
+            <div className="flex items-center gap-2 text-xs text-blue-400 font-bold px-3 uppercase tracking-wider"><Car className="w-4 h-4" /><span>Rol Conductor Activo</span></div>
             <div className="flex gap-2">
-              <button
-                onClick={() => setDriverViewMode('mobile')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 uppercase tracking-wider ${
-                  driverViewMode === 'mobile'
-                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/30'
-                    : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200'
-                }`}
-              >
-                <Smartphone className="w-3.5 h-3.5" /> Vista PWA Smartphone
-              </button>
-              <button
-                onClick={() => setDriverViewMode('desktop')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 uppercase tracking-wider ${
-                  driverViewMode === 'desktop'
-                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/30'
-                    : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200'
-                }`}
-              >
-                <Monitor className="w-3.5 h-3.5" /> Vista Escritorio
-              </button>
+              <button onClick={() => setDriverViewMode('mobile')} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 uppercase tracking-wider ${driverViewMode === 'mobile' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/30' : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200'}`}><Smartphone className="w-3.5 h-3.5" /> Vista PWA Smartphone</button>
+              <button onClick={() => setDriverViewMode('desktop')} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 uppercase tracking-wider ${driverViewMode === 'desktop' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/30' : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200'}`}><Monitor className="w-3.5 h-3.5" /> Vista Escritorio</button>
             </div>
           </div>
-
-          {driverViewMode === 'mobile' ? (
-            <DriverMobileView />
-          ) : (
-            <div className="flex flex-1 relative">
-              <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-              <main className="flex-1 p-4 md:p-6 overflow-y-auto max-w-7xl mx-auto w-full">
-                {renderModule()}
-              </main>
-            </div>
-          )}
+          {driverViewMode === 'mobile' ? <DriverMobileView /> : <div className="flex flex-1 relative"><Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} /><main className="flex-1 p-4 md:p-6 overflow-y-auto max-w-7xl mx-auto w-full">{renderModule()}</main></div>}
         </div>
       ) : (
         <div className="flex-1 flex relative">
-          {/* Mobile Sidebar Toggle Button */}
-          <button
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="md:hidden fixed bottom-5 right-5 z-40 p-3.5 bg-blue-600 text-white rounded-full shadow-2xl font-bold border border-blue-400/30 shadow-blue-900/50"
-            aria-label="Abrir Menú"
-          >
-            <Menu className="w-6 h-6" />
-          </button>
-
+          <button onClick={() => setSidebarOpen(!sidebarOpen)} className="md:hidden fixed bottom-5 right-5 z-40 p-3.5 bg-blue-600 text-white rounded-full shadow-2xl font-bold border border-blue-400/30 shadow-blue-900/50" aria-label="Abrir Menú"><Menu className="w-6 h-6" /></button>
           <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-
-          <main className={`flex-1 overflow-y-auto mx-auto w-full min-h-[calc(100vh-65px)] ${currentRole === 'operator' ? 'p-2.5 md:p-3 max-w-[1800px]' : ['super_admin', 'regional_partner', 'sales_partner'].includes(currentRole) ? 'p-4 md:p-6 max-w-[1600px]' : 'p-4 md:p-6 max-w-7xl'}`}>
-            {renderModule()}
-          </main>
+          <main className={`flex-1 overflow-y-auto mx-auto w-full min-h-[calc(100vh-65px)] ${currentRole === 'operator' ? 'p-2.5 md:p-3 max-w-[1800px]' : ['super_admin', 'regional_partner', 'sales_partner'].includes(currentRole) ? 'p-4 md:p-6 max-w-[1600px]' : 'p-4 md:p-6 max-w-7xl'}`}>{renderModule()}</main>
         </div>
       )}
 
-      {/* Global Modals */}
       <NewTripModal />
       <SOSAlertModal />
       <TripDetailModal />
@@ -188,14 +121,26 @@ const MainAppContent: React.FC = () => {
   );
 };
 
+const AuthenticatedShell: React.FC = () => {
+  const { session, loading } = useAuth();
+
+  if (runtimeConfig.isCommercial && loading) {
+    return <main className="min-h-screen bg-zinc-950 text-zinc-200 flex items-center justify-center"><div className="flex items-center gap-3 text-sm font-bold"><Loader2 className="h-5 w-5 animate-spin text-amber-400" /> Validando sesión segura…</div></main>;
+  }
+
+  if (runtimeConfig.isCommercial && !session) return <LoginScreen />;
+
+  return <AppProvider><MainAppContent /></AppProvider>;
+};
+
 export default function App() {
   return (
     <ErrorBoundary>
-      <CommercialGate>
-        <AppProvider>
-          <MainAppContent />
-        </AppProvider>
-      </CommercialGate>
+      <AuthProvider>
+        <CommercialGate>
+          <AuthenticatedShell />
+        </CommercialGate>
+      </AuthProvider>
     </ErrorBoundary>
   );
 }
