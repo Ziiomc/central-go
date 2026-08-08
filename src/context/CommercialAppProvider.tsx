@@ -19,6 +19,7 @@ import { DEFAULT_FARE_CONFIG, ZONES } from '../data/mockData';
 import { soundManager } from '../lib/audio';
 import { playSOSSiren, speakVHFDispatch } from '../lib/audioService';
 import {
+  assignCompanyUserByEmail,
   assignTripAtomic,
   cancelTripAtomic,
   insertClient,
@@ -31,7 +32,9 @@ import {
   markAllNotificationsRead,
   markNotificationRead,
   reportDriverLocation,
+  rejectDriverTripAtomic,
   resolveDriverSos,
+  resolveOwnDriverSos,
   saveFareConfig,
   setDriverManualStatus,
   setDriverStatusAsOperator,
@@ -280,7 +283,13 @@ export const CommercialAppProvider: React.FC<React.PropsWithChildren> = ({ child
     if (before?.driverId) setDrivers((items) => items.map((driver) => driver.id === before.driverId ? { ...driver, status: 'available' } : driver));
   };
 
-  const rejectTripOffer = (tripId: string, reason: string) => unassignTrip(tripId, reason);
+  const rejectTripOffer = async (tripId: string, reason: string) => {
+    if (currentRole !== 'driver') return unassignTrip(tripId, reason);
+    const before = trips.find((trip) => trip.id === tripId);
+    const trip = await rejectDriverTripAtomic(tripId, reason);
+    setTrips((items) => upsertById(items, trip));
+    if (before?.driverId) setDrivers((items) => items.map((driver) => driver.id === before.driverId ? { ...driver, status: 'available' } : driver));
+  };
 
   const toggleDriverAvailability = async (driverId: string, status: DriverStatus) => {
     if (!['available', 'paused', 'offline'].includes(status)) throw new Error('Este estado se administra desde la carrera activa.');
@@ -311,7 +320,8 @@ export const CommercialAppProvider: React.FC<React.PropsWithChildren> = ({ child
   };
 
   const resolveDriverSOS = async (driverId: string) => {
-    await resolveDriverSos(driverId);
+    if (currentRole === 'driver') await resolveOwnDriverSos();
+    else await resolveDriverSos(driverId);
     setDrivers((items) => items.map((driver) => driver.id === driverId ? { ...driver, sosActive: false, status: 'available', sosTimestamp: undefined } : driver));
     setActiveSOSDriver((driver) => driver?.id === driverId ? null : driver);
   };
@@ -349,7 +359,11 @@ export const CommercialAppProvider: React.FC<React.PropsWithChildren> = ({ child
   };
 
   const addDriver = async (data: Omit<Driver, 'id' | 'rating' | 'totalTripsCompleted' | 'todayEarnings'>) => {
-    const driver = await insertDriver({ ...data, companyId: currentCompany.id });
+    let linkedUserId = data.userId;
+    if (linkedUserId.includes('@')) {
+      linkedUserId = await assignCompanyUserByEmail(currentCompany.id, linkedUserId, 'driver');
+    }
+    const driver = await insertDriver({ ...data, userId: linkedUserId, companyId: currentCompany.id });
     setDrivers((items) => upsertById(items, driver));
     addAuditLog('NUEVO_CONDUCTOR', `Registró ${driver.unitNumber} (${driver.name})`);
     return driver;

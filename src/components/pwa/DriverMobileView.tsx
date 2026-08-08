@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../../context/AppContext';
 import { DriverStatus, Trip } from '../../types';
 import {
@@ -22,6 +22,7 @@ import {
 import { soundManager } from '../../lib/audio';
 import { playVHFRadioChirp, speakVHFDispatch } from '../../lib/audioService';
 import centralGoLogo from '../../assets/images/central-go-logo.svg';
+import { runtimeConfig } from '../../config/runtime';
 
 export const DriverMobileView: React.FC = () => {
   const {
@@ -32,50 +33,63 @@ export const DriverMobileView: React.FC = () => {
     updateDriverLocation,
     triggerDriverSOS,
     resolveDriverSOS,
-    cancelTrip,
+    rejectTripOffer,
     createTrip,
+    currentUser,
   } = useApp();
 
   // GPS state
   const [isGpsActive, setIsGpsActive] = useState<boolean>(false);
   const [gpsText, setGpsText] = useState<string>('GPS Linares Activo');
+  const gpsWatchId = useRef<number | null>(null);
+  const lastGpsSent = useRef<{ at: number; lat: number; lng: number } | null>(null);
 
   // Selected driver unit ID for driver mobile simulation
   const [myDriverId, setMyDriverId] = useState<string>('drv-2');
-  const driver = drivers.find((d) => d.id === myDriverId) || drivers[0];
+  const driver = runtimeConfig.isCommercial
+    ? drivers.find((d) => d.userId === currentUser.id)
+    : drivers.find((d) => d.id === myDriverId) || drivers[0];
+
+  const stopGpsTracking = () => {
+    if (gpsWatchId.current !== null && navigator.geolocation) navigator.geolocation.clearWatch(gpsWatchId.current);
+    gpsWatchId.current = null;
+    setIsGpsActive(false);
+    setGpsText(runtimeConfig.isCommercial ? 'GPS detenido' : 'GPS Linares (Simulado)');
+  };
 
   const toggleRealGpsTracking = () => {
-    if (!navigator.geolocation) {
+    if (!navigator.geolocation || !driver) {
       setGpsText('GPS no disponible en navegador');
       return;
     }
+    if (isGpsActive) { stopGpsTracking(); return; }
 
-    if (isGpsActive) {
-      setIsGpsActive(false);
-      setGpsText('GPS Linares (Simulado)');
-    } else {
-      setIsGpsActive(true);
-      setGpsText('Obteniendo posición...');
-
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const { latitude, longitude } = pos.coords;
-          updateDriverLocation(
-            driver.id,
-            latitude,
-            longitude,
-            `Ubicación Real GPS (${latitude.toFixed(4)}, ${longitude.toFixed(4)}) - Linares`
-          );
-          setGpsText(`GPS EN VIVO: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`);
-        },
-        (err) => {
-          setIsGpsActive(false);
-          setGpsText('Permiso GPS denegado');
-        },
-        { enableHighAccuracy: true }
-      );
-    }
+    setIsGpsActive(true);
+    setGpsText('Solicitando GPS de alta precisión…');
+    gpsWatchId.current = navigator.geolocation.watchPosition(
+      (pos) => {
+        const { latitude, longitude, accuracy } = pos.coords;
+        const now = Date.now();
+        const last = lastGpsSent.current;
+        const metersApprox = last ? Math.hypot((latitude-last.lat)*111320, (longitude-last.lng)*111320*Math.cos(latitude*Math.PI/180)) : Infinity;
+        const shouldSend = !last || now-last.at >= 8000 || metersApprox >= 15;
+        setGpsText(`GPS EN VIVO · precisión ±${Math.round(accuracy)} m`);
+        if (shouldSend) {
+          lastGpsSent.current = { at: now, lat: latitude, lng: longitude };
+          void Promise.resolve(updateDriverLocation(driver.id, latitude, longitude, `GPS ${latitude.toFixed(5)}, ${longitude.toFixed(5)}`)).catch(() => setGpsText('Error enviando GPS a la central'));
+        }
+      },
+      (err) => {
+        stopGpsTracking();
+        setGpsText(err.code === 1 ? 'Permiso GPS denegado' : 'No fue posible obtener GPS');
+      },
+      { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
+    );
   };
+
+  useEffect(() => () => {
+    if (gpsWatchId.current !== null && navigator.geolocation) navigator.geolocation.clearWatch(gpsWatchId.current);
+  }, []);
 
   // Active assigned or in-progress trip for this driver
   const activeTrip = trips.find(
@@ -102,18 +116,23 @@ export const DriverMobileView: React.FC = () => {
 
   // Offer countdown timer
   useEffect(() => {
-    let timer: NodeJS.Timeout;
+    let timer: ReturnType<typeof setInterval>;
     if (incomingOffer && offerTimer > 0) {
       timer = setInterval(() => setOfferTimer((t) => t - 1), 1000);
     } else if (incomingOffer && offerTimer === 0) {
       // Auto reject if expired
       setIncomingOffer(null);
-      cancelTrip(incomingOffer.id, 'Expiró tiempo de respuesta del conductor');
+      void Promise.resolve(rejectTripOffer(incomingOffer.id, 'Expiró tiempo de respuesta del conductor')).catch(() => undefined);
     }
     return () => clearInterval(timer);
   }, [incomingOffer, offerTimer]);
 
-  if (!driver) return null;
+  if (!driver) return (
+    <div className="max-w-md mx-auto rounded-2xl border border-amber-500/20 bg-zinc-950 p-6 text-zinc-100">
+      <h2 className="font-black">Cuenta de conductor sin móvil vinculado</h2>
+      <p className="mt-2 text-sm text-zinc-400">El administrador debe registrar este conductor usando el mismo correo de tu cuenta Central GO.</p>
+    </div>
+  );
 
   const handleAcceptOffer = () => {
     if (incomingOffer) {
@@ -124,7 +143,7 @@ export const DriverMobileView: React.FC = () => {
 
   const handleRejectOffer = () => {
     if (incomingOffer) {
-      cancelTrip(incomingOffer.id, 'Rechazado por conductor');
+      void Promise.resolve(rejectTripOffer(incomingOffer.id, 'Rechazado por conductor')).catch(() => undefined);
       setIncomingOffer(null);
     }
   };
@@ -189,7 +208,8 @@ export const DriverMobileView: React.FC = () => {
             </div>
           </div>
 
-          {/* Unit Switcher Selector */}
+          {/* Unit Switcher Selector - solo demo */}
+          {runtimeConfig.isDemo && (
           <div className="flex items-center justify-between pt-2 border-t border-zinc-800/80 text-xs font-mono">
             <span className="text-zinc-400 font-bold uppercase text-[10px]">Simular como Móvil:</span>
             <select
@@ -204,6 +224,7 @@ export const DriverMobileView: React.FC = () => {
               ))}
             </select>
           </div>
+          )}
         </div>
 
         {/* GPS Sensor Active Bar */}
@@ -521,7 +542,8 @@ export const DriverMobileView: React.FC = () => {
               </p>
             </div>
 
-            {/* Simulator Button to test active trip workflow immediately */}
+            {/* Simulator Button - exclusivamente demo */}
+            {runtimeConfig.isDemo && (
             <div className="pt-2 border-t border-zinc-800/80">
               <button
                 onClick={() => {
@@ -547,6 +569,7 @@ export const DriverMobileView: React.FC = () => {
                 <span>⚡ ASIGNAR CARRERA DE PRUEBA A ESTE MÓVIL</span>
               </button>
             </div>
+            )}
           </div>
         )}
       </div>

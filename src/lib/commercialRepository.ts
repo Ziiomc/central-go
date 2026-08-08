@@ -273,6 +273,12 @@ export async function unassignTripAtomic(tripId: string, reason?: string): Promi
   return mapTripRow(data);
 }
 
+export async function rejectDriverTripAtomic(tripId: string, reason?: string): Promise<Trip> {
+  const { data, error } = await requireSupabase().rpc('centralgo_driver_reject_trip', { p_trip_id: tripId, p_reason: reason ?? 'Rechazado por conductor' });
+  if (error) throw error;
+  return mapTripRow(data);
+}
+
 export async function cancelTripAtomic(tripId: string, reason: string): Promise<Trip> {
   const { data, error } = await requireSupabase().rpc('centralgo_operator_cancel_trip', { p_trip_id: tripId, p_reason: reason });
   if (error) throw error;
@@ -318,6 +324,11 @@ export async function triggerDriverSos(driver: Driver): Promise<string> {
   });
   if (error) throw error;
   return String(data);
+}
+
+export async function resolveOwnDriverSos(): Promise<void> {
+  const { error } = await requireSupabase().rpc('centralgo_driver_resolve_own_sos', { p_notes: 'Alerta desactivada por el conductor desde su PWA' });
+  if (error) throw error;
 }
 
 export async function resolveDriverSos(driverId: string): Promise<void> {
@@ -372,6 +383,12 @@ export async function insertVehicle(data: Omit<Vehicle, 'id'>): Promise<Vehicle>
   }).select('*').single();
   if (error) throw error;
   return mapVehicleRow(row);
+}
+
+export async function assignCompanyUserByEmail(companyId: string, email: string, role: 'company_admin' | 'operator' | 'driver'): Promise<string> {
+  const { data, error } = await requireSupabase().rpc('centralgo_assign_company_user', { p_company_id: companyId, p_email: email.trim(), p_role: role });
+  if (error) throw error;
+  return String(data);
 }
 
 export async function insertDriver(data: Omit<Driver, 'id' | 'rating' | 'totalTripsCompleted' | 'todayEarnings'>): Promise<Driver> {

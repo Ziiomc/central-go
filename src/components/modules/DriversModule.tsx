@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { Driver } from '../../types';
+import { runtimeConfig } from '../../config/runtime';
 import {
   Users,
   Search,
@@ -25,6 +26,9 @@ export const DriversModule: React.FC = () => {
   const [unitNumber, setUnitNumber] = useState('Móvil ');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
+  const [accountEmail, setAccountEmail] = useState('');
+  const [formError, setFormError] = useState('');
+  const [saving, setSaving] = useState(false);
   const [licenseNumber, setLicenseNumber] = useState('');
   const [selectedVehicleId, setSelectedVehicleId] = useState('');
 
@@ -35,10 +39,14 @@ export const DriversModule: React.FC = () => {
       d.phone.includes(searchTerm)
   );
 
-  const handleAddSubmit = (e: React.FormEvent) => {
+  const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    addDriver({
-      userId: `usr-${Date.now()}`,
+    setFormError('');
+    if (runtimeConfig.isCommercial && !accountEmail.includes('@')) { setFormError('El conductor debe crear primero su cuenta y debes indicar su correo.'); return; }
+    setSaving(true);
+    try {
+      await addDriver({
+      userId: runtimeConfig.isCommercial ? accountEmail.trim() : `usr-${Date.now()}`,
       companyId: 'comp-1',
       vehicleId: selectedVehicleId || undefined,
       unitNumber: unitNumber || 'Móvil 99',
@@ -56,8 +64,14 @@ export const DriversModule: React.FC = () => {
       },
       commissionBalance: 0,
       sosActive: false,
-    });
-    setIsAddModalOpen(false);
+      });
+      setIsAddModalOpen(false);
+      setAccountEmail('');
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'No fue posible registrar al conductor.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -221,6 +235,14 @@ export const DriversModule: React.FC = () => {
                 />
               </div>
 
+              {runtimeConfig.isCommercial && (
+              <div>
+                <label className="text-xs text-zinc-300 font-mono uppercase tracking-wider block">Correo de cuenta Central GO</label>
+                <input type="email" value={accountEmail} onChange={(e) => setAccountEmail(e.target.value)} placeholder="conductor@correo.cl" required className="w-full bg-[#121215] border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-blue-500 transition" />
+                <p className="mt-1 text-[10px] text-zinc-500">El conductor debe haber creado previamente su cuenta.</p>
+              </div>
+            )}
+
               <div>
                 <label className="text-xs text-zinc-300 font-mono uppercase tracking-wider block">Teléfono Móvil</label>
                 <input
@@ -245,6 +267,8 @@ export const DriversModule: React.FC = () => {
                 />
               </div>
 
+              {formError && <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">{formError}</div>}
+
               <div className="flex gap-2 pt-2">
                 <button
                   type="button"
@@ -254,7 +278,7 @@ export const DriversModule: React.FC = () => {
                   Cancelar
                 </button>
                 <button
-                  type="submit"
+                  type="submit" disabled={saving}
                   className="w-1/2 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-lg shadow uppercase tracking-wider"
                 >
                   Guardar Conductor
