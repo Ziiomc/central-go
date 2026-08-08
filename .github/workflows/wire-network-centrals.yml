@@ -21,7 +21,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: node scripts/wire-network-centrals.mjs
+      - name: Aplicar conexión real de centrales v2
+        run: node scripts/wire-network-centrals.mjs
       - run: rm -f scripts/wire-network-centrals.mjs
       - name: Publicar
         run: |
