@@ -16,11 +16,15 @@ export default defineConfig(() => ({
       output: {
         manualChunks(id) {
           if (!id.includes('node_modules')) return undefined;
-          if (id.includes('react') || id.includes('react-dom')) return 'react-core';
-          if (id.includes('leaflet')) return 'maps';
-          if (id.includes('recharts') || id.includes('d3-')) return 'charts';
-          if (id.includes('lucide-react')) return 'icons';
-          return 'vendor';
+          if (
+            id.includes('/node_modules/react/') ||
+            id.includes('/node_modules/react-dom/') ||
+            id.includes('/node_modules/scheduler/')
+          ) return 'react-core';
+          if (id.includes('/node_modules/leaflet/')) return 'maps';
+          if (id.includes('/node_modules/recharts/') || id.includes('/node_modules/d3-')) return 'charts';
+          if (id.includes('/node_modules/lucide-react/')) return 'icons';
+          return undefined;
         },
       },
     },
