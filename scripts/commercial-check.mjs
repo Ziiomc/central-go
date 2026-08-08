@@ -19,6 +19,7 @@ const app = mustRead('src/App.tsx');
 const context = mustRead('src/context/AppContext.tsx');
 const migrationCore = mustRead('supabase/migrations/001_commercial_core.sql');
 const migrationSecurity = mustRead('supabase/migrations/002_security_rpc.sql');
+const migrationPrivileges = mustRead('supabase/migrations/003_explicit_privileges.sql');
 
 if ((pkg.scripts?.build ?? '').includes('bootstrap')) fail('El build volvió a depender de capas bootstrap.');
 if (!pkg.scripts?.lint?.includes('tsc')) fail('Falta TypeScript obligatorio.');
@@ -50,6 +51,17 @@ for (const requiredSnippet of [
 ]) {
   if (!migrationSecurity.includes(requiredSnippet)) {
     fail(`Hardening SQL obligatorio ausente: ${requiredSnippet}`);
+  }
+}
+
+for (const requiredSnippet of [
+  'from anon, authenticated;',
+  'grant select on public.company_memberships to authenticated;',
+  'grant select, insert, update on public.trips to authenticated;',
+  'grant select on public.audit_logs to authenticated;',
+]) {
+  if (!migrationPrivileges.includes(requiredSnippet)) {
+    fail(`Matriz de privilegios SQL incompleta: ${requiredSnippet}`);
   }
 }
 
