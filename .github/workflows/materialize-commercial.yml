@@ -59,8 +59,14 @@ jobs:
               '  clearAllNotifications: () => void;\n}',
               "  clearAllNotifications: () => void;\n  addAuditLog: (action: string, description: string) => void;\n  addNotification: (title: string, message: string, type: AppNotification['type'], relatedId?: string) => void;\n}"
             );
-            fs.writeFileSync(contextPath, context);
           }
+          if (!context.includes('        addAuditLog,\n        addNotification,')) {
+            context = context.replace(
+              '        clearAllNotifications,\n      }}',
+              '        clearAllNotifications,\n        addAuditLog,\n        addNotification,\n      }}'
+            );
+          }
+          fs.writeFileSync(contextPath, context);
 
           const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
           pkg.version = '1.6.0';
