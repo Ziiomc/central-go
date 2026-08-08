@@ -1,0 +1,57 @@
+name: Aplicar hardening Central GO 1.7
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/apply-hardening.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  hardening:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configurar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Aplicar endurecimiento comercial
+        run: node scripts/apply-hardening.mjs
+
+      - name: Limpiar instalador temporal
+        run: |
+          rm -f scripts/apply-hardening.mjs
+          rm -f .github/workflows/apply-hardening.yml
+
+      - name: Actualizar dependencias reproducibles
+        run: npm install --no-audit --no-fund
+
+      - name: TypeScript
+        run: npm run lint
+
+      - name: Chequeos comerciales
+        run: npm run check:commercial
+
+      - name: Compilar producción
+        run: npm run build
+
+      - name: Publicar Central GO 1.7
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Endurecer Central GO 1.7 para preproducción comercial"
+          git pull --rebase origin main
+          git push origin HEAD:main
