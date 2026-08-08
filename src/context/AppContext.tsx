@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import {
   UserRole,
   DriverStatus,
@@ -30,6 +30,7 @@ import {
 } from '../data/mockData';
 import { playVHFRadioChirp, playSOSSiren, speakVHFDispatch } from '../lib/audioService';
 import { soundManager } from '../lib/audio';
+import { advanceAlongRoute, requestDrivingRoute, RoadPoint } from '../lib/roadRouting';
 
 interface AppContextType {
   // Roles & Session
@@ -73,11 +74,13 @@ interface AppContextType {
   reassignTrip: (tripId: string, newDriverId: string) => void;
   updateTripStatus: (tripId: string, status: TripStatus, notes?: string) => void;
   cancelTrip: (tripId: string, reason: string) => void;
+  rejectTripOffer: (tripId: string, reason: string) => void;
   toggleDriverAvailability: (driverId: string, status: DriverStatus) => void;
   updateDriverLocation: (driverId: string, lat: number, lng: number, address?: string) => void;
   triggerDriverSOS: (driverId: string) => void;
   resolveDriverSOS: (driverId: string) => void;
-  autoAssignClosestDriver: (tripId: string) => void;
+  autoAssignClosestDriver: (tripId: string) => Driver | null;
+  unassignTrip: (tripId: string) => void;
   settleDriverCommission: (driverId: string) => void;
   
   // Management CRUD
@@ -87,6 +90,8 @@ interface AppContextType {
   updateFareConfig: (config: FareConfig) => void;
   markNotificationAsRead: (id: string) => void;
   clearAllNotifications: () => void;
+  addAuditLog: (action: string, description: string) => void;
+  addNotification: (title: string, message: string, type: AppNotification['type'], relatedId?: string) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -97,6 +102,28 @@ const createLocalId = (prefix: string) => {
     : `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
   return `${prefix}-${uniquePart}`;
 };
+
+interface DriverRoadRouteState {
+  key: string;
+  mode: 'trip_origin' | 'trip_destination' | 'patrol';
+  points: RoadPoint[];
+  index: number;
+  segmentOffsetMeters: number;
+  loading: boolean;
+  finished: boolean;
+  arrivalHandled: boolean;
+  tripId?: string;
+  patrolIndex?: number;
+}
+
+const LINARES_PATROL_DESTINATIONS: Array<RoadPoint & { address: string }> = [
+  { lat: -35.8454, lng: -71.5979, address: 'Plaza de Armas de Linares' },
+  { lat: -35.8430, lng: -71.5880, address: 'Terminal de Buses de Linares' },
+  { lat: -35.8412, lng: -71.5921, address: 'Avenida León Bustos' },
+  { lat: -35.8480, lng: -71.5920, address: 'Población San Antonio' },
+  { lat: -35.8490, lng: -71.6030, address: 'Hospital Base de Linares' },
+  { lat: -35.8520, lng: -71.5950, address: 'Estación de Trenes de Linares' },
+];
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentRole, setCurrentRole] = useState<UserRole>('operator');
@@ -121,9 +148,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [vhfModalDriver, setVHFModalDriver] = useState<Driver | null>(null);
   const [isMobileDevice, setIsMobileDevice] = useState<boolean>(false);
 
+  const driverRoadRoutesRef = useRef<Record<string, DriverRoadRouteState>>({});
+  const driversSnapshotRef = useRef<Driver[]>(INITIAL_DRIVERS);
+  const tripsSnapshotRef = useRef<Trip[]>(INITIAL_TRIPS);
+  const patrolIndexRef = useRef<Record<string, number>>({});
+
+  useEffect(() => {
+    driversSnapshotRef.current = drivers;
+  }, [drivers]);
+
+  useEffect(() => {
+    tripsSnapshotRef.current = trips;
+  }, [trips]);
+
   const sendVHFMessageToDriver = (driver: Driver, message: string) => {
     if (!soundMuted) {
-      playVHFRadioChirp();
       speakVHFDispatch(message);
     }
     addAuditLog('TRANSMISION_VHF', `Transmisión VHF a ${driver.unitNumber}: "${message}"`);
@@ -141,19 +180,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, []);
 
   // Set default current user profile based on role
+  const sessionProfiles: Record<UserRole, { id: string; name: string; email: string; phone: string }> = {
+    driver: { id: 'usr-drv-2', name: 'Gustavo Rossi (Móvil 12)', email: 'grossi@radiotaxilinares.cl', phone: '+56 9 7654 3210' },
+    operator: { id: 'usr-op-1', name: 'Sonia Rodríguez (Operadora 01)', email: 'operaciones@radiotaxilinares.cl', phone: '+56 9 7654 3210' },
+    company_admin: { id: 'usr-admin-1', name: 'Ing. Roberto Paz (Admin)', email: 'administracion@radiotaxilinares.cl', phone: '+56 9 8112 4400' },
+    sales_partner: { id: 'usr-partner-1', name: 'Ignacio Varas (Partner Comercial)', email: 'ignacio@centralgo.network', phone: '+56 9 7330 4431' },
+    regional_partner: { id: 'usr-regional-1', name: 'María Paz Herrera (Partner Regional)', email: 'maria@centralgo.network', phone: '+56 9 8812 0911' },
+    super_admin: { id: 'usr-super-1', name: 'Superadmin Central GO', email: 'admin@centralgo.network', phone: '+56 9 9000 1000' },
+  };
+  const sessionProfile = sessionProfiles[currentRole];
+
   const currentUser: User = {
-    id: currentRole === 'driver' ? 'usr-drv-2' : currentRole === 'operator' ? 'usr-op-1' : 'usr-admin-1',
+    id: sessionProfile.id,
     companyId: currentCompany.id,
-    name:
-      currentRole === 'driver'
-        ? 'Gustavo Rossi (Móvil 12)'
-        : currentRole === 'operator'
-        ? 'Sonia Rodríguez (Operadora 01)'
-        : currentRole === 'company_admin'
-        ? 'Ing. Roberto Paz (Admin)'
-        : 'SuperAdmin CentralGo',
-    email: currentRole === 'driver' ? 'grossi@radiotaxilinares.cl' : 'operaciones@radiotaxilinares.cl',
-    phone: '+56 9 7654 3210',
+    name: sessionProfile.name,
+    email: sessionProfile.email,
+    phone: sessionProfile.phone,
     role: currentRole,
     active: true,
     createdAt: '2025-01-01T00:00:00Z',
@@ -197,105 +239,191 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  // Real-time Driver Simulation Loop (Moves vehicles along Linares street grid)
+  // Road-aware simulation: every vehicle follows a driving route returned by
+  // OpenStreetMap/OSRM. When the service is unavailable, roadRouting uses a
+  // local Linares street-grid fallback instead of moving diagonally over blocks.
   useEffect(() => {
-    const interval = setInterval(() => {
-      setDrivers((prevDrivers) =>
-        prevDrivers.map((drv) => {
-          if (drv.status === 'paused' || drv.status === 'offline' || drv.status === 'sos') {
-            return drv;
+    let cancelled = false;
+
+    const ensureDriverRoutes = async () => {
+      const currentDrivers = driversSnapshotRef.current;
+      const currentTrips = tripsSnapshotRef.current;
+
+      await Promise.all(
+        currentDrivers.map(async (driver) => {
+          if (cancelled || ['paused', 'offline', 'sos'].includes(driver.status)) {
+            delete driverRoadRoutesRef.current[driver.id];
+            return;
           }
 
-          let { lat, lng, heading } = drv.currentLocation;
-          let speed = 0;
-
-          // Find active trip for this driver
-          const activeTrip = trips.find(
-            (t) => t.driverId === drv.id && ['assigned', 'en_route', 'in_progress'].includes(t.status)
+          const activeTrip = currentTrips.find(
+            (trip) =>
+              trip.driverId === driver.id &&
+              ['assigned', 'en_route', 'in_progress'].includes(trip.status)
           );
 
-          if (activeTrip && (drv.status === 'en_route' || drv.status === 'in_trip')) {
-            const target = drv.status === 'en_route' ? activeTrip.origin : activeTrip.destination;
-            const dLat = target.lat - lat;
-            const dLng = target.lng - lng;
-            const distance = Math.hypot(dLat, dLng);
+          let target: RoadPoint;
+          let key: string;
+          let mode: DriverRoadRouteState['mode'];
+          let tripId: string | undefined;
+          let patrolIndex: number | undefined;
 
-            speed = Math.floor(28 + Math.random() * 20);
+          if (activeTrip && driver.status === 'en_route') {
+            target = { lat: activeTrip.origin.lat, lng: activeTrip.origin.lng };
+            key = `trip:${activeTrip.id}:origin:${target.lat.toFixed(5)}:${target.lng.toFixed(5)}`;
+            mode = 'trip_origin';
+            tripId = activeTrip.id;
+          } else if (activeTrip && driver.status === 'in_trip') {
+            target = { lat: activeTrip.destination.lat, lng: activeTrip.destination.lng };
+            key = `trip:${activeTrip.id}:destination:${target.lat.toFixed(5)}:${target.lng.toFixed(5)}`;
+            mode = 'trip_destination';
+            tripId = activeTrip.id;
+          } else if (driver.status === 'available') {
+            const storedIndex = patrolIndexRef.current[driver.id] ??
+              Math.abs(driver.id.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0)) % LINARES_PATROL_DESTINATIONS.length;
+            patrolIndex = storedIndex % LINARES_PATROL_DESTINATIONS.length;
+            target = LINARES_PATROL_DESTINATIONS[patrolIndex];
 
-            if (distance < 0.0008) {
-              // Arrived at waypoint
-              if (drv.status === 'en_route') {
+            // Do not route a car to the point where it is already parked.
+            const distanceToTarget = Math.hypot(
+              target.lat - driver.currentLocation.lat,
+              target.lng - driver.currentLocation.lng
+            );
+            if (distanceToTarget < 0.00045) {
+              patrolIndex = (patrolIndex + 1) % LINARES_PATROL_DESTINATIONS.length;
+              patrolIndexRef.current[driver.id] = patrolIndex;
+              target = LINARES_PATROL_DESTINATIONS[patrolIndex];
+            }
+
+            key = `patrol:${driver.id}:${patrolIndex}`;
+            mode = 'patrol';
+          } else {
+            delete driverRoadRoutesRef.current[driver.id];
+            return;
+          }
+
+          const existingRoute = driverRoadRoutesRef.current[driver.id];
+          if (existingRoute?.key === key) return;
+
+          const pendingRoute: DriverRoadRouteState = {
+            key,
+            mode,
+            points: [],
+            index: 0,
+            segmentOffsetMeters: 0,
+            loading: true,
+            finished: false,
+            arrivalHandled: false,
+            tripId,
+            patrolIndex,
+          };
+          driverRoadRoutesRef.current[driver.id] = pendingRoute;
+
+          const points = await requestDrivingRoute(
+            { lat: driver.currentLocation.lat, lng: driver.currentLocation.lng },
+            target
+          );
+
+          if (cancelled || driverRoadRoutesRef.current[driver.id]?.key !== key) return;
+          driverRoadRoutesRef.current[driver.id] = {
+            ...pendingRoute,
+            points,
+            loading: false,
+          };
+        })
+      );
+    };
+
+    void ensureDriverRoutes();
+    const routeRefreshInterval = window.setInterval(() => {
+      void ensureDriverRoutes();
+    }, 2200);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(routeRefreshInterval);
+    };
+  }, []);
+
+  useEffect(() => {
+    const movementInterval = window.setInterval(() => {
+      setDrivers((previousDrivers) =>
+        previousDrivers.map((driver) => {
+          if (['paused', 'offline', 'sos'].includes(driver.status)) {
+            return {
+              ...driver,
+              currentLocation: { ...driver.currentLocation, speed: 0 },
+            };
+          }
+
+          const routeState = driverRoadRoutesRef.current[driver.id];
+          if (!routeState || routeState.loading || routeState.points.length < 2 || routeState.finished) {
+            return driver;
+          }
+
+          const speed = routeState.mode === 'patrol'
+            ? Math.round(18 + Math.random() * 10)
+            : Math.round(32 + Math.random() * 14);
+
+          // La simulación avanza aproximadamente 4,2 veces más rápido que el
+          // tiempo real para que el desplazamiento sea visible durante una demo.
+          const travelMeters = (speed / 3.6) * 0.9 * 4.2;
+          const advanced = advanceAlongRoute(
+            routeState.points,
+            routeState.index,
+            routeState.segmentOffsetMeters,
+            travelMeters
+          );
+
+          routeState.index = advanced.index;
+          routeState.segmentOffsetMeters = advanced.remainingOnSegmentMeters;
+          routeState.finished = advanced.finished;
+
+          if (advanced.finished) {
+            if (routeState.mode === 'patrol') {
+              const nextIndex = ((routeState.patrolIndex ?? 0) + 1) % LINARES_PATROL_DESTINATIONS.length;
+              patrolIndexRef.current[driver.id] = nextIndex;
+              delete driverRoadRoutesRef.current[driver.id];
+            } else if (!routeState.arrivalHandled && routeState.tripId) {
+              routeState.arrivalHandled = true;
+              const activeTrip = tripsSnapshotRef.current.find((trip) => trip.id === routeState.tripId);
+
+              if (activeTrip && routeState.mode === 'trip_origin') {
                 queueMicrotask(() => {
                   updateTripStatus(activeTrip.id, 'in_progress');
                   if (!soundMuted) {
-                    speakVHFDispatch(`Atención central, móvil ${drv.unitNumber} ha llegado al origen.`);
+                    speakVHFDispatch(`Atención central, móvil ${driver.unitNumber} ha llegado al origen.`);
                   }
                 });
-              } else if (drv.status === 'in_trip') {
+              } else if (activeTrip && routeState.mode === 'trip_destination') {
                 queueMicrotask(() => {
                   updateTripStatus(activeTrip.id, 'completed');
                   if (!soundMuted) {
-                    speakVHFDispatch(`Atención central, móvil ${drv.unitNumber} finalizó carrera en ${activeTrip.destination.address}. Móvil libre.`);
+                    speakVHFDispatch(
+                      `Atención central, móvil ${driver.unitNumber} finalizó carrera en ${activeTrip.destination.address}. Móvil libre.`
+                    );
                   }
                 });
               }
-            } else {
-              // Street movement along primary axis (Manhattan grid)
-              const stepSize = 0.00045;
-              if (Math.abs(dLat) > Math.abs(dLng)) {
-                lat += Math.sign(dLat) * stepSize;
-                heading = dLat > 0 ? 0 : 180; // North or South
-              } else {
-                lng += Math.sign(dLng) * stepSize;
-                heading = dLng > 0 ? 90 : 270; // East or West
-              }
-            }
-          } else if (drv.status === 'available') {
-            // Patrol along Linares street grid
-            speed = Math.floor(15 + Math.random() * 15);
-            let currentHeading = heading || 90;
-
-            // 12% chance to turn 90 deg at cross street
-            if (Math.random() < 0.12) {
-              const cardinalTurns = [0, 90, 180, 270];
-              currentHeading = cardinalTurns[Math.floor(Math.random() * cardinalTurns.length)];
-            }
-
-            const step = 0.00028;
-            if (currentHeading === 0) lat += step;
-            else if (currentHeading === 90) lng += step;
-            else if (currentHeading === 180) lat -= step;
-            else if (currentHeading === 270) lng -= step;
-            else lng += step;
-
-            heading = currentHeading;
-
-            // Bound within Linares city limits (-35.860 to -35.832 lat, -71.615 to -71.580 lng)
-            if (lat < -35.860 || lat > -35.832 || lng < -71.615 || lng > -71.580) {
-              const dCenterLat = -35.8454 - lat;
-              const dCenterLng = -71.5979 - lng;
-              heading = Math.abs(dCenterLat) > Math.abs(dCenterLng)
-                ? (dCenterLat > 0 ? 0 : 180)
-                : (dCenterLng > 0 ? 90 : 270);
             }
           }
 
           return {
-            ...drv,
+            ...driver,
             currentLocation: {
-              ...drv.currentLocation,
-              lat,
-              lng,
-              heading,
-              speed,
+              ...driver.currentLocation,
+              lat: advanced.point.lat,
+              lng: advanced.point.lng,
+              heading: advanced.heading,
+              speed: advanced.finished ? 0 : speed,
               lastUpdated: new Date().toISOString(),
             },
           };
         })
       );
-    }, 2500);
+    }, 900);
 
-    return () => clearInterval(interval);
+    return () => window.clearInterval(movementInterval);
   }, [trips, soundMuted]);
 
   // Operational Actions
@@ -391,7 +519,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       } else if (assignedUnitNumber) {
         speakVHFDispatch(`Atención móvil ${assignedUnitNumber}, nuevo despacho en ${newTrip.origin.address}`);
       } else {
-        playVHFRadioChirp();
         speakVHFDispatch(`Atención central y unidades, nuevo despacho libre ingresado en ${newTrip.origin.address}`);
       }
     }
@@ -559,6 +686,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addNotification('Viaje Cancelado', `Cancelación de ${trip.code}: ${reason}`, 'warning', tripId);
   };
 
+  const rejectTripOffer = (tripId: string, reason: string) => {
+    const trip = trips.find((t) => t.id === tripId);
+    if (!trip || ['completed', 'cancelled'].includes(trip.status)) return;
+
+    setTrips((prev) =>
+      prev.map((t) =>
+        t.id === tripId
+          ? {
+              ...t,
+              status: 'pending',
+              driverId: undefined,
+              driverUnitNumber: undefined,
+              driverName: undefined,
+              assignedAt: undefined,
+              notes: `${t.notes ? `${t.notes} | ` : ''}${reason}`,
+            }
+          : t
+      )
+    );
+
+    if (trip.driverId) {
+      setDrivers((prev) =>
+        prev.map((driver) =>
+          driver.id === trip.driverId ? { ...driver, status: 'available' } : driver
+        )
+      );
+    }
+
+    addAuditLog('RECHAZAR_OFERTA', `${trip.code} volvió a la cola. Motivo: ${reason}`);
+    addNotification('Carrera nuevamente disponible', `${trip.code}: ${reason}`, 'warning', tripId);
+  };
+
   const toggleDriverAvailability = (driverId: string, status: DriverStatus) => {
     setDrivers((prev) =>
       prev.map((d) => (d.id === driverId ? { ...d, status } : d))
@@ -637,15 +796,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
   };
 
-  const autoAssignClosestDriver = (tripId: string) => {
+  const autoAssignClosestDriver = (tripId: string): Driver | null => {
     const pendingTrip = trips.find((t) => t.id === tripId);
-    if (!pendingTrip) return;
+    if (!pendingTrip) return null;
 
     // Find available drivers
     const available = drivers.filter((d) => d.status === 'available');
     if (available.length === 0) {
       addNotification('Despacho Automático', 'No hay móviles libres en este momento', 'warning');
-      return;
+      return null;
     }
 
     // Pick closest driver by simple Euclidean distance to origin
@@ -663,6 +822,41 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
 
     assignTrip(tripId, closestDriver.id);
+    return closestDriver;
+  };
+
+  const unassignTrip = (tripId: string) => {
+    const trip = trips.find((item) => item.id === tripId);
+    if (!trip || !trip.driverId || ['completed', 'cancelled'].includes(trip.status)) return;
+
+    const previousDriverId = trip.driverId;
+    const previousUnit = trip.driverUnitNumber || 'Móvil';
+
+    setTrips((prev) =>
+      prev.map((item) =>
+        item.id === tripId
+          ? {
+              ...item,
+              status: 'pending',
+              driverId: undefined,
+              driverUnitNumber: undefined,
+              driverName: undefined,
+              assignedAt: undefined,
+              enRouteAt: undefined,
+              arrivedAt: undefined,
+            }
+          : item
+      )
+    );
+
+    setDrivers((prev) =>
+      prev.map((driver) =>
+        driver.id === previousDriverId ? { ...driver, status: 'available' } : driver
+      )
+    );
+
+    addAuditLog('DESHACER_ASIGNACION', `Devolvió ${trip.code} a pendientes y liberó ${previousUnit}`);
+    addNotification('Asignación deshecha', `${trip.code} volvió a la cola de pendientes`, 'info', tripId);
   };
 
   // CRUD Helpers
@@ -755,11 +949,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         reassignTrip,
         updateTripStatus,
         cancelTrip,
+        rejectTripOffer,
         toggleDriverAvailability,
         updateDriverLocation,
         triggerDriverSOS,
         resolveDriverSOS,
         autoAssignClosestDriver,
+        unassignTrip,
         settleDriverCommission,
         addClient,
         addVehicle,
@@ -767,6 +963,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateFareConfig,
         markNotificationAsRead,
         clearAllNotifications,
+        addAuditLog,
+        addNotification,
       }}
     >
       {children}

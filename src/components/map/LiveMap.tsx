@@ -2,24 +2,28 @@ import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import { useApp } from '../../context/AppContext';
 import { Driver, Trip, DriverStatus } from '../../types';
-import { playVHFRadioChirp, speakVHFDispatch } from '../../lib/audioService';
+import { speakVHFDispatch } from '../../lib/audioService';
+import { requestDrivingRoute, RoadPoint } from '../../lib/roadRouting';
 import { Radio, ShieldAlert, Navigation, Compass, Layers, Crosshair, Plus } from 'lucide-react';
 
 interface LiveMapProps {
   height?: string;
-  onSelectDriver?: (driver: Driver) => void;
+  onSelectDriver?: (driver: Driver | null) => void;
   selectedTrip?: Trip | null;
+  focusDriverId?: string | null;
 }
 
 export const LiveMap: React.FC<LiveMapProps> = ({
   height = 'h-[500px]',
   onSelectDriver,
   selectedTrip,
+  focusDriverId,
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const markersRef = useRef<{ [key: string]: L.Marker }>({});
   const tripPolylineRef = useRef<L.Polyline | null>(null);
+  const approachPolylineRef = useRef<L.Polyline | null>(null);
   const tripMarkersRef = useRef<L.Marker[]>([]);
 
   const userGpsMarkerRef = useRef<L.Marker | null>(null);
@@ -56,6 +60,15 @@ export const LiveMap: React.FC<LiveMapProps> = ({
 
     darkTileLayer.addTo(map);
     mapInstanceRef.current = map;
+
+    // Clicking an empty area returns the map to its neutral state.
+    // Marker clicks do not bubble to the map in Leaflet, so selecting a taxi
+    // still works normally while a background click safely deselects it.
+    const clearDriverFocus = () => {
+      map.closePopup();
+      onSelectDriver?.(null);
+    };
+    map.on('click', clearDriverFocus);
 
     // Ensure map renders correctly without gray tiles
     setTimeout(() => {
@@ -161,6 +174,16 @@ export const LiveMap: React.FC<LiveMapProps> = ({
       attribution: tileMode === 'dark' ? '&copy; CARTO' : '&copy; OpenStreetMap',
     }).addTo(map);
   }, [tileMode]);
+
+  const enableSmoothMarkerTransition = (marker: L.Marker) => {
+    window.requestAnimationFrame(() => {
+      const element = marker.getElement();
+      if (element) {
+        element.style.transition = 'transform 850ms linear';
+        element.style.willChange = 'transform';
+      }
+    });
+  };
 
   // Update Driver Markers
   useEffect(() => {
@@ -300,9 +323,11 @@ export const LiveMap: React.FC<LiveMapProps> = ({
       });
 
       if (markersRef.current[driver.id]) {
-        // Update existing marker position & icon
-        markersRef.current[driver.id].setLatLng([lat, lng]);
+        // Update the icon first and then move the Leaflet element. The CSS
+        // transition makes each GPS sample glide to the next road point.
         markersRef.current[driver.id].setIcon(customIcon);
+        enableSmoothMarkerTransition(markersRef.current[driver.id]);
+        markersRef.current[driver.id].setLatLng([lat, lng]);
       } else {
         // Create new marker
         const marker = L.marker([lat, lng], { icon: customIcon }).addTo(map);
@@ -354,61 +379,141 @@ export const LiveMap: React.FC<LiveMapProps> = ({
         });
 
         markersRef.current[driver.id] = marker;
+        enableSmoothMarkerTransition(marker);
       }
     });
   }, [drivers, filterStatus, tileMode]);
 
-  // Handle Selected Trip Route Display (Origin -> Destination Polyline)
+
+  // When the dashboard clears its vehicle focus, close any popup that had
+  // been reopened by the tracking effect.
+  useEffect(() => {
+    if (focusDriverId || !mapInstanceRef.current) return;
+    mapInstanceRef.current.closePopup();
+  }, [focusDriverId]);
+
+  // Focus a driver selected from the operational dashboard.
+  useEffect(() => {
+    if (!focusDriverId || !mapInstanceRef.current) return;
+    const driver = drivers.find((item) => item.id === focusDriverId);
+    if (!driver) return;
+
+    mapInstanceRef.current.setView(
+      [driver.currentLocation.lat, driver.currentLocation.lng],
+      Math.max(mapInstanceRef.current.getZoom(), 16),
+      { animate: true }
+    );
+
+    const marker = markersRef.current[driver.id];
+    if (marker) marker.openPopup();
+  }, [focusDriverId, drivers]);
+
+  // Draw the selected trip over real streets instead of a straight line.
   useEffect(() => {
     if (!mapInstanceRef.current) return;
     const map = mapInstanceRef.current;
+    const abortController = new AbortController();
 
-    // Clear existing trip markers & polylines
     if (tripPolylineRef.current) {
       tripPolylineRef.current.remove();
       tripPolylineRef.current = null;
     }
-    tripMarkersRef.current.forEach((m) => m.remove());
+    if (approachPolylineRef.current) {
+      approachPolylineRef.current.remove();
+      approachPolylineRef.current = null;
+    }
+    tripMarkersRef.current.forEach((marker) => marker.remove());
     tripMarkersRef.current = [];
 
-    if (selectedTrip) {
-      const orig: [number, number] = [selectedTrip.origin.lat, selectedTrip.origin.lng];
-      const dest: [number, number] = [selectedTrip.destination.lat, selectedTrip.destination.lng];
+    if (!selectedTrip) return () => abortController.abort();
 
-      // Origin Icon
-      const origIcon = L.divIcon({
-        html: `<div class="p-1.5 bg-emerald-500 text-slate-950 font-bold text-xs rounded-full border-2 border-white shadow-xl">A</div>`,
-        className: 'orig-pin',
-        iconSize: [24, 24],
-        iconAnchor: [12, 12],
-      });
+    const origin: RoadPoint = { lat: selectedTrip.origin.lat, lng: selectedTrip.origin.lng };
+    const destination: RoadPoint = {
+      lat: selectedTrip.destination.lat,
+      lng: selectedTrip.destination.lng,
+    };
 
-      // Dest Icon
-      const destIcon = L.divIcon({
-        html: `<div class="p-1.5 bg-rose-500 text-white font-bold text-xs rounded-full border-2 border-white shadow-xl">B</div>`,
-        className: 'dest-pin',
-        iconSize: [24, 24],
-        iconAnchor: [12, 12],
-      });
+    const originIcon = L.divIcon({
+      html: `<div class="p-1.5 bg-emerald-500 text-slate-950 font-bold text-xs rounded-full border-2 border-white shadow-xl">A</div>`,
+      className: 'orig-pin',
+      iconSize: [24, 24],
+      iconAnchor: [12, 12],
+    });
+    const destinationIcon = L.divIcon({
+      html: `<div class="p-1.5 bg-rose-500 text-white font-bold text-xs rounded-full border-2 border-white shadow-xl">B</div>`,
+      className: 'dest-pin',
+      iconSize: [24, 24],
+      iconAnchor: [12, 12],
+    });
 
-      const m1 = L.marker(orig, { icon: origIcon }).addTo(map);
-      const m2 = L.marker(dest, { icon: destIcon }).addTo(map);
-      tripMarkersRef.current = [m1, m2];
+    tripMarkersRef.current = [
+      L.marker([origin.lat, origin.lng], { icon: originIcon }).addTo(map),
+      L.marker([destination.lat, destination.lng], { icon: destinationIcon }).addTo(map),
+    ];
 
-      // Dotted routing line
-      const polyline = L.polyline([orig, dest], {
-        color: '#f59e0b',
-        weight: 4,
-        dashArray: '8, 8',
-        opacity: 0.85,
-      }).addTo(map);
+    const selectedDriver = selectedTrip.driverId
+      ? drivers.find((driver) => driver.id === selectedTrip.driverId)
+      : undefined;
 
-      tripPolylineRef.current = polyline;
+    const renderStreetRoutes = async () => {
+      const passengerRoutePromise = requestDrivingRoute(origin, destination, abortController.signal);
+      const approachRoutePromise =
+        selectedDriver && ['assigned', 'en_route'].includes(selectedTrip.status)
+          ? requestDrivingRoute(
+              {
+                lat: selectedDriver.currentLocation.lat,
+                lng: selectedDriver.currentLocation.lng,
+              },
+              origin,
+              abortController.signal
+            )
+          : Promise.resolve<RoadPoint[]>([]);
 
-      // Fit bounds
-      map.fitBounds([orig, dest], { padding: [50, 50] });
-    }
-  }, [selectedTrip]);
+      try {
+        const [passengerRoute, approachRoute] = await Promise.all([
+          passengerRoutePromise,
+          approachRoutePromise,
+        ]);
+        if (abortController.signal.aborted) return;
+
+        tripPolylineRef.current = L.polyline(
+          passengerRoute.map((point) => [point.lat, point.lng] as [number, number]),
+          {
+            color: '#3b82f6',
+            weight: 5,
+            opacity: 0.9,
+          }
+        ).addTo(map);
+
+        if (approachRoute.length > 1) {
+          approachPolylineRef.current = L.polyline(
+            approachRoute.map((point) => [point.lat, point.lng] as [number, number]),
+            {
+              color: '#f59e0b',
+              weight: 4,
+              dashArray: '9, 7',
+              opacity: 0.9,
+            }
+          ).addTo(map);
+        }
+
+        const allPoints = [...passengerRoute, ...approachRoute];
+        if (allPoints.length > 1) {
+          map.fitBounds(
+            L.latLngBounds(allPoints.map((point) => [point.lat, point.lng])),
+            { padding: [48, 48], maxZoom: 16 }
+          );
+        }
+      } catch (error) {
+        if (!abortController.signal.aborted) {
+          console.warn('No fue posible dibujar la ruta callejera:', error);
+        }
+      }
+    };
+
+    void renderStreetRoutes();
+    return () => abortController.abort();
+  }, [selectedTrip?.id, selectedTrip?.status, selectedTrip?.driverId]);
 
   // Center on active SOS if present
   const focusOnSOS = () => {
@@ -501,7 +606,6 @@ export const LiveMap: React.FC<LiveMapProps> = ({
 
           <button
             onClick={() => {
-              playVHFRadioChirp();
               speakVHFDispatch('Atención todas las unidades en Linares, mantener la frecuencia libre para despachos de la central.');
             }}
             className="px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-bold text-xs rounded-xl shadow-lg flex items-center gap-1.5 transition border border-amber-500/40 uppercase tracking-wider"

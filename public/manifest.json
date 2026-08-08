@@ -1,7 +1,7 @@
 {
   "id": "/",
   "short_name": "CentralGo",
-  "name": "Central Go - Despacho de Radiotaxis",
+  "name": "Central GO - Red de Radiotaxis",
   "icons": [
     {
       "src": "/icon.svg",
@@ -17,5 +17,5 @@
   "display": "standalone",
   "orientation": "any",
   "lang": "es-CL",
-  "description": "Central de despacho simple, seguimiento de móviles y gestión de carreras para radiotaxis."
+  "description": "Plataforma internacional de despacho, gestión de centrales, partners y conductores de radiotaxi."
 }

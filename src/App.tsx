@@ -17,6 +17,13 @@ import { HistoryModule } from './components/modules/HistoryModule';
 import { SettingsModule } from './components/modules/SettingsModule';
 import { ProfileModule } from './components/modules/ProfileModule';
 import { HelpModule } from './components/modules/HelpModule';
+import { GlobalAdminDashboard } from './components/modules/GlobalAdminDashboard';
+import { PartnerDashboard } from './components/modules/PartnerDashboard';
+import { CentralsNetworkModule } from './components/modules/CentralsNetworkModule';
+import { PartnersNetworkModule } from './components/modules/PartnersNetworkModule';
+import { CommissionsNetworkModule } from './components/modules/CommissionsNetworkModule';
+import { PlansNetworkModule } from './components/modules/PlansNetworkModule';
+import { NetworkSupportModule } from './components/modules/NetworkSupportModule';
 import { DriverMobileView } from './components/pwa/DriverMobileView';
 import { NewTripModal } from './components/modals/NewTripModal';
 import { SOSAlertModal } from './components/modals/SOSAlertModal';
@@ -51,7 +58,20 @@ const MainAppContent: React.FC = () => {
   const renderModule = () => {
     switch (activeModule) {
       case 'dashboard':
-        return currentRole === 'operator' ? <OperatorConsole /> : <DashboardModule />;
+        if (currentRole === 'operator') return <OperatorConsole />;
+        if (currentRole === 'super_admin') return <GlobalAdminDashboard />;
+        if (currentRole === 'regional_partner' || currentRole === 'sales_partner') return <PartnerDashboard />;
+        return <DashboardModule />;
+      case 'network_centrals':
+        return <CentralsNetworkModule />;
+      case 'partners_network':
+        return <PartnersNetworkModule />;
+      case 'commissions_network':
+        return <CommissionsNetworkModule />;
+      case 'plans_network':
+        return <PlansNetworkModule />;
+      case 'network_support':
+        return <NetworkSupportModule />;
       case 'live_map':
         return (
           <div className="space-y-4">
@@ -150,7 +170,7 @@ const MainAppContent: React.FC = () => {
 
           <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
-          <main className="flex-1 p-4 md:p-6 overflow-y-auto max-w-7xl mx-auto w-full min-h-[calc(100vh-65px)]">
+          <main className={`flex-1 overflow-y-auto mx-auto w-full min-h-[calc(100vh-65px)] ${currentRole === 'operator' ? 'p-2.5 md:p-3 max-w-[1800px]' : ['super_admin', 'regional_partner', 'sales_partner'].includes(currentRole) ? 'p-4 md:p-6 max-w-[1600px]' : 'p-4 md:p-6 max-w-7xl'}`}>
             {renderModule()}
           </main>
         </div>

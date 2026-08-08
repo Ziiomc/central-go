@@ -1,14 +1,14 @@
 {
   "name": "central-go",
   "private": true,
-  "version": "1.5.1",
+  "version": "1.6.0",
   "type": "module",
   "scripts": {
-    "dev": "node network-bootstrap.mjs && node pricing-bootstrap.mjs && node operator-layout-bootstrap.mjs && node operations-pro-bootstrap.mjs && node road-routes-bootstrap.mjs && node selection-fix-bootstrap.mjs && vite --port=3000 --host=0.0.0.0",
-    "build": "node network-bootstrap.mjs && node pricing-bootstrap.mjs && node operator-layout-bootstrap.mjs && node operations-pro-bootstrap.mjs && node road-routes-bootstrap.mjs && node selection-fix-bootstrap.mjs && vite build",
+    "dev": "vite --port=3000 --host=0.0.0.0",
+    "build": "vite build",
     "preview": "vite preview --host=0.0.0.0",
-    "clean": "rm -rf dist server.js",
-    "lint": "node network-bootstrap.mjs && node pricing-bootstrap.mjs && node operator-layout-bootstrap.mjs && node operations-pro-bootstrap.mjs && node road-routes-bootstrap.mjs && node selection-fix-bootstrap.mjs && tsc --noEmit"
+    "clean": "rm -rf dist",
+    "lint": "tsc --noEmit"
   },
   "dependencies": {
     "leaflet": "^1.9.4",
@@ -28,7 +28,7 @@
     "typescript": "~5.8.2",
     "vite": "^6.2.3"
   },
-  "description": "Central GO Operations Pro con rutas callejeras, movimiento GPS suave y selección de móviles corregida.",
+  "description": "Central GO 1.6 - base comercial estable sin capas de build autogeneradas.",
   "engines": {
     "node": ">=20"
   }

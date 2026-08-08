@@ -1,40 +1,184 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   ArrowRight,
   Car,
   CheckCircle2,
+  ChevronDown,
   Clock3,
+  Columns3,
+  Gauge,
+  LayoutList,
+  List,
+  LocateFixed,
   MapPin,
+  Radio,
   Navigation,
+  PanelBottomOpen,
   Phone,
   Plus,
-  Radio,
+  RefreshCw,
   Search,
-  Users,
+  Timer,
+  Undo2,
+  UserRound,
+  Wifi,
+  WifiOff,
+  X,
   Zap,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { DRIVER_STATUS_LABELS, TRIP_STATUS_LABELS } from '../../lib/labels';
+import { Driver, DriverStatus, Trip, TripStatus } from '../../types';
 import { LiveMap } from '../map/LiveMap';
 
-const activeStatusOrder = ['pending', 'assigned', 'en_route', 'arrived', 'in_progress'];
+const activeStatusOrder: TripStatus[] = ['pending', 'assigned', 'en_route', 'arrived', 'in_progress'];
+const driverStatusOrder: DriverStatus[] = ['available', 'en_route', 'in_trip', 'paused', 'offline', 'sos'];
+
+type QueueView = 'compact' | 'cards';
+type DriverTab = 'available' | 'en_route' | 'in_trip' | 'paused_offline' | 'all';
+type ColumnKey = 'time' | 'client' | 'origin' | 'destination' | 'driver' | 'status' | 'fare' | 'actions';
+
+const columnLabels: Record<ColumnKey, string> = {
+  time: 'Hora',
+  client: 'Cliente',
+  origin: 'Origen',
+  destination: 'Destino',
+  driver: 'Móvil',
+  status: 'Estado',
+  fare: 'Valor',
+  actions: 'Acciones',
+};
+
+const statusTone: Record<DriverStatus, string> = {
+  available: 'border-emerald-500/25 bg-emerald-500/10 text-emerald-300',
+  en_route: 'border-amber-500/25 bg-amber-500/10 text-amber-300',
+  in_trip: 'border-blue-500/25 bg-blue-500/10 text-blue-300',
+  paused: 'border-zinc-600 bg-zinc-800 text-zinc-300',
+  offline: 'border-zinc-700 bg-zinc-900 text-zinc-500',
+  sos: 'border-red-500/40 bg-red-500/15 text-red-300',
+};
 
 function minutesSince(date: string) {
   return Math.max(0, Math.round((Date.now() - new Date(date).getTime()) / 60000));
+}
+
+function formatTime(date: string) {
+  return new Date(date).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' });
+}
+
+function formatMoney(value: number) {
+  return `$${Math.round(value).toLocaleString('es-CL')}`;
+}
+
+function inferZone(address?: string) {
+  const normalized = (address || '').toLowerCase();
+  if (normalized.includes('plaza') || normalized.includes('centro')) return 'Centro';
+  if (normalized.includes('terminal')) return 'Terminal';
+  if (normalized.includes('hospital') || normalized.includes('clínica') || normalized.includes('clinica')) return 'Salud';
+  if (normalized.includes('san antonio')) return 'San Antonio';
+  if (normalized.includes('achibueno')) return 'Achibueno';
+  return address?.split(',')[0]?.slice(0, 20) || 'Linares';
+}
+
+function getConnection(driver: Driver) {
+  if (driver.status === 'offline') return { label: 'Sin app', tone: 'text-zinc-500', Icon: WifiOff };
+  const seconds = Math.max(0, Math.round((Date.now() - new Date(driver.currentLocation.lastUpdated).getTime()) / 1000));
+  if (seconds < 90) return { label: 'App en línea', tone: 'text-emerald-400', Icon: Wifi };
+  if (seconds < 300) return { label: 'Señal débil', tone: 'text-amber-400', Icon: Wifi };
+  return { label: 'Sin señal', tone: 'text-red-400', Icon: WifiOff };
 }
 
 export const OperatorConsole: React.FC = () => {
   const {
     trips,
     drivers,
+    operators,
+    currentUser,
+    currentCompany,
     setNewTripModalOpen,
     setSelectedTripForDetail,
+    setVHFModalDriver,
     autoAssignClosestDriver,
+    unassignTrip,
     updateTripStatus,
-    currentCompany,
+    toggleDriverAvailability,
   } = useApp();
+
   const [search, setSearch] = useState('');
+  const [queueView, setQueueView] = useState<QueueView>('compact');
+  const [driverTab, setDriverTab] = useState<DriverTab>('available');
+  const [selectedTripId, setSelectedTripId] = useState<string | null>(null);
+  const [focusDriverId, setFocusDriverId] = useState<string | null>(null);
+  const [driverMenuId, setDriverMenuId] = useState<string | null>(null);
+  const [columnsOpen, setColumnsOpen] = useState(false);
+  const [now, setNow] = useState(new Date());
+  const [lastSync, setLastSync] = useState(new Date());
+  const [statusConfirmation, setStatusConfirmation] = useState<{ driver: Driver; status: DriverStatus } | null>(null);
+  const [visibleColumns, setVisibleColumns] = useState<Record<ColumnKey, boolean>>({
+    time: true,
+    client: true,
+    origin: true,
+    destination: true,
+    driver: true,
+    status: true,
+    fare: true,
+    actions: true,
+  });
+  const [assignmentToast, setAssignmentToast] = useState<{
+    tripId: string;
+    tripCode: string;
+    driverUnitNumber: string;
+  } | null>(null);
+  const [undoSeconds, setUndoSeconds] = useState(0);
+
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const mapSectionRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    const handleShortcuts = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const typing = target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA' || target?.tagName === 'SELECT';
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        searchInputRef.current?.focus();
+      }
+      if (!typing && event.key === 'F3') {
+        event.preventDefault();
+        setQueueView((current) => (current === 'compact' ? 'cards' : 'compact'));
+      }
+      if (event.key === 'Escape') {
+        setDriverMenuId(null);
+        setColumnsOpen(false);
+        setFocusDriverId(null);
+      }
+    };
+    window.addEventListener('keydown', handleShortcuts);
+    return () => window.removeEventListener('keydown', handleShortcuts);
+  }, []);
+
+  useEffect(() => {
+    if (!assignmentToast) return;
+    setUndoSeconds(7);
+    const timer = window.setInterval(() => {
+      setUndoSeconds((seconds) => {
+        if (seconds <= 1) {
+          window.clearInterval(timer);
+          setAssignmentToast(null);
+          return 0;
+        }
+        return seconds - 1;
+      });
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [assignmentToast]);
+
+  const operator = operators.find((item) => item.userId === currentUser.id) ?? operators[0];
 
   const availableDrivers = useMemo(
     () => drivers.filter((driver) => driver.status === 'available'),
@@ -44,227 +188,571 @@ export const OperatorConsole: React.FC = () => {
     () => drivers.filter((driver) => ['en_route', 'in_trip'].includes(driver.status)),
     [drivers]
   );
-  const activeTrips = useMemo(
-    () =>
-      trips
-        .filter((trip) => activeStatusOrder.includes(trip.status))
-        .filter((trip) => {
-          const term = search.trim().toLowerCase();
-          if (!term) return true;
-          return [
-            trip.code,
-            trip.clientName,
-            trip.clientPhone,
-            trip.origin.address,
-            trip.destination.address,
-            trip.driverUnitNumber ?? '',
-          ].some((value) => value.toLowerCase().includes(term));
-        })
-        .sort((a, b) => {
-          const statusDiff = activeStatusOrder.indexOf(a.status) - activeStatusOrder.indexOf(b.status);
-          return statusDiff || new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-        }),
-    [trips, search]
-  );
 
+  const activeTrips = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    return trips
+      .filter((trip) => activeStatusOrder.includes(trip.status))
+      .filter((trip) => {
+        if (!term) return true;
+        return [
+          trip.code,
+          trip.clientName,
+          trip.clientPhone,
+          trip.origin.address,
+          trip.destination.address,
+          trip.driverUnitNumber ?? '',
+          trip.operatorName,
+        ].some((value) => value.toLowerCase().includes(term));
+      })
+      .sort((a, b) => {
+        const statusDiff = activeStatusOrder.indexOf(a.status) - activeStatusOrder.indexOf(b.status);
+        return statusDiff || new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      });
+  }, [trips, search]);
+
+  useEffect(() => {
+    if (!selectedTripId && activeTrips.length) setSelectedTripId(activeTrips[0].id);
+    if (selectedTripId && !activeTrips.some((trip) => trip.id === selectedTripId)) {
+      setSelectedTripId(activeTrips[0]?.id ?? null);
+    }
+  }, [activeTrips, selectedTripId]);
+
+  const selectedTrip = activeTrips.find((trip) => trip.id === selectedTripId) ?? null;
+  const selectedDriver = drivers.find((driver) => driver.id === focusDriverId) ?? null;
   const pendingCount = trips.filter((trip) => trip.status === 'pending').length;
   const completedToday = trips.filter((trip) => trip.status === 'completed').length;
 
+  const orderedAvailable = useMemo(
+    () => [...availableDrivers].sort((a, b) => new Date(a.currentLocation.lastUpdated).getTime() - new Date(b.currentLocation.lastUpdated).getTime()),
+    [availableDrivers]
+  );
+
+  const displayedDrivers = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    return [...drivers]
+      .sort((a, b) => {
+        const statusDiff = driverStatusOrder.indexOf(a.status) - driverStatusOrder.indexOf(b.status);
+        if (statusDiff) return statusDiff;
+        if (a.status === 'available' && b.status === 'available') {
+          return orderedAvailable.findIndex((item) => item.id === a.id) - orderedAvailable.findIndex((item) => item.id === b.id);
+        }
+        return a.unitNumber.localeCompare(b.unitNumber, 'es', { numeric: true });
+      })
+      .filter((driver) => {
+        if (driverTab === 'paused_offline' && !['paused', 'offline'].includes(driver.status)) return false;
+        if (driverTab !== 'all' && driverTab !== 'paused_offline' && driver.status !== driverTab) return false;
+        if (!term) return true;
+        return [driver.unitNumber, driver.name, driver.phone, driver.currentLocation.address ?? '', inferZone(driver.currentLocation.address)]
+          .some((value) => value.toLowerCase().includes(term));
+      });
+  }, [drivers, driverTab, search, orderedAvailable]);
+
+  const handleAutoAssign = (tripId: string, tripCode: string) => {
+    const driver = autoAssignClosestDriver(tripId);
+    if (!driver) return;
+    setFocusDriverId(driver.id);
+    setAssignmentToast({ tripId, tripCode, driverUnitNumber: driver.unitNumber });
+  };
+
+  const undoAssignment = () => {
+    if (!assignmentToast) return;
+    unassignTrip(assignmentToast.tripId);
+    setAssignmentToast(null);
+  };
+
+  const focusDriver = (driver: Driver, toggle = true) => {
+    const deselecting = toggle && focusDriverId === driver.id;
+    setFocusDriverId(deselecting ? null : driver.id);
+    if (!deselecting) {
+      mapSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    setDriverMenuId(null);
+  };
+
+  const requestDriverStatus = (driver: Driver, status: DriverStatus) => {
+    const riskyChange = status === 'offline' || (['en_route', 'in_trip'].includes(driver.status) && status !== driver.status);
+    if (riskyChange) {
+      setStatusConfirmation({ driver, status });
+    } else {
+      toggleDriverAvailability(driver.id, status);
+    }
+    setDriverMenuId(null);
+  };
+
+  const confirmDriverStatus = () => {
+    if (!statusConfirmation) return;
+    toggleDriverAvailability(statusConfirmation.driver.id, statusConfirmation.status);
+    setStatusConfirmation(null);
+  };
+
+  const refreshOperationalData = () => {
+    setLastSync(new Date());
+    setNow(new Date());
+  };
+
   return (
-    <div className="space-y-5 pb-8">
-      <section className="rounded-2xl border border-amber-400/30 bg-gradient-to-br from-amber-400/12 via-[#111113] to-[#0b0b0d] p-4 shadow-2xl shadow-black/30 md:p-5">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="min-w-0">
-            <div className="mb-1 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-amber-300">
-              <Radio className="h-4 w-4" /> Central operativa
-            </div>
-            <h1 className="text-2xl font-black tracking-tight text-white md:text-3xl">
-              Despacho simple y rápido
-            </h1>
-            <p className="mt-1 max-w-2xl text-sm text-zinc-400">
-              {currentCompany.name}. Las carreras pendientes aparecen primero y puedes asignarlas con un solo clic.
-            </p>
+    <div className="space-y-3 pb-5">
+      <section className="flex flex-wrap items-center gap-2 rounded-2xl border border-zinc-800 bg-[#0d0d0f] p-2.5 shadow-xl shadow-black/20">
+        <div className="flex min-w-0 flex-1 items-center gap-3 px-1.5">
+          <div className="hidden rounded-xl border border-blue-500/20 bg-blue-500/10 p-2 text-blue-300 sm:block">
+            <UserRound className="h-4 w-4" />
           </div>
-          <button
-            onClick={() => setNewTripModalOpen(true)}
-            className="flex min-h-14 w-full items-center justify-center gap-3 rounded-2xl border border-amber-200 bg-amber-400 px-6 py-3 text-base font-black text-zinc-950 shadow-xl shadow-amber-500/20 transition hover:bg-amber-300 active:scale-[0.99] lg:w-auto"
-          >
-            <Plus className="h-6 w-6" strokeWidth={3} />
-            NUEVA CARRERA
-            <span className="rounded-md bg-black/10 px-2 py-1 text-[10px] font-bold">F2</span>
-          </button>
+          <div className="min-w-0">
+            <p className="truncate text-xs font-black text-white">{operator?.name ?? currentUser.name}</p>
+            <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-zinc-400">
+              <span className="flex items-center gap-1"><Clock3 className="h-3 w-3 text-amber-300" />{now.toLocaleTimeString('es-CL')}</span>
+              <span className="flex items-center gap-1"><Timer className="h-3 w-3 text-emerald-300" />Promedio {operator?.avgDispatchTimeSeconds ?? 0}s</span>
+              <span className="flex items-center gap-1"><Gauge className="h-3 w-3 text-blue-300" />{operator?.dispatchesToday ?? 0} despachos hoy</span>
+            </div>
+          </div>
         </div>
+
+        <div className="relative min-w-[220px] flex-[1.3] lg:max-w-xl">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+          <input
+            ref={searchInputRef}
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Buscar carrera, cliente, teléfono, calle o móvil…"
+            className="w-full rounded-xl border border-zinc-800 bg-zinc-950 py-2.5 pl-9 pr-16 text-xs text-white outline-none transition placeholder:text-zinc-500 focus:border-amber-400"
+          />
+          <kbd className="absolute right-3 top-1/2 -translate-y-1/2 rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-[9px] font-black text-zinc-400">Ctrl K</kbd>
+        </div>
+
+        <button
+          onClick={refreshOperationalData}
+          className="flex h-10 items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900 px-3 text-[11px] font-bold text-zinc-300 hover:border-blue-500/40 hover:text-white"
+          title={`Última sincronización: ${lastSync.toLocaleTimeString('es-CL')}`}
+        >
+          <RefreshCw className="h-4 w-4" /> <span className="hidden xl:inline">Actualizar</span>
+        </button>
+        <button
+          onClick={() => selectedDriver && focusDriver(selectedDriver, false)}
+          disabled={!selectedDriver}
+          className="flex h-10 items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900 px-3 text-[11px] font-bold text-zinc-300 hover:border-emerald-500/40 hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
+          title={selectedDriver ? `Ubicar ${selectedDriver.unitNumber}` : 'Selecciona un móvil'}
+        >
+          <LocateFixed className="h-4 w-4" /> <span className="hidden xl:inline">Ubicar</span>
+        </button>
+        <button
+          onClick={() => setNewTripModalOpen(true)}
+          className="flex h-10 items-center gap-2 rounded-xl bg-amber-400 px-4 text-xs font-black text-zinc-950 shadow-lg shadow-amber-500/15 transition hover:bg-amber-300"
+        >
+          <Plus className="h-4 w-4" strokeWidth={3} /> Nueva carrera <kbd className="hidden rounded bg-black/10 px-1.5 py-0.5 text-[9px] sm:inline">F2</kbd>
+        </button>
       </section>
 
-      <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatusCard label="Móviles libres" value={availableDrivers.length} detail={`de ${drivers.length} conectados`} icon={Car} tone="emerald" />
+      <section className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+        <StatusCard label="Móviles libres" value={availableDrivers.length} detail={`de ${drivers.length} registrados`} icon={Car} tone="emerald" />
         <StatusCard label="En servicio" value={busyDrivers.length} detail="en camino o carrera" icon={Navigation} tone="blue" />
         <StatusCard label="Por asignar" value={pendingCount} detail={pendingCount ? 'requieren atención' : 'todo al día'} icon={AlertTriangle} tone={pendingCount ? 'amber' : 'zinc'} />
-        <StatusCard label="Finalizadas" value={completedToday} detail="en esta demostración" icon={CheckCircle2} tone="zinc" />
+        <StatusCard label="Finalizadas" value={completedToday} detail="durante esta jornada" icon={CheckCircle2} tone="zinc" />
       </section>
 
-      <section className="grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,.65fr)]">
-        <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-[#0d0d0f] shadow-2xl shadow-black/20">
-          <div className="flex flex-col gap-3 border-b border-zinc-800 p-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h2 className="text-base font-extrabold text-white">Cola de despacho</h2>
-              <p className="text-xs text-zinc-500">Pendientes primero · toca una carrera para ver el detalle</p>
-            </div>
-            <div className="relative sm:w-72">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
-              <input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Buscar cliente, dirección o móvil"
-                className="w-full rounded-xl border border-zinc-800 bg-zinc-950 py-2.5 pl-9 pr-3 text-sm text-white outline-none transition placeholder:text-zinc-600 focus:border-amber-400"
-              />
+      <section ref={mapSectionRef} className="grid min-h-[570px] gap-3 2xl:grid-cols-[minmax(520px,0.92fr)_minmax(620px,1.35fr)] xl:grid-cols-[minmax(470px,0.9fr)_minmax(560px,1.25fr)]">
+        <div className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-zinc-800 bg-[#0d0d0f] shadow-2xl shadow-black/20">
+          <div className="border-b border-zinc-800 p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-sm font-extrabold text-white">Cola de despacho</h2>
+                  <span className={`rounded-full px-2 py-0.5 text-[9px] font-black ${pendingCount ? 'bg-amber-500/15 text-amber-300' : 'bg-emerald-500/10 text-emerald-300'}`}>
+                    {pendingCount} por asignar
+                  </span>
+                </div>
+                <p className="mt-0.5 text-[10px] text-zinc-400">{activeTrips.length} carreras visibles · pendientes primero</p>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <div className="flex rounded-lg border border-zinc-800 bg-zinc-950 p-1">
+                  <button
+                    onClick={() => setQueueView('compact')}
+                    className={`flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[10px] font-black ${queueView === 'compact' ? 'bg-blue-600 text-white' : 'text-zinc-500 hover:text-white'}`}
+                    title="Vista compacta (F3)"
+                  >
+                    <List className="h-3.5 w-3.5" /> Compacta
+                  </button>
+                  <button
+                    onClick={() => setQueueView('cards')}
+                    className={`flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[10px] font-black ${queueView === 'cards' ? 'bg-blue-600 text-white' : 'text-zinc-500 hover:text-white'}`}
+                    title="Vista visual (F3)"
+                  >
+                    <LayoutList className="h-3.5 w-3.5" /> Visual
+                  </button>
+                </div>
+
+                {queueView === 'compact' && (
+                  <div className="relative">
+                    <button
+                      onClick={() => setColumnsOpen((open) => !open)}
+                      className="rounded-lg border border-zinc-800 bg-zinc-950 p-2 text-zinc-400 hover:text-white"
+                      title="Columnas visibles"
+                    >
+                      <Columns3 className="h-4 w-4" />
+                    </button>
+                    {columnsOpen && (
+                      <div className="absolute right-0 top-full z-40 mt-2 w-48 rounded-xl border border-zinc-700 bg-[#111114] p-2 shadow-2xl">
+                        <p className="px-2 py-1 text-[9px] font-black uppercase tracking-widest text-zinc-500">Columnas visibles</p>
+                        {(Object.keys(columnLabels) as ColumnKey[]).map((key) => (
+                          <label key={key} className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-[11px] text-zinc-300 hover:bg-zinc-800">
+                            <input
+                              type="checkbox"
+                              checked={visibleColumns[key]}
+                              onChange={() => setVisibleColumns((current) => ({ ...current, [key]: !current[key] }))}
+                              className="accent-blue-500"
+                            />
+                            {columnLabels[key]}
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
-          <div className="divide-y divide-zinc-800/80">
-            {activeTrips.length === 0 ? (
-              <div className="flex min-h-56 flex-col items-center justify-center gap-3 p-8 text-center">
-                <CheckCircle2 className="h-10 w-10 text-emerald-400" />
-                <div>
-                  <p className="font-bold text-white">No hay carreras activas</p>
-                  <p className="text-sm text-zinc-500">La central está al día.</p>
-                </div>
-                <button onClick={() => setNewTripModalOpen(true)} className="rounded-xl bg-amber-400 px-4 py-2 text-sm font-black text-zinc-950">
-                  Crear carrera
-                </button>
+          {activeTrips.length === 0 ? (
+            <EmptyQueue onCreate={() => setNewTripModalOpen(true)} />
+          ) : queueView === 'compact' ? (
+            <CompactTripTable
+              trips={activeTrips}
+              selectedTripId={selectedTripId}
+              visibleColumns={visibleColumns}
+              availableDriversCount={availableDrivers.length}
+              onSelect={setSelectedTripId}
+              onDetail={setSelectedTripForDetail}
+              onAssign={handleAutoAssign}
+              onCall={(phone) => { window.location.href = `tel:${phone}`; }}
+            />
+          ) : (
+            <VisualTripQueue
+              trips={activeTrips}
+              selectedTripId={selectedTripId}
+              availableDriversCount={availableDrivers.length}
+              onSelect={setSelectedTripId}
+              onDetail={setSelectedTripForDetail}
+              onAssign={handleAutoAssign}
+              onStart={(tripId) => updateTripStatus(tripId, 'in_progress')}
+            />
+          )}
+        </div>
+
+        <div className="min-w-0 overflow-hidden rounded-2xl border border-zinc-800 bg-[#0d0d0f] shadow-2xl shadow-black/20">
+          <div className="flex min-h-[62px] items-center justify-between gap-3 border-b border-zinc-800 px-4 py-2.5">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-extrabold text-white">Mapa operativo</h2>
+                <span className="flex items-center gap-1 text-[9px] font-black uppercase text-emerald-400"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> En línea</span>
               </div>
-            ) : (
-              activeTrips.map((trip) => {
-                const isPending = trip.status === 'pending';
+              {selectedTrip ? (
+                <p className="mt-0.5 truncate text-[10px] text-zinc-400">
+                  <strong className="text-blue-300">{selectedTrip.code}</strong> · {selectedTrip.origin.address} → {selectedTrip.destination.address}
+                </p>
+              ) : (
+                <p className="mt-0.5 text-[10px] text-zinc-400">Selecciona una carrera para ver su ruta.</p>
+              )}
+            </div>
+            {selectedDriver && (
+              <button
+                onClick={() => setVHFModalDriver(selectedDriver)}
+                className="flex shrink-0 items-center gap-1.5 rounded-lg border border-blue-500/25 bg-blue-500/10 px-2.5 py-2 text-[10px] font-black text-blue-200 hover:bg-blue-500/20"
+              >
+                <Radio className="h-3.5 w-3.5" /> VHF {selectedDriver.unitNumber}
+              </button>
+            )}
+          </div>
+          <LiveMap
+            height="h-[507px]"
+            selectedTrip={selectedTrip}
+            focusDriverId={focusDriverId}
+            onSelectDriver={(driver) =>
+              setFocusDriverId((current) => driver ? (current === driver.id ? null : driver.id) : null)
+            }
+          />
+        </div>
+      </section>
+
+      <section className="overflow-visible rounded-2xl border border-zinc-800 bg-[#0d0d0f] shadow-xl shadow-black/20">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-800 px-3 py-2.5">
+          <div className="flex items-center gap-2">
+            <PanelBottomOpen className="h-4 w-4 text-emerald-300" />
+            <div>
+              <h2 className="text-sm font-extrabold text-white">Control de móviles</h2>
+              <p className="text-[10px] text-zinc-400">Turno, conexión y cambio rápido de estado</p>
+            </div>
+          </div>
+          <div className="flex max-w-full gap-1 overflow-x-auto rounded-xl border border-zinc-800 bg-zinc-950 p-1">
+            {([
+              ['available', `Libres ${availableDrivers.length}`],
+              ['en_route', `En camino ${drivers.filter((d) => d.status === 'en_route').length}`],
+              ['in_trip', `En carrera ${drivers.filter((d) => d.status === 'in_trip').length}`],
+              ['paused_offline', `Pausa / fuera ${drivers.filter((d) => ['paused', 'offline'].includes(d.status)).length}`],
+              ['all', `Todos ${drivers.length}`],
+            ] as [DriverTab, string][]).map(([id, label]) => (
+              <button
+                key={id}
+                onClick={() => setDriverTab(id)}
+                className={`whitespace-nowrap rounded-lg px-2.5 py-1.5 text-[10px] font-black transition ${driverTab === id ? 'bg-emerald-600 text-white' : 'text-zinc-500 hover:text-white'}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[920px] border-collapse text-left">
+            <thead className="bg-zinc-950/80 text-[9px] font-black uppercase tracking-wider text-zinc-500">
+              <tr>
+                <th className="w-14 px-3 py-2">Turno</th>
+                <th className="px-3 py-2">Móvil / conductor</th>
+                <th className="px-3 py-2">Estado</th>
+                <th className="px-3 py-2">Zona</th>
+                <th className="px-3 py-2">Última actividad</th>
+                <th className="px-3 py-2">Conexión</th>
+                <th className="px-3 py-2 text-right">Acciones</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-800/80">
+              {displayedDrivers.map((driver) => {
+                const connection = getConnection(driver);
+                const ConnectionIcon = connection.Icon;
+                const turnPosition = driver.status === 'available' ? orderedAvailable.findIndex((item) => item.id === driver.id) + 1 : null;
+                const isFocused = focusDriverId === driver.id;
                 return (
-                  <article
-                    key={trip.id}
-                    className={`p-4 transition hover:bg-zinc-900/70 ${isPending ? 'bg-amber-400/[0.045]' : ''}`}
-                  >
-                    <div className="flex flex-col gap-3 md:flex-row md:items-center">
-                      <button
-                        onClick={() => setSelectedTripForDetail(trip)}
-                        className="min-w-0 flex-1 text-left"
-                      >
-                        <div className="mb-2 flex flex-wrap items-center gap-2">
-                          <span className="font-mono text-xs font-bold text-blue-300">{trip.code}</span>
-                          <TripStatusBadge status={trip.status} />
-                          <span className="flex items-center gap-1 text-[11px] text-zinc-500">
-                            <Clock3 className="h-3 w-3" /> hace {minutesSince(trip.createdAt)} min
-                          </span>
+                  <tr key={driver.id} className={`transition ${isFocused ? 'bg-blue-500/[0.08]' : 'hover:bg-zinc-900/70'}`}>
+                    <td className="px-3 py-2.5">
+                      {turnPosition ? (
+                        <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/10 text-[11px] font-black text-emerald-300">{turnPosition}</span>
+                      ) : (
+                        <span className="text-zinc-700">—</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <button onClick={() => focusDriver(driver)} className="flex min-w-0 items-center gap-2.5 text-left">
+                        <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border text-[11px] font-black ${statusTone[driver.status]}`}>
+                          {driver.unitNumber.replace(/\D/g, '').slice(-2)}
                         </div>
-                        <div className="font-bold text-white">{trip.clientName}</div>
-                        <div className="mt-1 grid gap-1 text-sm sm:grid-cols-2">
-                          <span className="flex min-w-0 items-center gap-1.5 text-zinc-300">
-                            <MapPin className="h-4 w-4 shrink-0 text-emerald-400" />
-                            <span className="truncate">{trip.origin.address}</span>
-                          </span>
-                          <span className="flex min-w-0 items-center gap-1.5 text-zinc-500">
-                            <Navigation className="h-4 w-4 shrink-0 text-rose-400" />
-                            <span className="truncate">{trip.destination.address}</span>
-                          </span>
+                        <div className="min-w-0">
+                          <p className="truncate text-xs font-black text-white">{driver.unitNumber} · {driver.name}</p>
+                          <p className="truncate text-[9px] text-zinc-500">{driver.phone}</p>
                         </div>
                       </button>
-
-                      <div className="flex flex-wrap items-center gap-2 md:justify-end">
-                        {trip.driverUnitNumber ? (
-                          <span className="rounded-xl border border-blue-500/25 bg-blue-500/10 px-3 py-2 text-xs font-bold text-blue-200">
-                            {trip.driverUnitNumber}
-                          </span>
-                        ) : (
-                          <button
-                            onClick={() => autoAssignClosestDriver(trip.id)}
-                            disabled={!availableDrivers.length}
-                            className="flex items-center gap-2 rounded-xl bg-amber-400 px-4 py-2.5 text-xs font-black text-zinc-950 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-40"
-                          >
-                            <Zap className="h-4 w-4" /> Asignar cercano
-                          </button>
-                        )}
-
-                        {trip.status === 'arrived' && (
-                          <button
-                            onClick={() => updateTripStatus(trip.id, 'in_progress')}
-                            className="rounded-xl bg-emerald-600 px-3 py-2.5 text-xs font-bold text-white hover:bg-emerald-500"
-                          >
-                            Iniciar carrera
-                          </button>
-                        )}
-                        <a
-                          href={`tel:${trip.clientPhone}`}
-                          aria-label={`Llamar a ${trip.clientName}`}
-                          className="rounded-xl border border-zinc-700 bg-zinc-900 p-2.5 text-zinc-300 hover:border-zinc-600 hover:text-white"
-                        >
-                          <Phone className="h-4 w-4" />
-                        </a>
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <div className="relative inline-block">
                         <button
-                          onClick={() => setSelectedTripForDetail(trip)}
-                          aria-label={`Ver detalle de ${trip.code}`}
-                          className="rounded-xl border border-zinc-700 bg-zinc-900 p-2.5 text-zinc-300 hover:border-zinc-600 hover:text-white"
+                          onClick={() => setDriverMenuId((current) => current === driver.id ? null : driver.id)}
+                          className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[10px] font-black ${statusTone[driver.status]}`}
                         >
-                          <ArrowRight className="h-4 w-4" />
+                          {DRIVER_STATUS_LABELS[driver.status]} <ChevronDown className="h-3 w-3" />
                         </button>
+                        {driverMenuId === driver.id && (
+                          <div className="absolute left-0 top-full z-50 mt-1.5 w-44 rounded-xl border border-zinc-700 bg-[#111114] p-1.5 shadow-2xl">
+                            {driverStatusOrder.filter((status) => status !== 'sos').map((status) => (
+                              <button
+                                key={status}
+                                onClick={() => requestDriverStatus(driver, status)}
+                                className={`flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-[10px] font-bold transition hover:bg-zinc-800 ${driver.status === status ? 'text-blue-300' : 'text-zinc-300'}`}
+                              >
+                                {DRIVER_STATUS_LABELS[status]}
+                                {driver.status === status && <CheckCircle2 className="h-3.5 w-3.5" />}
+                              </button>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  </article>
+                    </td>
+                    <td className="px-3 py-2.5 text-[10px] font-semibold text-zinc-300">{inferZone(driver.currentLocation.address)}</td>
+                    <td className="px-3 py-2.5">
+                      <p className="max-w-[260px] truncate text-[10px] text-zinc-300">{driver.currentLocation.address || 'Ubicación no informada'}</p>
+                      <p className="mt-0.5 text-[9px] text-zinc-600">hace {minutesSince(driver.currentLocation.lastUpdated)} min · {driver.currentLocation.speed ?? 0} km/h</p>
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <span className={`flex items-center gap-1.5 text-[10px] font-bold ${connection.tone}`}><ConnectionIcon className="h-3.5 w-3.5" />{connection.label}</span>
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <div className="flex justify-end gap-1.5">
+                        <button onClick={() => focusDriver(driver)} className="rounded-lg border border-zinc-700 bg-zinc-900 p-2 text-zinc-400 hover:border-emerald-500/40 hover:text-emerald-300" title="Ubicar en mapa"><LocateFixed className="h-3.5 w-3.5" /></button>
+                        <button onClick={() => setVHFModalDriver(driver)} className="rounded-lg border border-zinc-700 bg-zinc-900 p-2 text-zinc-400 hover:border-blue-500/40 hover:text-blue-300" title="Radio VHF"><Radio className="h-3.5 w-3.5" /></button>
+                        <button onClick={() => setNewTripModalOpen(true)} className="rounded-lg border border-zinc-700 bg-zinc-900 p-2 text-zinc-400 hover:border-amber-500/40 hover:text-amber-300" title="Crear carrera"><Plus className="h-3.5 w-3.5" /></button>
+                      </div>
+                    </td>
+                  </tr>
                 );
-              })
-            )}
-          </div>
+              })}
+            </tbody>
+          </table>
         </div>
+      </section>
 
-        <aside className="rounded-2xl border border-zinc-800 bg-[#0d0d0f] p-4 shadow-2xl shadow-black/20">
-          <div className="mb-3 flex items-center justify-between">
-            <div>
-              <h2 className="text-base font-extrabold text-white">Móviles libres</h2>
-              <p className="text-xs text-zinc-500">Disponibles para el próximo despacho</p>
+      {assignmentToast && (
+        <div className="fixed bottom-5 right-5 z-[70] w-[min(92vw,390px)] rounded-2xl border border-emerald-400/35 bg-[#101713] p-4 shadow-2xl shadow-black/60" role="status" aria-live="polite">
+          <div className="flex items-start gap-3">
+            <div className="rounded-xl bg-emerald-500/15 p-2 text-emerald-300"><CheckCircle2 className="h-5 w-5" /></div>
+            <div className="min-w-0 flex-1">
+              <p className="font-extrabold text-white">Carrera asignada al {assignmentToast.driverUnitNumber}</p>
+              <p className="mt-0.5 text-sm text-zinc-300">{assignmentToast.tripCode} salió de la cola de pendientes.</p>
+              <button onClick={undoAssignment} className="mt-3 flex items-center gap-2 rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-3 py-2 text-xs font-black text-emerald-200 hover:bg-emerald-500/20">
+                <Undo2 className="h-4 w-4" /> Deshacer ({undoSeconds}s)
+              </button>
             </div>
-            <span className="rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-bold text-emerald-300">
-              {availableDrivers.length}
-            </span>
+            <button onClick={() => setAssignmentToast(null)} aria-label="Cerrar confirmación" className="rounded-lg p-1.5 text-zinc-400 hover:bg-white/5 hover:text-white"><X className="h-4 w-4" /></button>
           </div>
-          <div className="space-y-2">
-            {availableDrivers.slice(0, 7).map((driver) => (
-              <div key={driver.id} className="flex items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-950/70 p-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-sm font-black text-emerald-300">
-                  {driver.unitNumber.replace(/\D/g, '').slice(-2)}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-bold text-white">{driver.unitNumber} · {driver.name}</div>
-                  <div className="truncate text-xs text-zinc-500">{driver.currentLocation.address}</div>
-                </div>
-                <span className="text-[10px] font-bold uppercase text-emerald-400">{DRIVER_STATUS_LABELS[driver.status]}</span>
-              </div>
-            ))}
-            {!availableDrivers.length && (
-              <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 text-sm text-amber-200">
-                No hay móviles libres en este momento.
-              </div>
-            )}
-          </div>
-          <button
-            onClick={() => setNewTripModalOpen(true)}
-            className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-3 text-sm font-bold text-white hover:border-amber-400/50"
-          >
-            <Users className="h-4 w-4" /> Abrir despacho
-          </button>
-        </aside>
-      </section>
-
-      <section className="overflow-hidden rounded-2xl border border-zinc-800 bg-[#0d0d0f] shadow-2xl shadow-black/20">
-        <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
-          <div>
-            <h2 className="font-extrabold text-white">Mapa de la flota</h2>
-            <p className="text-xs text-zinc-500">Ubicación simulada para la demostración</p>
-          </div>
-          <span className="flex items-center gap-1.5 text-xs font-bold text-emerald-400">
-            <span className="h-2 w-2 rounded-full bg-emerald-400" /> En línea
-          </span>
         </div>
-        <LiveMap height="h-[420px]" />
-      </section>
+      )}
+
+      {statusConfirmation && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/75 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-2xl border border-amber-500/25 bg-[#111114] p-5 shadow-2xl">
+            <div className="flex items-start gap-3">
+              <div className="rounded-xl bg-amber-500/10 p-2 text-amber-300"><AlertTriangle className="h-5 w-5" /></div>
+              <div>
+                <h3 className="font-black text-white">Confirmar cambio de estado</h3>
+                <p className="mt-1 text-sm leading-relaxed text-zinc-400">
+                  ¿Cambiar {statusConfirmation.driver.unitNumber} de <strong className="text-white">{DRIVER_STATUS_LABELS[statusConfirmation.driver.status]}</strong> a <strong className="text-amber-300">{DRIVER_STATUS_LABELS[statusConfirmation.status]}</strong>?
+                </p>
+              </div>
+            </div>
+            <div className="mt-5 grid grid-cols-2 gap-2">
+              <button onClick={() => setStatusConfirmation(null)} className="rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-2.5 text-xs font-black text-zinc-300 hover:text-white">Cancelar</button>
+              <button onClick={confirmDriverStatus} className="rounded-xl bg-amber-400 px-4 py-2.5 text-xs font-black text-zinc-950 hover:bg-amber-300">Confirmar</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
+
+function EmptyQueue({ onCreate }: { onCreate: () => void }) {
+  return (
+    <div className="flex min-h-[490px] flex-col items-center justify-center gap-3 p-6 text-center">
+      <CheckCircle2 className="h-9 w-9 text-emerald-400" />
+      <div><p className="text-sm font-bold text-white">No hay carreras activas</p><p className="text-xs text-zinc-400">La central está al día.</p></div>
+      <button onClick={onCreate} className="rounded-xl bg-amber-400 px-4 py-2 text-xs font-black text-zinc-950">Crear carrera</button>
+    </div>
+  );
+}
+
+function CompactTripTable({
+  trips,
+  selectedTripId,
+  visibleColumns,
+  availableDriversCount,
+  onSelect,
+  onDetail,
+  onAssign,
+  onCall,
+}: {
+  trips: Trip[];
+  selectedTripId: string | null;
+  visibleColumns: Record<ColumnKey, boolean>;
+  availableDriversCount: number;
+  onSelect: (id: string) => void;
+  onDetail: (trip: Trip) => void;
+  onAssign: (tripId: string, tripCode: string) => void;
+  onCall: (phone: string) => void;
+}) {
+  return (
+    <div className="max-h-[507px] flex-1 overflow-auto">
+      <table className="w-full min-w-[920px] border-collapse text-left">
+        <thead className="sticky top-0 z-10 bg-zinc-950 text-[9px] font-black uppercase tracking-wider text-zinc-500 shadow-[0_1px_0_#27272a]">
+          <tr>
+            {visibleColumns.time && <th className="w-16 px-2.5 py-2">Hora</th>}
+            {visibleColumns.client && <th className="w-40 px-2.5 py-2">Cliente</th>}
+            {visibleColumns.origin && <th className="min-w-52 px-2.5 py-2">Dirección inicial</th>}
+            {visibleColumns.destination && <th className="min-w-44 px-2.5 py-2">Destino</th>}
+            {visibleColumns.driver && <th className="w-24 px-2.5 py-2">Móvil</th>}
+            {visibleColumns.status && <th className="w-28 px-2.5 py-2">Estado</th>}
+            {visibleColumns.fare && <th className="w-24 px-2.5 py-2 text-right">Valor</th>}
+            {visibleColumns.actions && <th className="w-28 px-2.5 py-2 text-right">Acciones</th>}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-zinc-800/70">
+          {trips.map((trip) => {
+            const selected = trip.id === selectedTripId;
+            const pending = trip.status === 'pending';
+            return (
+              <tr
+                key={trip.id}
+                onClick={() => onSelect(trip.id)}
+                className={`cursor-pointer transition ${selected ? 'bg-blue-500/[0.09] shadow-[inset_3px_0_0_#3b82f6]' : pending ? 'bg-amber-400/[0.035] hover:bg-amber-400/[0.07]' : 'hover:bg-zinc-900/70'}`}
+              >
+                {visibleColumns.time && <td className="px-2.5 py-2.5 align-top font-mono text-[10px] font-bold text-zinc-300">{formatTime(trip.createdAt)}<span className="mt-0.5 block text-[8px] text-zinc-600">{minutesSince(trip.createdAt)} min</span></td>}
+                {visibleColumns.client && <td className="px-2.5 py-2.5 align-top"><p className="max-w-36 truncate text-[11px] font-black text-white">{trip.clientName}</p><p className="mt-0.5 text-[9px] text-zinc-500">{trip.clientPhone}</p></td>}
+                {visibleColumns.origin && <td className="px-2.5 py-2.5 align-top"><p className="max-w-60 truncate text-[10px] font-semibold text-zinc-200">{trip.origin.address}</p><p className="mt-0.5 text-[9px] text-emerald-500">{inferZone(trip.origin.address)}</p></td>}
+                {visibleColumns.destination && <td className="px-2.5 py-2.5 align-top"><p className="max-w-52 truncate text-[10px] text-zinc-400">{trip.destination.address}</p><p className="mt-0.5 text-[9px] text-zinc-600">{trip.estimatedDistanceKm.toFixed(1)} km</p></td>}
+                {visibleColumns.driver && <td className="px-2.5 py-2.5 align-top">{trip.driverUnitNumber ? <span className="rounded-md border border-blue-500/25 bg-blue-500/10 px-2 py-1 text-[10px] font-black text-blue-200">{trip.driverUnitNumber}</span> : <span className="text-[9px] font-bold text-amber-300">Sin asignar</span>}</td>}
+                {visibleColumns.status && <td className="px-2.5 py-2.5 align-top"><TripStatusBadge status={trip.status} /></td>}
+                {visibleColumns.fare && <td className="px-2.5 py-2.5 text-right align-top text-[10px] font-black text-zinc-200">{formatMoney(trip.estimatedFare)}</td>}
+                {visibleColumns.actions && (
+                  <td className="px-2.5 py-2 align-top">
+                    <div className="flex justify-end gap-1">
+                      {!trip.driverId && <button onClick={(event) => { event.stopPropagation(); onAssign(trip.id, trip.code); }} disabled={!availableDriversCount} className="rounded-md bg-amber-400 p-1.5 text-zinc-950 hover:bg-amber-300 disabled:opacity-30" title="Asignar cercano"><Zap className="h-3.5 w-3.5" /></button>}
+                      <button onClick={(event) => { event.stopPropagation(); onCall(trip.clientPhone); }} className="rounded-md border border-zinc-700 bg-zinc-900 p-1.5 text-zinc-400 hover:text-white" title="Llamar"><Phone className="h-3.5 w-3.5" /></button>
+                      <button onClick={(event) => { event.stopPropagation(); onDetail(trip); }} className="rounded-md border border-zinc-700 bg-zinc-900 p-1.5 text-zinc-400 hover:text-white" title="Ver detalle"><ArrowRight className="h-3.5 w-3.5" /></button>
+                    </div>
+                  </td>
+                )}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function VisualTripQueue({
+  trips,
+  selectedTripId,
+  availableDriversCount,
+  onSelect,
+  onDetail,
+  onAssign,
+  onStart,
+}: {
+  trips: Trip[];
+  selectedTripId: string | null;
+  availableDriversCount: number;
+  onSelect: (id: string) => void;
+  onDetail: (trip: Trip) => void;
+  onAssign: (tripId: string, tripCode: string) => void;
+  onStart: (tripId: string) => void;
+}) {
+  return (
+    <div className="max-h-[507px] flex-1 divide-y divide-zinc-800/80 overflow-y-auto">
+      {trips.map((trip) => {
+        const isPending = trip.status === 'pending';
+        const selected = selectedTripId === trip.id;
+        return (
+          <article key={trip.id} className={`p-3 transition ${selected ? 'bg-blue-500/[0.08] shadow-[inset_3px_0_0_#3b82f6]' : isPending ? 'bg-amber-400/[0.04] hover:bg-amber-400/[0.07]' : 'hover:bg-zinc-900/70'}`}>
+            <button onClick={() => onSelect(trip.id)} className="w-full min-w-0 text-left">
+              <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
+                <span className="font-mono text-[10px] font-bold text-blue-300">{trip.code}</span><TripStatusBadge status={trip.status} />
+                <span className="ml-auto flex items-center gap-1 text-[9px] text-zinc-400"><Clock3 className="h-3 w-3" /> {minutesSince(trip.createdAt)} min</span>
+              </div>
+              <div className="truncate text-xs font-black text-white">{trip.clientName}</div>
+              <div className="mt-1 space-y-0.5 text-[10px]">
+                <span className="flex min-w-0 items-center gap-1.5 text-zinc-300"><MapPin className="h-3 w-3 shrink-0 text-emerald-400" /><span className="truncate">{trip.origin.address}</span></span>
+                <span className="flex min-w-0 items-center gap-1.5 text-zinc-500"><Navigation className="h-3 w-3 shrink-0 text-rose-400" /><span className="truncate">{trip.destination.address}</span></span>
+              </div>
+            </button>
+            <div className="mt-2.5 flex items-center gap-1.5">
+              {trip.driverUnitNumber ? <span className="rounded-lg border border-blue-500/25 bg-blue-500/10 px-2 py-1.5 text-[10px] font-bold text-blue-200">{trip.driverUnitNumber}</span> : <button onClick={() => onAssign(trip.id, trip.code)} disabled={!availableDriversCount} className="flex flex-1 items-center justify-center gap-1 rounded-lg bg-amber-400 px-2 py-1.5 text-[10px] font-black text-zinc-950 hover:bg-amber-300 disabled:opacity-40"><Zap className="h-3.5 w-3.5" /> Asignar</button>}
+              {trip.status === 'arrived' && <button onClick={() => onStart(trip.id)} className="flex-1 rounded-lg bg-emerald-600 px-2 py-1.5 text-[10px] font-bold text-white">Iniciar</button>}
+              <a href={`tel:${trip.clientPhone}`} className="rounded-lg border border-zinc-700 bg-zinc-900 p-1.5 text-zinc-400 hover:text-white"><Phone className="h-3.5 w-3.5" /></a>
+              <button onClick={() => onDetail(trip)} className="rounded-lg border border-zinc-700 bg-zinc-900 p-1.5 text-zinc-400 hover:text-white"><ArrowRight className="h-3.5 w-3.5" /></button>
+            </div>
+          </article>
+        );
+      })}
+    </div>
+  );
+}
 
 const toneClasses = {
   emerald: 'text-emerald-300 bg-emerald-500/10 border-emerald-500/20',
@@ -281,22 +769,19 @@ function StatusCard({ label, value, detail, icon: Icon, tone }: {
   tone: keyof typeof toneClasses;
 }) {
   return (
-    <div className="rounded-2xl border border-zinc-800 bg-[#0d0d0f] p-4 shadow-xl shadow-black/10">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="text-xs font-bold uppercase tracking-wider text-zinc-500">{label}</div>
-          <div className="mt-1 text-3xl font-black text-white">{value}</div>
-          <div className="text-[11px] text-zinc-500">{detail}</div>
+    <div className="rounded-xl border border-zinc-800 bg-[#0d0d0f] px-3 py-2.5 shadow-lg shadow-black/10">
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <div className="truncate text-[9px] font-bold uppercase tracking-wider text-zinc-500">{label}</div>
+          <div className="flex items-baseline gap-2"><span className="text-2xl font-black text-white">{value}</span><span className="truncate text-[9px] text-zinc-500">{detail}</span></div>
         </div>
-        <div className={`rounded-xl border p-2.5 ${toneClasses[tone]}`}>
-          <Icon className="h-5 w-5" />
-        </div>
+        <div className={`rounded-lg border p-1.5 ${toneClasses[tone]}`}><Icon className="h-4 w-4" /></div>
       </div>
     </div>
   );
 }
 
-function TripStatusBadge({ status }: { status: keyof typeof TRIP_STATUS_LABELS }) {
+function TripStatusBadge({ status }: { status: TripStatus }) {
   const tone = status === 'pending'
     ? 'border-amber-500/30 bg-amber-500/15 text-amber-300'
     : status === 'in_progress'
@@ -304,5 +789,5 @@ function TripStatusBadge({ status }: { status: keyof typeof TRIP_STATUS_LABELS }
       : status === 'arrived'
         ? 'border-emerald-500/30 bg-emerald-500/15 text-emerald-300'
         : 'border-zinc-700 bg-zinc-800 text-zinc-300';
-  return <span className={`rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase ${tone}`}>{TRIP_STATUS_LABELS[status]}</span>;
+  return <span className={`rounded-md border px-1.5 py-0.5 text-[8px] font-bold uppercase ${tone}`}>{TRIP_STATUS_LABELS[status]}</span>;
 }

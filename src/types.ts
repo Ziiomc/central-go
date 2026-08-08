@@ -1,4 +1,4 @@
-export type UserRole = 'super_admin' | 'company_admin' | 'operator' | 'driver';
+export type UserRole = 'super_admin' | 'regional_partner' | 'sales_partner' | 'company_admin' | 'operator' | 'driver';
 
 export type DriverStatus = 'available' | 'en_route' | 'in_trip' | 'paused' | 'offline' | 'sos';
 

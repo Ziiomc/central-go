@@ -1,1 +1,0 @@
-Central GO Network UI overlay. Archivos temporales usados para aplicar la interfaz multitenant durante la compilación.
