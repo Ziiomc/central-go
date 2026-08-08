@@ -27,11 +27,13 @@ jobs:
           cache: npm
 
       - name: Aplicar endurecimiento comercial
-        run: node scripts/apply-hardening.mjs
-
-      - name: Limpiar instalador temporal
         run: |
-          rm -f scripts/apply-hardening.mjs
+          node scripts/apply-hardening.mjs
+          node scripts/fix-demo-guard.mjs
+
+      - name: Limpiar instaladores temporales
+        run: |
+          rm -f scripts/apply-hardening.mjs scripts/fix-demo-guard.mjs
           rm -f .github/workflows/apply-hardening.yml
 
       - name: Actualizar dependencias reproducibles
