@@ -31,11 +31,6 @@ jobs:
           node scripts/apply-hardening.mjs
           node scripts/fix-demo-guard.mjs
 
-      - name: Limpiar instaladores temporales
-        run: |
-          rm -f scripts/apply-hardening.mjs scripts/fix-demo-guard.mjs
-          rm -f .github/workflows/apply-hardening.yml
-
       - name: Actualizar dependencias reproducibles
         run: npm install --no-audit --no-fund
 
@@ -47,6 +42,11 @@ jobs:
 
       - name: Compilar producción
         run: npm run build
+
+      - name: Preparar cambios publicables
+        run: |
+          rm -f scripts/apply-hardening.mjs scripts/fix-demo-guard.mjs
+          git checkout HEAD -- .github/workflows/build-check.yml .github/workflows/apply-hardening.yml
 
       - name: Publicar Central GO 1.7
         run: |
