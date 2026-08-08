@@ -15,6 +15,8 @@ import {
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { PaymentMethod } from '../../types';
+import { runtimeConfig } from '../../config/runtime';
+import { geocodeCommercialAddress } from '../../lib/geocoding';
 
 const ORIGIN_PRESETS = [
   ['Plaza de Armas', 'Plaza de Armas, Linares'],
@@ -40,6 +42,7 @@ export const NewTripModal: React.FC = () => {
     drivers,
     createTrip,
     fareConfig,
+    currentCompany,
   } = useApp();
 
   const originInputRef = useRef<HTMLInputElement>(null);
@@ -132,18 +135,27 @@ export const NewTripModal: React.FC = () => {
     const selectedDriver = availableDrivers.find((driver) => driver.id === selectedDriverId);
     setSubmitting(true);
     try {
+      const originPoint = runtimeConfig.isCommercial
+        ? await geocodeCommercialAddress(currentCompany.id, cleanOrigin)
+        : { lat: -35.8454 + (Math.random() - 0.5) * 0.018, lng: -71.5979 + (Math.random() - 0.5) * 0.018 };
+
+      const destinationUnknown = /^a convenir/i.test(cleanDestination);
+      const destinationPoint = runtimeConfig.isCommercial
+        ? (destinationUnknown ? originPoint : await geocodeCommercialAddress(currentCompany.id, cleanDestination))
+        : { lat: -35.849 + (Math.random() - 0.5) * 0.018, lng: -71.603 + (Math.random() - 0.5) * 0.018 };
+
       await createTrip({
       clientId: selectedClientId || undefined,
       clientName: clientName.trim() || 'Cliente Particular',
       clientPhone: clientPhone.trim() || 'Sin teléfono',
       origin: {
-        lat: -35.8454 + (Math.random() - 0.5) * 0.018,
-        lng: -71.5979 + (Math.random() - 0.5) * 0.018,
+        lat: originPoint.lat,
+        lng: originPoint.lng,
         address: cleanOrigin,
       },
       destination: {
-        lat: -35.849 + (Math.random() - 0.5) * 0.018,
-        lng: -71.603 + (Math.random() - 0.5) * 0.018,
+        lat: destinationPoint.lat,
+        lng: destinationPoint.lng,
         address: cleanDestination,
       },
       driverId: selectedDriver?.id,
