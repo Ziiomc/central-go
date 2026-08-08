@@ -54,6 +54,7 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<AuthProfile | null>(null);
   const [memberships, setMemberships] = useState<Membership[]>([]);
+  const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(runtimeConfig.isCommercial);
   const [identityError, setIdentityError] = useState<string | null>(null);
 
@@ -64,6 +65,7 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     if (!runtimeConfig.isCommercial || !nextSession) {
       setProfile(null);
       setMemberships([]);
+      setCompanies([]);
       setLoading(false);
       return;
     }
@@ -78,15 +80,17 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
 
       if (profileError) throw profileError;
       if (membershipError) throw membershipError;
+      if (!profileRow.active) throw new Error('Esta cuenta está suspendida. Contacta al administrador de Central GO.');
 
-      setProfile({
+      const nextProfile: AuthProfile = {
         id: profileRow.id,
         name: profileRow.name,
         phone: profileRow.phone,
         avatarUrl: profileRow.avatar_url,
         globalRole: profileRow.global_role,
         active: profileRow.active,
-      });
+      };
+      setProfile(nextProfile);
 
       const mapped: Membership[] = (membershipRows ?? [])
         .filter((row: any) => row.companies)
@@ -97,11 +101,20 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
           company: mapCompany(Array.isArray(row.companies) ? row.companies[0] : row.companies),
         }));
       setMemberships(mapped);
+
+      if (nextProfile.globalRole === 'super_admin') {
+        const { data: companyRows, error: companiesError } = await db.from('companies').select('id,name,code,phone,address,vhf_frequency,logo_url,active').order('name');
+        if (companiesError) throw companiesError;
+        setCompanies((companyRows ?? []).map(mapCompany));
+      } else {
+        setCompanies(mapped.map((item) => item.company));
+      }
     } catch (error) {
       console.error('[Central GO] No fue posible cargar la identidad comercial', error);
       setIdentityError(error instanceof Error ? error.message : 'No fue posible cargar el perfil comercial.');
       setProfile(null);
       setMemberships([]);
+      setCompanies([]);
     } finally {
       setLoading(false);
     }
@@ -167,7 +180,7 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     authUser: session?.user ?? null,
     profile,
     memberships,
-    companies: memberships.map((item) => item.company),
+    companies,
     effectiveRole,
     loading,
     identityError,
@@ -175,7 +188,7 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     signUp,
     signOut,
     refreshIdentity: () => loadIdentity(session),
-  }), [session, profile, memberships, effectiveRole, loading, identityError]);
+  }), [session, profile, memberships, companies, effectiveRole, loading, identityError]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
