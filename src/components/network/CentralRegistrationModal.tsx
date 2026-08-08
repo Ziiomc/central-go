@@ -2,6 +2,8 @@ import React, { useMemo, useState } from 'react';
 import { Building2, Check, ChevronLeft, ChevronRight, Globe2, UserRound, X, Zap } from 'lucide-react';
 import { EmptySuccess, money } from './NetworkUi';
 import { NetworkCentral } from '../../data/networkMockData';
+import { runtimeConfig } from '../../config/runtime';
+import { createNetworkCentral, loadNetworkCentrals } from '../../lib/networkRepository';
 
 interface CentralRegistrationModalProps {
   open: boolean;
@@ -25,8 +27,11 @@ export const CentralRegistrationModal: React.FC<CentralRegistrationModalProps> =
   const [step, setStep] = useState(1);
   const [finished, setFinished] = useState(false);
   const [billing, setBilling] = useState<'monthly' | 'annual'>('annual');
+  const [saving, setSaving] = useState(false);
+  const [submitError, setSubmitError] = useState('');
+  const [ownerAssigned, setOwnerAssigned] = useState(true);
   const [form, setForm] = useState({
-    name: '', country: 'Chile', region: '', city: '', owner: '', phone: '', email: '', vehicles: '20', plan: 'Enterprise' as NetworkCentral['plan'], partner: 'Ignacio Varas', regionalPartner: 'María Paz Herrera',
+    name: '', code: '', country: 'Chile', region: '', city: '', owner: '', phone: '', email: '', vehicles: '20', plan: 'Enterprise' as NetworkCentral['plan'], partner: 'Ignacio Varas', regionalPartner: 'María Paz Herrera',
   });
 
   const selectedPlan = useMemo(() => plans.find((p) => p.name === form.plan) || plans[2], [form.plan]);
@@ -36,7 +41,7 @@ export const CentralRegistrationModal: React.FC<CentralRegistrationModalProps> =
   if (!open) return null;
 
   const update = (key: keyof typeof form, value: string) => setForm((prev) => ({ ...prev, [key]: value }));
-  const canContinue = step === 1 ? form.name && form.region && form.city : step === 2 ? form.owner && form.phone && form.email : true;
+  const canContinue = step === 1 ? form.name && form.region && form.city && (!runtimeConfig.isCommercial || form.code) : step === 2 ? form.owner && form.phone && form.email : true;
 
   const resetAndClose = () => {
     setStep(1);
@@ -45,30 +50,41 @@ export const CentralRegistrationModal: React.FC<CentralRegistrationModalProps> =
     onClose();
   };
 
-  const submit = () => {
-    const created: NetworkCentral = {
-      id: `net-demo-${Date.now()}`,
-      name: form.name || 'Nueva Central Demo',
-      country: form.country,
-      countryCode: form.country === 'Chile' ? 'CL' : form.country === 'Argentina' ? 'AR' : form.country === 'México' ? 'MX' : form.country === 'Perú' ? 'PE' : form.country === 'España' ? 'ES' : 'EC',
-      region: form.region,
-      city: form.city,
-      owner: form.owner,
-      phone: form.phone,
-      email: form.email,
-      vehicles: Number(form.vehicles) || 0,
-      operators: 1,
-      plan: form.plan,
-      monthlyFee: selectedMonthlyPrice,
-      status: 'trial',
-      partner: form.partner,
-      regionalPartner: form.regionalPartner,
-      joinedAt: new Date().toISOString().slice(0, 10),
-      nextBillingAt: new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10),
-      activityScore: 15,
-    };
-    onCreate?.(created);
-    setFinished(true);
+  const submit = async () => {
+    setSubmitError('');
+    setSaving(true);
+    try {
+      if (runtimeConfig.isCommercial) {
+        const countryCode = form.country === 'Chile' ? 'CL' : form.country === 'Argentina' ? 'AR' : form.country === 'México' ? 'MX' : form.country === 'Perú' ? 'PE' : form.country === 'España' ? 'ES' : 'EC';
+        const result = await createNetworkCentral({
+          name: form.name, code: form.code, city: form.city, countryCode, phone: form.phone, address: form.region,
+          plan: form.plan, billing, ownerEmail: form.email,
+        });
+        setOwnerAssigned(result.ownerAssigned);
+        const realCentrals = await loadNetworkCentrals();
+        const created = realCentrals.find((item) => item.id === result.companyId);
+        if (created) onCreate?.(created);
+        setFinished(true);
+        return;
+      }
+
+      const created: NetworkCentral = {
+        id: `net-demo-${Date.now()}`,
+        name: form.name || 'Nueva Central Demo',
+        country: form.country,
+        countryCode: form.country === 'Chile' ? 'CL' : form.country === 'Argentina' ? 'AR' : form.country === 'México' ? 'MX' : form.country === 'Perú' ? 'PE' : form.country === 'España' ? 'ES' : 'EC',
+        region: form.region, city: form.city, owner: form.owner, phone: form.phone, email: form.email,
+        vehicles: Number(form.vehicles) || 0, operators: 1, plan: form.plan, monthlyFee: selectedMonthlyPrice, status: 'trial',
+        partner: form.partner, regionalPartner: form.regionalPartner, joinedAt: new Date().toISOString().slice(0, 10),
+        nextBillingAt: new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10), activityScore: 15,
+      };
+      onCreate?.(created);
+      setFinished(true);
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : 'No fue posible registrar la central.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -108,6 +124,7 @@ export const CentralRegistrationModal: React.FC<CentralRegistrationModalProps> =
                   <SelectField label="País" value={form.country} onChange={(v) => update('country', v)} options={['Chile', 'Argentina', 'Perú', 'México', 'España', 'Ecuador']} />
                   <Field label="Región / Estado" value={form.region} onChange={(v) => update('region', v)} placeholder="Ej. Región del Maule" />
                   <Field label="Ciudad" value={form.city} onChange={(v) => update('city', v)} placeholder="Ej. Linares" />
+                  {runtimeConfig.isCommercial && <Field label="Código interno único" value={form.code} onChange={(v) => update('code', v.toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 24))} placeholder="Ej. ROYAL-LINARES" />}
                   <Field label="Móviles estimados" type="number" value={form.vehicles} onChange={(v) => update('vehicles', v)} placeholder="20" />
                   <div className="sm:col-span-2 p-3.5 rounded-xl border border-blue-500/20 bg-blue-500/5 text-[11px] text-blue-200/80 leading-relaxed">
                     Cada central tendrá un espacio independiente. Sus conductores, carreras y clientes no serán visibles para otras empresas.
@@ -171,10 +188,14 @@ export const CentralRegistrationModal: React.FC<CentralRegistrationModalProps> =
                       </div>
                     )}
                   </div>
+                  {runtimeConfig.isDemo ? (
                   <div className="grid sm:grid-cols-2 gap-4">
                     <SelectField label="Partner comercial atribuido" value={form.partner} onChange={(v) => update('partner', v)} options={['Ignacio Varas', 'Luciano Ferreyra', 'Camila Rojas', 'Lucía Martín']} />
                     <SelectField label="Responsable regional" value={form.regionalPartner} onChange={(v) => update('regionalPartner', v)} options={['María Paz Herrera', 'Valentina Núñez', 'Renzo Medina', 'Paola Hernández']} />
                   </div>
+                  ) : (
+                    <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-3 text-[10px] text-blue-200/80">La atribución a un partner se realizará desde el padrón real de Partners después de crear la central. No se usarán nombres ficticios en producción.</div>
+                  )}
                   <div className="grid sm:grid-cols-3 gap-3 p-4 rounded-2xl bg-purple-500/5 border border-purple-500/20">
                     <Summary label={billing === 'annual' ? 'Cobro anual' : 'Cobro mensual'} value={money(selectedBillingAmount)} />
                     <Summary label="Partner directo (20%)" value={money(selectedBillingAmount * 0.2)} />
@@ -184,17 +205,18 @@ export const CentralRegistrationModal: React.FC<CentralRegistrationModalProps> =
               )}
             </div>
 
+            {submitError && <div className="mx-5 mb-0 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-xs font-bold text-rose-200">{submitError}</div>}
             <div className="p-5 border-t border-zinc-800 flex items-center justify-between bg-zinc-950/35">
               <button disabled={step === 1} onClick={() => setStep((s) => s - 1)} className="px-4 py-2 rounded-xl border border-zinc-800 text-xs font-bold text-zinc-300 disabled:opacity-30 flex items-center gap-1.5"><ChevronLeft className="w-4 h-4" />Atrás</button>
               {step < 3 ? (
                 <button disabled={!canContinue} onClick={() => setStep((s) => s + 1)} className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-800 disabled:text-zinc-600 text-xs font-black text-white flex items-center gap-1.5 shadow-lg shadow-blue-950/50">Continuar<ChevronRight className="w-4 h-4" /></button>
               ) : (
-                <button onClick={submit} className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-xs font-black text-slate-950 flex items-center gap-2 shadow-lg shadow-amber-950/50"><Zap className="w-4 h-4" />Crear central en prueba</button>
+                <button disabled={saving} onClick={() => void submit()} className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-xs font-black text-slate-950 flex items-center gap-2 shadow-lg shadow-amber-950/50"><Zap className="w-4 h-4" />{saving ? 'Creando central…' : 'Crear central en prueba'}</button>
               )}
             </div>
           </>
         ) : (
-          <div className="p-8"><EmptySuccess title="Central registrada correctamente" detail={`${form.name || 'La nueva central'} quedó creada en modo prueba. En la versión funcional se enviarán accesos por correo y quedará atribuida automáticamente a ${form.partner}.`} onClose={resetAndClose} /></div>
+          <div className="p-8"><EmptySuccess title="Central registrada correctamente" detail={runtimeConfig.isCommercial ? (ownerAssigned ? `${form.name} quedó creada con prueba de 14 días y el propietario ya tiene acceso administrador.` : `${form.name} quedó creada con prueba de 14 días. El propietario deberá crear su cuenta con ${form.email} para poder asignarle acceso.`) : `${form.name || 'La nueva central'} quedó creada en modo prueba y atribuida a ${form.partner}.`} onClose={resetAndClose} /></div>
         )}
       </div>
     </div>

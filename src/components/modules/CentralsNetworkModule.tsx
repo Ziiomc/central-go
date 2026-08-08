@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Building2,
   CalendarClock,
@@ -13,6 +13,8 @@ import {
 } from 'lucide-react';
 import { NETWORK_CENTRALS, NetworkCentral } from '../../data/networkMockData';
 import { CentralRegistrationModal } from '../network/CentralRegistrationModal';
+import { runtimeConfig } from '../../config/runtime';
+import { loadNetworkCentrals } from '../../lib/networkRepository';
 import { CountryFlag, money, NetworkKpi, ProgressBar, StatusPill } from '../network/NetworkUi';
 
 const filterOptions = [
@@ -24,11 +26,28 @@ const filterOptions = [
 ];
 
 export const CentralsNetworkModule: React.FC = () => {
-  const [centrals, setCentrals] = useState<NetworkCentral[]>(NETWORK_CENTRALS);
+  const [centrals, setCentrals] = useState<NetworkCentral[]>(runtimeConfig.isDemo ? NETWORK_CENTRALS : []);
+  const [loading, setLoading] = useState(runtimeConfig.isCommercial);
+  const [loadError, setLoadError] = useState('');
   const [registerOpen, setRegisterOpen] = useState(false);
   const [filter, setFilter] = useState('all');
   const [query, setQuery] = useState('');
   const [view, setView] = useState<'table' | 'cards'>('table');
+
+  const reloadCentrals = async () => {
+    if (!runtimeConfig.isCommercial) return;
+    setLoading(true);
+    setLoadError('');
+    try {
+      setCentrals(await loadNetworkCentrals());
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : 'No fue posible cargar las centrales reales.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { void reloadCentrals(); }, []);
 
   const filtered = useMemo(() => {
     return centrals.filter((central) => {
@@ -54,11 +73,14 @@ export const CentralsNetworkModule: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        <NetworkKpi label="Centrales registradas" value="38" detail={`${centrals.length} representadas en la maqueta`} icon={Building2} accent="blue" />
-        <NetworkKpi label="Suscripciones activas" value="34" detail="89,5% de la cartera" icon={UsersRound} accent="emerald" />
-        <NetworkKpi label="MRR administrado" value={money(4036000)} detail={`${money(mrr)} visible en esta lista`} icon={CalendarClock} accent="purple" />
-        <NetworkKpi label="Móviles conectados" value="1.284" detail={`${vehicles} móviles en los registros demo`} icon={ShieldAlert} accent="amber" />
+        <NetworkKpi label="Centrales registradas" value={String(centrals.length)} detail={runtimeConfig.isCommercial ? 'Empresas reales registradas' : 'Representadas en la maqueta'} icon={Building2} accent="blue" />
+        <NetworkKpi label="Suscripciones activas" value={String(centrals.filter((c) => c.status === 'active').length)} detail={centrals.length ? `${Math.round((centrals.filter((c) => c.status === 'active').length / centrals.length) * 100)}% de la cartera` : 'Sin centrales aún'} icon={UsersRound} accent="emerald" />
+        <NetworkKpi label="MRR administrado" value={money(mrr)} detail={runtimeConfig.isCommercial ? 'Equivalente mensual de suscripciones' : `${money(mrr)} visible en esta lista`} icon={CalendarClock} accent="purple" />
+        <NetworkKpi label="Móviles registrados" value={String(vehicles)} detail={runtimeConfig.isCommercial ? 'Flota real cargada en la plataforma' : `${vehicles} móviles en los registros demo`} icon={ShieldAlert} accent="amber" />
       </div>
+
+      {loadError && <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-xs font-bold text-rose-200">{loadError}</div>}
+      {loading && <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 px-4 py-3 text-xs font-bold text-blue-300">Sincronizando red comercial…</div>}
 
       <section className="bg-[#0d0d0f] border border-zinc-800 rounded-2xl shadow-xl overflow-hidden">
         <div className="p-4 border-b border-zinc-800 flex flex-col xl:flex-row xl:items-center justify-between gap-4">
@@ -107,7 +129,10 @@ export const CentralsNetworkModule: React.FC = () => {
         )}
       </section>
 
-      <CentralRegistrationModal open={registerOpen} onClose={() => setRegisterOpen(false)} onCreate={(central) => setCentrals((prev) => [central, ...prev])} />
+      <CentralRegistrationModal open={registerOpen} onClose={() => setRegisterOpen(false)} onCreate={(central) => {
+        if (runtimeConfig.isCommercial) void reloadCentrals();
+        else setCentrals((prev) => [central, ...prev]);
+      }} />
     </div>
   );
 };
