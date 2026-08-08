@@ -1,0 +1,34 @@
+name: Endurecer PWA conductor comercial
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/harden-driver-commercial.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/harden-driver-commercial.mjs
+      - run: rm -f scripts/harden-driver-commercial.mjs
+      - name: Publicar
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src scripts/harden-driver-commercial.mjs
+          git commit -m "Endurecer identidad GPS y ofertas del conductor comercial"
+          git pull --rebase origin main
+          git push origin HEAD:main
