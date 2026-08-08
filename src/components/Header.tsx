@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { UserRole } from '../types';
+import { runtimeConfig } from '../config/runtime';
+import { useAuth } from '../context/AuthContext';
 import { promptPWAInstall } from '../lib/pwa';
 import centralGoLogo from '../assets/images/central-go-logo.svg';
 import {
@@ -18,6 +20,7 @@ import {
   ShieldAlert,
   ShieldCheck,
   LockKeyhole,
+  LogOut,
   X,
   Volume2,
   VolumeX,
@@ -29,6 +32,7 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({ onToggleNotifications }) => {
+  const { signOut } = useAuth();
   const {
     currentRole,
     setCurrentRole,
@@ -76,6 +80,7 @@ export const Header: React.FC<HeaderProps> = ({ onToggleNotifications }) => {
   };
 
   const openOwnerAccess = () => {
+    if (!runtimeConfig.isDemo) return;
     setRoleMenuOpen(false);
     setOwnerPin('');
     setOwnerAccessError('');
@@ -94,6 +99,7 @@ export const Header: React.FC<HeaderProps> = ({ onToggleNotifications }) => {
   }, []);
 
   const handleOwnerLogoTap = () => {
+    if (!runtimeConfig.isDemo) return;
     ownerTapCount.current += 1;
     if (ownerTapTimer.current) window.clearTimeout(ownerTapTimer.current);
     if (ownerTapCount.current >= 5) {
@@ -107,6 +113,7 @@ export const Header: React.FC<HeaderProps> = ({ onToggleNotifications }) => {
   };
 
   const enterRole = (role: UserRole) => {
+    if (!runtimeConfig.isDemo) return;
     if (role === 'super_admin' && !ownerUnlocked) {
       openOwnerAccess();
       return;
@@ -198,18 +205,21 @@ export const Header: React.FC<HeaderProps> = ({ onToggleNotifications }) => {
           <button onClick={handleInstallClick} className="hidden xl:flex items-center gap-1.5 px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-200 rounded-lg text-xs font-semibold"><Download className="w-3.5 h-3.5 text-blue-400" /><span>PWA</span></button>
 
           <div className="relative">
-            <button onClick={() => setRoleMenuOpen(!roleMenuOpen)} className="flex items-center gap-2 px-2.5 md:px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-xs font-medium text-zinc-200 transition shadow-md"><div className={`w-2 h-2 rounded-full animate-pulse ${isNetworkRole ? 'bg-purple-500' : 'bg-blue-500'}`} /><span className="hidden md:block font-semibold max-w-[150px] truncate">{currentRole === 'super_admin' ? 'Superadmin Global' : rolesList.find((r) => r.role === currentRole)?.label}</span><ChevronDown className="w-3.5 h-3.5 text-zinc-500" /></button>
-            {roleMenuOpen && (
+            <button onClick={() => runtimeConfig.isDemo && setRoleMenuOpen(!roleMenuOpen)} className="flex items-center gap-2 px-2.5 md:px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-xs font-medium text-zinc-200 transition shadow-md"><div className={`w-2 h-2 rounded-full animate-pulse ${isNetworkRole ? 'bg-purple-500' : 'bg-blue-500'}`} /><span className="hidden md:block font-semibold max-w-[150px] truncate">{currentRole === 'super_admin' ? 'Superadmin Global' : rolesList.find((r) => r.role === currentRole)?.label}</span><ChevronDown className="w-3.5 h-3.5 text-zinc-500" /></button>
+            {runtimeConfig.isDemo && roleMenuOpen && (
               <div className="absolute right-0 mt-2 w-72 bg-[#0d0d0f] border border-zinc-800 rounded-xl shadow-2xl z-50 p-2">
                 <div className="px-3 py-1.5 text-[10px] font-mono font-bold text-zinc-500 uppercase border-b border-zinc-800 mb-1 tracking-wider">Cambiar perfil de demostración</div>
                 {rolesList.map(({ role, label, icon: Icon, color }) => <button key={role} onClick={() => enterRole(role)} className={`w-full text-left px-3 py-2.5 rounded-lg text-xs font-medium flex items-center gap-2.5 transition ${currentRole === role ? 'bg-blue-600/10 text-blue-400 font-bold border border-blue-500/20' : 'text-zinc-300 hover:bg-zinc-800'}`}><Icon className={`w-4 h-4 ${color}`} /><span className="flex-1">{label}</span></button>)}
               </div>
             )}
           </div>
+          {runtimeConfig.isCommercial && (
+            <button onClick={() => void signOut()} className="p-2 rounded-lg bg-zinc-900 hover:bg-rose-950/60 border border-zinc-800 hover:border-rose-500/30 text-zinc-400 hover:text-rose-300 transition" title="Cerrar sesión"><LogOut className="w-4 h-4" /></button>
+          )}
         </div>
       </div>
 
-      {ownerAccessOpen && (
+      {runtimeConfig.isDemo && ownerAccessOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 px-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="owner-access-title">
           <form onSubmit={unlockOwnerAccess} className="w-full max-w-sm rounded-3xl border border-fuchsia-500/25 bg-[#111116] p-6 shadow-2xl shadow-fuchsia-950/40">
             <div className="flex items-start justify-between gap-4">

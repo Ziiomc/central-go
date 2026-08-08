@@ -57,6 +57,7 @@ export const NewTripModal: React.FC = () => {
   const [isFixedFare, setIsFixedFare] = useState(false);
   const [fixedFareAmount, setFixedFareAmount] = useState(4500);
   const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   const availableDrivers = useMemo(
     () => drivers.filter((driver) => driver.status === 'available'),
@@ -117,7 +118,7 @@ export const NewTripModal: React.FC = () => {
     if (client.hasCurrentAccount) setPaymentMethod('cuenta_corriente');
   };
 
-  const submitTrip = (event: React.FormEvent) => {
+  const submitTrip = async (event: React.FormEvent) => {
     event.preventDefault();
     const cleanOrigin = originAddress.trim();
     const cleanDestination = destinationAddress.trim() || 'A convenir / Taxímetro';
@@ -129,7 +130,9 @@ export const NewTripModal: React.FC = () => {
     }
 
     const selectedDriver = availableDrivers.find((driver) => driver.id === selectedDriverId);
-    createTrip({
+    setSubmitting(true);
+    try {
+      await createTrip({
       clientId: selectedClientId || undefined,
       clientName: clientName.trim() || 'Cliente Particular',
       clientPhone: clientPhone.trim() || 'Sin teléfono',
@@ -154,10 +157,15 @@ export const NewTripModal: React.FC = () => {
       estimatedFare: calculatedFare,
       isFixedFare,
       fixedFareAmount: isFixedFare ? Math.max(1000, fixedFareAmount) : undefined,
-    });
+      });
 
-    setNewTripModalOpen(false);
-    resetForm();
+      setNewTripModalOpen(false);
+      resetForm();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No fue posible crear la carrera.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -326,7 +334,7 @@ export const NewTripModal: React.FC = () => {
             </div>
             <div className="flex gap-2">
               <button type="button" onClick={closeModal} className="rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm font-bold text-zinc-300 hover:text-white">Cancelar</button>
-              <button type="submit" className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-amber-200 bg-amber-400 px-6 py-3 text-sm font-black text-zinc-950 shadow-lg shadow-amber-500/20 hover:bg-amber-300 sm:flex-none">
+              <button type="submit" disabled={submitting} className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-amber-200 bg-amber-400 px-6 py-3 text-sm font-black text-zinc-950 shadow-lg shadow-amber-500/20 hover:bg-amber-300 sm:flex-none">
                 <Send className="h-4 w-4" /> DESPACHAR
               </button>
             </div>

@@ -33,7 +33,9 @@ import { soundManager } from '../lib/audio';
 import { runtimeConfig } from '../config/runtime';
 import { advanceAlongRoute, requestDrivingRoute, RoadPoint } from '../lib/roadRouting';
 
-interface AppContextType {
+export type MaybePromise<T> = T | Promise<T>;
+
+export interface AppContextType {
   // Roles & Session
   currentRole: UserRole;
   setCurrentRole: (role: UserRole) => void;
@@ -70,32 +72,32 @@ interface AppContextType {
   isMobileDevice: boolean;
   
   // Operational Actions
-  createTrip: (data: Partial<Trip>) => Trip;
-  assignTrip: (tripId: string, driverId: string) => void;
-  reassignTrip: (tripId: string, newDriverId: string) => void;
-  updateTripStatus: (tripId: string, status: TripStatus, notes?: string) => void;
-  cancelTrip: (tripId: string, reason: string) => void;
-  rejectTripOffer: (tripId: string, reason: string) => void;
-  toggleDriverAvailability: (driverId: string, status: DriverStatus) => void;
-  updateDriverLocation: (driverId: string, lat: number, lng: number, address?: string) => void;
-  triggerDriverSOS: (driverId: string) => void;
-  resolveDriverSOS: (driverId: string) => void;
-  autoAssignClosestDriver: (tripId: string) => Driver | null;
-  unassignTrip: (tripId: string) => void;
-  settleDriverCommission: (driverId: string) => void;
+  createTrip: (data: Partial<Trip>) => MaybePromise<Trip>;
+  assignTrip: (tripId: string, driverId: string) => MaybePromise<void>;
+  reassignTrip: (tripId: string, newDriverId: string) => MaybePromise<void>;
+  updateTripStatus: (tripId: string, status: TripStatus, notes?: string) => MaybePromise<void>;
+  cancelTrip: (tripId: string, reason: string) => MaybePromise<void>;
+  rejectTripOffer: (tripId: string, reason: string) => MaybePromise<void>;
+  toggleDriverAvailability: (driverId: string, status: DriverStatus) => MaybePromise<void>;
+  updateDriverLocation: (driverId: string, lat: number, lng: number, address?: string) => MaybePromise<void>;
+  triggerDriverSOS: (driverId: string) => MaybePromise<void>;
+  resolveDriverSOS: (driverId: string) => MaybePromise<void>;
+  autoAssignClosestDriver: (tripId: string) => MaybePromise<Driver | null>;
+  unassignTrip: (tripId: string) => MaybePromise<void>;
+  settleDriverCommission: (driverId: string) => MaybePromise<void>;
   
   // Management CRUD
-  addClient: (client: Omit<Client, 'id' | 'totalTrips'>) => Client;
-  addVehicle: (vehicle: Omit<Vehicle, 'id'>) => Vehicle;
-  addDriver: (driver: Omit<Driver, 'id' | 'rating' | 'totalTripsCompleted' | 'todayEarnings'>) => Driver;
-  updateFareConfig: (config: FareConfig) => void;
-  markNotificationAsRead: (id: string) => void;
-  clearAllNotifications: () => void;
-  addAuditLog: (action: string, description: string) => void;
-  addNotification: (title: string, message: string, type: AppNotification['type'], relatedId?: string) => void;
+  addClient: (client: Omit<Client, 'id' | 'totalTrips'>) => MaybePromise<Client>;
+  addVehicle: (vehicle: Omit<Vehicle, 'id'>) => MaybePromise<Vehicle>;
+  addDriver: (driver: Omit<Driver, 'id' | 'rating' | 'totalTripsCompleted' | 'todayEarnings'>) => MaybePromise<Driver>;
+  updateFareConfig: (config: FareConfig) => MaybePromise<void>;
+  markNotificationAsRead: (id: string) => MaybePromise<void>;
+  clearAllNotifications: () => MaybePromise<void>;
+  addAuditLog: (action: string, description: string) => MaybePromise<void>;
+  addNotification: (title: string, message: string, type: AppNotification['type'], relatedId?: string) => MaybePromise<void>;
 }
 
-const AppContext = createContext<AppContextType | undefined>(undefined);
+export const AppContext = createContext<AppContextType | undefined>(undefined);
 
 const createLocalId = (prefix: string) => {
   const uniquePart = typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -349,6 +351,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, []);
 
   useEffect(() => {
+    if (!runtimeConfig.isDemo) return;
+
     const movementInterval = window.setInterval(() => {
       setDrivers((previousDrivers) =>
         previousDrivers.map((driver) => {

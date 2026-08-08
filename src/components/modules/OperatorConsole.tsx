@@ -248,8 +248,8 @@ export const OperatorConsole: React.FC = () => {
       });
   }, [drivers, driverTab, search, orderedAvailable]);
 
-  const handleAutoAssign = (tripId: string, tripCode: string) => {
-    const driver = autoAssignClosestDriver(tripId);
+  const handleAutoAssign = async (tripId: string, tripCode: string) => {
+    const driver = await autoAssignClosestDriver(tripId);
     if (!driver) return;
     setFocusDriverId(driver.id);
     setAssignmentToast({ tripId, tripCode, driverUnitNumber: driver.unitNumber });

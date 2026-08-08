@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { AppProvider, useApp } from './context/AppContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { CommercialAppProvider } from './context/CommercialAppProvider';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
 import { DashboardModule } from './components/modules/DashboardModule';
@@ -130,7 +131,9 @@ const AuthenticatedShell: React.FC = () => {
 
   if (runtimeConfig.isCommercial && !session) return <LoginScreen />;
 
-  return <AppProvider><MainAppContent /></AppProvider>;
+  return runtimeConfig.isCommercial
+    ? <CommercialAppProvider><MainAppContent /></CommercialAppProvider>
+    : <AppProvider><MainAppContent /></AppProvider>;
 };
 
 export default function App() {

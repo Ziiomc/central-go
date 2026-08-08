@@ -292,6 +292,11 @@ export async function setDriverManualStatus(companyId: string, status: DriverSta
   if (error) throw error;
 }
 
+export async function setDriverStatusAsOperator(driverId: string, status: DriverStatus): Promise<void> {
+  const { error } = await requireSupabase().rpc('centralgo_operator_set_driver_status', { p_driver_id: driverId, p_new_status: status });
+  if (error) throw error;
+}
+
 export async function reportDriverLocation(companyId: string, lat: number, lng: number, address?: string): Promise<void> {
   const { error } = await requireSupabase().rpc('centralgo_driver_report_location', {
     target_company: companyId,
