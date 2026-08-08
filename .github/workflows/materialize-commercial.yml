@@ -51,6 +51,17 @@ jobs:
           rm -f .github/workflows/unpack.yml
           node <<'NODE'
           const fs = require('fs');
+
+          const contextPath = 'src/context/AppContext.tsx';
+          let context = fs.readFileSync(contextPath, 'utf8');
+          if (!context.includes('addAuditLog: (action: string, description: string) => void;')) {
+            context = context.replace(
+              '  clearAllNotifications: () => void;\n}',
+              "  clearAllNotifications: () => void;\n  addAuditLog: (action: string, description: string) => void;\n  addNotification: (title: string, message: string, type: AppNotification['type'], relatedId?: string) => void;\n}"
+            );
+            fs.writeFileSync(contextPath, context);
+          }
+
           const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
           pkg.version = '1.6.0';
           pkg.scripts = {
