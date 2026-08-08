@@ -1,7 +1,9 @@
-name: Verificar compilación
+name: Calidad Central GO
 
 on:
   push:
+    branches: [main]
+  pull_request:
     branches: [main]
   workflow_dispatch:
 
@@ -9,17 +11,27 @@ permissions:
   contents: read
 
 jobs:
-  build:
+  quality:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
     steps:
       - name: Descargar código
         uses: actions/checkout@v4
+
       - name: Configurar Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-      - name: Instalar dependencias
-        run: npm install --no-audit --no-fund
-      - name: Compilar Central GO
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependencias reproducibles
+        run: npm ci --no-audit --no-fund
+
+      - name: TypeScript
+        run: npm run lint
+
+      - name: Reglas comerciales
+        run: npm run check:commercial
+
+      - name: Compilar producción
         run: npm run build
