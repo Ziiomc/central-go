@@ -37,3 +37,8 @@ El resultado se genera en la carpeta `dist`.
 ## Despliegue
 
 El proyecto está preparado para desplegarse en Vercel. No requiere claves de API para ejecutar esta demostración.
+
+
+## Seguridad comercial
+
+La rama principal ejecuta TypeScript, chequeos de preparación comercial y build de producción en cada cambio. El modo comercial permanece bloqueado hasta conectar autenticación y persistencia reales. Ver `docs/COMMERCIAL_READINESS.md`.

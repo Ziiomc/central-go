@@ -31,6 +31,8 @@ import { TripDetailModal } from './components/modals/TripDetailModal';
 import { VHFDispatchModal } from './components/modals/VHFDispatchModal';
 import { NotificationsDrawer } from './components/notifications/NotificationsDrawer';
 import { registerServiceWorker } from './lib/pwa';
+import { ErrorBoundary } from './components/system/ErrorBoundary';
+import { CommercialGate } from './components/system/CommercialGate';
 import { Menu, Car, Headphones, Smartphone, Monitor } from 'lucide-react';
 
 const MainAppContent: React.FC = () => {
@@ -188,8 +190,12 @@ const MainAppContent: React.FC = () => {
 
 export default function App() {
   return (
-    <AppProvider>
-      <MainAppContent />
-    </AppProvider>
+    <ErrorBoundary>
+      <CommercialGate>
+        <AppProvider>
+          <MainAppContent />
+        </AppProvider>
+      </CommercialGate>
+    </ErrorBoundary>
   );
 }

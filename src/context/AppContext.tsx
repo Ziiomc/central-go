@@ -30,6 +30,7 @@ import {
 } from '../data/mockData';
 import { playVHFRadioChirp, playSOSSiren, speakVHFDispatch } from '../lib/audioService';
 import { soundManager } from '../lib/audio';
+import { runtimeConfig } from '../config/runtime';
 import { advanceAlongRoute, requestDrivingRoute, RoadPoint } from '../lib/roadRouting';
 
 interface AppContextType {
@@ -243,6 +244,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // OpenStreetMap/OSRM. When the service is unavailable, roadRouting uses a
   // local Linares street-grid fallback instead of moving diagonally over blocks.
   useEffect(() => {
+    if (!runtimeConfig.isDemo) return;
+
     let cancelled = false;
 
     const ensureDriverRoutes = async () => {

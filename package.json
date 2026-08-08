@@ -1,14 +1,16 @@
 {
   "name": "central-go",
   "private": true,
-  "version": "1.6.0",
+  "version": "1.7.0",
   "type": "module",
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
     "build": "vite build",
     "preview": "vite preview --host=0.0.0.0",
     "clean": "rm -rf dist",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "check:commercial": "node scripts/commercial-check.mjs",
+    "test": "npm run lint && npm run check:commercial && npm run build"
   },
   "dependencies": {
     "leaflet": "^1.9.4",
@@ -28,7 +30,7 @@
     "typescript": "~5.8.2",
     "vite": "^6.2.3"
   },
-  "description": "Central GO 1.6 - base comercial estable sin capas de build autogeneradas.",
+  "description": "Central GO 1.7 - base comercial endurecida, con guardas de producción, CI y seguridad HTTP.",
   "engines": {
     "node": ">=20"
   }
