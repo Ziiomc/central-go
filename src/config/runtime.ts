@@ -6,9 +6,9 @@ const supabaseUrl = (import.meta.env.VITE_SUPABASE_URL ?? '').trim();
 const supabasePublishableKey = (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? '').trim();
 const backendFlag = import.meta.env.VITE_COMMERCIAL_BACKEND_ENABLED === 'true';
 
-// Deliberately false until the authenticated persistence layer is wired into AppContext.
-// This prevents a demo data model from being mistaken for a production system.
-const commercialBackendIntegrated = false;
+// La capa autenticada/persistente ya está integrada y protegida por CI.
+// El entorno comercial sigue necesitando las variables explícitas para activarse.
+const commercialBackendIntegrated = true;
 
 export const runtimeConfig = Object.freeze({
   mode,
