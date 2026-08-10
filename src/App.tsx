@@ -33,6 +33,7 @@ import { TripDetailModal } from './components/modals/TripDetailModal';
 import { VHFDispatchModal } from './components/modals/VHFDispatchModal';
 import { NotificationsDrawer } from './components/notifications/NotificationsDrawer';
 import { LoginScreen } from './components/auth/LoginScreen';
+import { PasswordSetupScreen } from './components/auth/PasswordSetupScreen';
 import { registerServiceWorker } from './lib/pwa';
 import { ErrorBoundary } from './components/system/ErrorBoundary';
 import { CommercialGate } from './components/system/CommercialGate';
@@ -112,21 +113,24 @@ const WrongDriverRoute: React.FC = () => (
 );
 
 const AuthenticatedShell: React.FC = () => {
-  const { session, loading, effectiveRole } = useAuth();
+  const { session, authUser, loading, effectiveRole } = useAuth();
   const driverPath = window.location.pathname === '/driver' || window.location.pathname.startsWith('/driver/');
+  const recoveryPath = window.location.pathname === '/reset-password' || window.location.pathname.startsWith('/reset-password/');
+  const needsPasswordSetup = Boolean(authUser?.user_metadata?.needs_password_setup);
 
   useEffect(() => {
     registerServiceWorker();
   }, []);
 
   useEffect(() => {
-    if (!loading && session && effectiveRole === 'driver' && !driverPath) {
+    if (!loading && session && !needsPasswordSetup && !recoveryPath && effectiveRole === 'driver' && !driverPath) {
       window.location.replace('/driver');
     }
-  }, [loading, session, effectiveRole, driverPath]);
+  }, [loading, session, effectiveRole, driverPath, recoveryPath, needsPasswordSetup]);
 
   if (loading) return <main className="min-h-screen bg-zinc-950 text-zinc-200 flex items-center justify-center"><div className="flex items-center gap-3 text-sm font-bold"><Loader2 className="h-5 w-5 animate-spin text-amber-400" />Validando sesión segura…</div></main>;
   if (!session) return <LoginScreen />;
+  if (needsPasswordSetup || recoveryPath) return <PasswordSetupScreen recovery={recoveryPath} />;
   if (effectiveRole === 'driver' && !driverPath) return <main className="min-h-screen bg-zinc-950 text-zinc-300 flex items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-amber-400" /></main>;
   if (driverPath && effectiveRole !== 'driver') return <WrongDriverRoute />;
   if (driverPath) return <CommercialAppProvider><DriverMobileView /></CommercialAppProvider>;
