@@ -25,6 +25,28 @@ export interface PartnerDashboardData {
   teamCount: number;
 }
 
+export interface PartnerDirectoryItem {
+  id: string;
+  userId: string;
+  name: string;
+  email: string;
+  phone: string;
+  kind: 'regional' | 'sales';
+  code: string;
+  commissionPercent: number;
+  active: boolean;
+  createdAt: string;
+  parentPartnerId: string | null;
+  parentName: string | null;
+  territories: PartnerTerritory[];
+  centralCount: number;
+  activeCentralCount: number;
+  monthlySales: number;
+  pendingCommission: number;
+  availableCommission: number;
+  paidCommission: number;
+}
+
 export async function loadPartnerDashboard(): Promise<PartnerDashboardData> {
   const db = requireSupabase();
   const { data, error } = await db.rpc('centralgo_partner_dashboard');
@@ -45,4 +67,61 @@ export async function loadPartnerDashboard(): Promise<PartnerDashboardData> {
     paidCommission: Number(raw.paidCommission ?? 0),
     teamCount: Number(raw.teamCount ?? 0),
   };
+}
+
+export async function loadVisiblePartners(): Promise<PartnerDirectoryItem[]> {
+  const db = requireSupabase();
+  const { data, error } = await db.rpc('centralgo_visible_partners');
+  if (error) throw error;
+  const rows = Array.isArray(data) ? data : [];
+  return rows.map((row: any) => ({
+    id: String(row.id),
+    userId: String(row.userId),
+    name: row.name ?? 'Partner',
+    email: row.email ?? '',
+    phone: row.phone ?? '',
+    kind: row.kind,
+    code: row.code ?? '',
+    commissionPercent: Number(row.commissionPercent ?? 0),
+    active: Boolean(row.active),
+    createdAt: row.createdAt ?? '',
+    parentPartnerId: row.parentPartnerId ?? null,
+    parentName: row.parentName ?? null,
+    territories: Array.isArray(row.territories) ? row.territories : [],
+    centralCount: Number(row.centralCount ?? 0),
+    activeCentralCount: Number(row.activeCentralCount ?? 0),
+    monthlySales: Number(row.monthlySales ?? 0),
+    pendingCommission: Number(row.pendingCommission ?? 0),
+    availableCommission: Number(row.availableCommission ?? 0),
+    paidCommission: Number(row.paidCommission ?? 0),
+  }));
+}
+
+export async function inviteNetworkPartner(input: {
+  name: string;
+  email: string;
+  kind: 'regional' | 'sales';
+  code: string;
+  commissionPercent: number;
+  parentPartnerId?: string | null;
+  countryCode?: string;
+  region?: string;
+  city?: string;
+  redirectTo?: string;
+}): Promise<{ invited: boolean; partnerId: string; message: string }> {
+  const db = requireSupabase();
+  const { data, error } = await db.functions.invoke('invite-network-user', { body: input });
+  if (error) throw error;
+  if (data?.error) throw new Error(String(data.error));
+  return {
+    invited: Boolean(data?.invited),
+    partnerId: String(data?.partnerId ?? ''),
+    message: data?.message ?? 'Partner configurado',
+  };
+}
+
+export async function setPartnerStatus(partnerId: string, active: boolean) {
+  const db = requireSupabase();
+  const { error } = await db.rpc('centralgo_superadmin_set_partner_status', { p_partner_id: partnerId, p_active: active });
+  if (error) throw error;
 }
