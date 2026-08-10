@@ -1,4 +1,4 @@
-const CACHE_NAME = 'centralgo-official-v1';
+const CACHE_NAME = 'centralgo-official-v3';
 const APP_SHELL = ['/', '/driver', '/index.html', '/manifest.json', '/driver-manifest.json', '/icon.svg'];
 
 self.addEventListener('install', (event) => {
@@ -17,8 +17,13 @@ self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 
   if (event.request.mode === 'navigate') {
+    // Las navegaciones siempre intentan red primero para impedir que el login o
+    // la demo queden atrapados en una versión anterior. Solo usamos el shell
+    // cacheado cuando realmente estamos sin conexión.
     event.respondWith(
-      fetch(event.request).then((response) => response).catch(() => caches.match('/index.html'))
+      fetch(event.request, { cache: 'no-store' })
+        .then((response) => response)
+        .catch(() => caches.match('/index.html'))
     );
     return;
   }
