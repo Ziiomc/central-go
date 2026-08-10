@@ -3,6 +3,17 @@ import { KeyRound, Loader2, LockKeyhole, Mail, ShieldCheck } from 'lucide-react'
 import centralGoLogo from '../../assets/images/central-go-logo.svg';
 import { useAuth } from '../../context/AuthContext';
 
+const friendlyAuthError = (error: unknown) => {
+  const message = error instanceof Error ? error.message : String(error ?? '');
+  if (/failed to fetch|networkerror|load failed|network request failed/i.test(message)) {
+    return 'No pudimos conectar con el servidor de Central GO. La aplicación intentó también la ruta de respaldo. Recarga la página y vuelve a intentar; si continúa, prueba otra red y repórtalo a soporte.';
+  }
+  if (/invalid login credentials/i.test(message)) return 'Correo o contraseña incorrectos.';
+  if (/email not confirmed/i.test(message)) return 'Debes confirmar tu correo antes de iniciar sesión.';
+  if (/rate limit|too many requests/i.test(message)) return 'Hay demasiados intentos seguidos. Espera un momento y vuelve a intentar.';
+  return message || 'No fue posible completar la autenticación.';
+};
+
 export const LoginScreen: React.FC = () => {
   const { signIn, requestPasswordReset, identityError } = useAuth();
   const [email, setEmail] = useState('');
@@ -15,7 +26,7 @@ export const LoginScreen: React.FC = () => {
     event.preventDefault();
     setError(''); setNotice(''); setBusy(true);
     try { await signIn(email, password); }
-    catch (err) { setError(err instanceof Error ? err.message : 'No fue posible iniciar sesión.'); }
+    catch (err) { setError(friendlyAuthError(err)); }
     finally { setBusy(false); }
   };
 
@@ -25,8 +36,8 @@ export const LoginScreen: React.FC = () => {
     setBusy(true);
     try {
       await requestPasswordReset(email);
-      setNotice('Te enviamos un enlace para definir una nueva contraseña.');
-    } catch (err) { setError(err instanceof Error ? err.message : 'No fue posible enviar la recuperación.'); }
+      setNotice('Te enviamos un enlace para definir una nueva contraseña. Revisa también Spam o Promociones.');
+    } catch (err) { setError(friendlyAuthError(err)); }
     finally { setBusy(false); }
   };
 
@@ -38,9 +49,9 @@ export const LoginScreen: React.FC = () => {
         <div className="mt-5 rounded-2xl border border-blue-500/20 bg-blue-500/[0.05] p-3.5 text-[11px] leading-relaxed text-blue-200/80">Los accesos nuevos se crean desde el panel de la central o desde Superadmin. Si recibiste una invitación por correo, ábrela primero para activar tu cuenta y definir tu contraseña.</div>
         <form onSubmit={submit} className="mt-6 space-y-4">
           <label className="block"><span className="mb-1.5 flex items-center gap-2 text-xs font-bold text-zinc-400"><Mail className="h-4 w-4" />Correo</span><input required type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm outline-none transition focus:border-amber-400/70" placeholder="tu@correo.com" /></label>
-          <label className="block"><span className="mb-1.5 flex items-center gap-2 text-xs font-bold text-zinc-400"><LockKeyhole className="h-4 w-4" />Contraseña</span><input required type="password" minLength={10} autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm outline-none transition focus:border-amber-400/70" placeholder="••••••••••" /></label>
-          {(error || identityError) && <div className="rounded-xl border border-rose-500/25 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{error || identityError}</div>}
-          {notice && <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">{notice}</div>}
+          <label className="block"><span className="mb-1.5 flex items-center gap-2 text-xs font-bold text-zinc-400"><LockKeyhole className="h-4 w-4" />Contraseña</span><input required type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm outline-none transition focus:border-amber-400/70" placeholder="••••••••••" /></label>
+          {(error || identityError) && <div aria-live="polite" className="rounded-xl border border-rose-500/25 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{error || identityError}</div>}
+          {notice && <div aria-live="polite" className="rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">{notice}</div>}
           <button disabled={busy} className="flex w-full items-center justify-center gap-2 rounded-xl bg-amber-400 px-4 py-3.5 text-sm font-black text-zinc-950 transition hover:bg-amber-300 disabled:opacity-60">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}{busy ? 'Validando…' : 'Entrar a Central GO'}</button>
         </form>
         <button type="button" disabled={busy} onClick={() => void recover()} className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-xs font-bold text-zinc-400 hover:text-white disabled:opacity-50"><KeyRound className="h-4 w-4" />Olvidé mi contraseña</button>

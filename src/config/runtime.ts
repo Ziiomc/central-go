@@ -1,6 +1,18 @@
-const supabaseUrl = (import.meta.env.VITE_SUPABASE_URL ?? '').trim();
-const supabasePublishableKey = (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? '').trim();
-const backendFlag = import.meta.env.VITE_COMMERCIAL_BACKEND_ENABLED === 'true';
+const OFFICIAL_SUPABASE_URL = 'https://cuazdzsvgwrnpczbvrgx.supabase.co';
+const OFFICIAL_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_ICfwSIQkutbSwAcHQdjBhA_aRPvM0lG';
+
+const envSupabaseUrl = (import.meta.env.VITE_SUPABASE_URL ?? '').trim();
+const envSupabasePublishableKey = (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? '').trim();
+const envBackendFlag = import.meta.env.VITE_COMMERCIAL_BACKEND_ENABLED === 'true';
+const production = import.meta.env.PROD;
+
+// En producción Central GO siempre debe hablar con el proyecto oficial.
+// Esto evita que una variable antigua de Vercel pueda apuntar el bundle a otro backend.
+const supabaseUrl = production ? OFFICIAL_SUPABASE_URL : (envSupabaseUrl || OFFICIAL_SUPABASE_URL);
+const supabasePublishableKey = production
+  ? OFFICIAL_SUPABASE_PUBLISHABLE_KEY
+  : (envSupabasePublishableKey || OFFICIAL_SUPABASE_PUBLISHABLE_KEY);
+const backendFlag = production ? true : envBackendFlag;
 
 // Central GO 2.0 opera exclusivamente contra el backend autenticado.
 // isDemo se conserva en false solo como compatibilidad con código legado no montado.
@@ -12,6 +24,7 @@ export const runtimeConfig = Object.freeze({
   isCommercial: true as const,
   supabaseUrl,
   supabasePublishableKey,
+  officialSupabaseUrl: OFFICIAL_SUPABASE_URL,
   hasSupabaseConfig: Boolean(supabaseUrl && supabasePublishableKey),
   backendFlag,
   commercialBackendIntegrated,
