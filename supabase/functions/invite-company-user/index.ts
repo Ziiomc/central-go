@@ -11,23 +11,16 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
   headers: { ...corsHeaders, 'Content-Type': 'application/json' },
 });
 
-const allowedRole = (value: string): value is 'company_admin' | 'operator' | 'driver' =>
-  ['company_admin', 'operator', 'driver'].includes(value);
+const allowedRole = (value: string): value is 'company_admin' | 'operator' | 'driver' => ['company_admin', 'operator', 'driver'].includes(value);
 
 const safeRedirect = (value?: string) => {
   if (!value) return undefined;
   try {
     const url = new URL(value);
-    const allowed = url.protocol === 'https:' && (
-      url.hostname.endsWith('.vercel.app') ||
-      url.hostname === 'centralgo.app' ||
-      url.hostname.endsWith('.centralgo.app')
-    );
+    const allowed = url.protocol === 'https:' && (url.hostname.endsWith('.vercel.app') || url.hostname === 'centralgo.app' || url.hostname.endsWith('.centralgo.app'));
     const local = url.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(url.hostname);
     return allowed || local ? url.toString() : undefined;
-  } catch {
-    return undefined;
-  }
+  } catch { return undefined; }
 };
 
 Deno.serve(async (req) => {
@@ -37,30 +30,17 @@ Deno.serve(async (req) => {
   try {
     const authorization = req.headers.get('Authorization');
     if (!authorization) return json({ error: 'Sesión requerida' }, 401);
-
-    const body = await req.json().catch(() => null) as {
-      companyId?: string;
-      email?: string;
-      role?: string;
-      name?: string;
-      redirectTo?: string;
-    } | null;
-
+    const body = await req.json().catch(() => null) as { companyId?: string; email?: string; role?: string; name?: string; redirectTo?: string } | null;
     const companyId = body?.companyId?.trim();
     const email = body?.email?.trim().toLowerCase();
     const role = body?.role?.trim() ?? '';
     const name = body?.name?.trim() ?? '';
-    if (!companyId || !email || !email.includes('@') || !allowedRole(role)) {
-      return json({ error: 'Central, correo y rol válidos son obligatorios' }, 400);
-    }
+    if (!companyId || !email || !email.includes('@') || !allowedRole(role)) return json({ error: 'Central, correo y rol válidos son obligatorios' }, 400);
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const userClient = createClient(supabaseUrl, anonKey, {
-      global: { headers: { Authorization: authorization } },
-      auth: { persistSession: false },
-    });
+    const userClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: authorization } }, auth: { persistSession: false } });
     const service = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
 
     const { data: userData, error: userError } = await userClient.auth.getUser();
@@ -70,20 +50,12 @@ Deno.serve(async (req) => {
     const { data: profile } = await service.from('profiles').select('global_role,active').eq('id', callerId).maybeSingle();
     if (!profile?.active) return json({ error: 'Cuenta suspendida' }, 403);
     const isSuper = profile.global_role === 'super_admin';
-
     let authorized = isSuper;
+
     if (!authorized && role !== 'company_admin') {
-      const { data: membership } = await service
-        .from('company_memberships')
-        .select('id')
-        .eq('company_id', companyId)
-        .eq('user_id', callerId)
-        .eq('role', 'company_admin')
-        .eq('active', true)
-        .maybeSingle();
+      const { data: membership } = await service.from('company_memberships').select('id').eq('company_id', companyId).eq('user_id', callerId).eq('role', 'company_admin').eq('active', true).maybeSingle();
       authorized = Boolean(membership);
     }
-
     if (!authorized && role === 'company_admin') {
       const { data: ownPartner } = await service.from('partners').select('id,kind').eq('user_id', callerId).eq('active', true).maybeSingle();
       if (ownPartner) {
@@ -95,7 +67,6 @@ Deno.serve(async (req) => {
         }
       }
     }
-
     if (!authorized) return json({ error: 'No tienes permiso para invitar este rol a la central' }, 403);
 
     let targetUser: { id: string; email?: string | null } | null = null;
@@ -110,32 +81,19 @@ Deno.serve(async (req) => {
     if (!targetUser) {
       const redirectTo = safeRedirect(body?.redirectTo);
       const { data, error } = await service.auth.admin.inviteUserByEmail(email, {
-        data: name ? { name } : undefined,
+        data: { ...(name ? { name } : {}), needs_password_setup: true },
         redirectTo,
       });
       if (error) throw error;
       targetUser = data.user;
       invited = true;
     }
-
     if (!targetUser) return json({ error: 'No fue posible crear o localizar el usuario' }, 500);
 
-    const { error: membershipError } = await service.from('company_memberships').upsert({
-      company_id: companyId,
-      user_id: targetUser.id,
-      role,
-      active: true,
-    }, { onConflict: 'company_id,user_id,role' });
+    const { error: membershipError } = await service.from('company_memberships').upsert({ company_id: companyId, user_id: targetUser.id, role, active: true }, { onConflict: 'company_id,user_id,role' });
     if (membershipError) throw membershipError;
 
-    return json({
-      ok: true,
-      userId: targetUser.id,
-      email,
-      role,
-      invited,
-      message: invited ? 'Invitación enviada por correo' : 'Usuario existente vinculado a la central',
-    });
+    return json({ ok: true, userId: targetUser.id, email, role, invited, message: invited ? 'Invitación enviada por correo' : 'Usuario existente vinculado a la central' });
   } catch (error) {
     console.error('invite-company-user', error);
     return json({ error: error instanceof Error ? error.message : 'No fue posible invitar al usuario' }, 500);
