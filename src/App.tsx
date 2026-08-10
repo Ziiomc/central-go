@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { AppProvider, useApp } from './context/AppContext';
+import React, { useEffect, useState } from 'react';
+import { useApp } from './context/AppContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { CommercialAppProvider } from './context/CommercialAppProvider';
 import { Header } from './components/Header';
@@ -19,7 +19,6 @@ import { HistoryModule } from './components/modules/HistoryModule';
 import { SettingsModule } from './components/modules/SettingsModule';
 import { ProfileModule } from './components/modules/ProfileModule';
 import { HelpModule } from './components/modules/HelpModule';
-import { GlobalAdminDashboard } from './components/modules/GlobalAdminDashboard';
 import { CommercialGlobalAdminDashboard } from './components/modules/CommercialGlobalAdminDashboard';
 import { PartnerDashboard } from './components/modules/PartnerDashboard';
 import { CentralsNetworkModule } from './components/modules/CentralsNetworkModule';
@@ -37,18 +36,12 @@ import { LoginScreen } from './components/auth/LoginScreen';
 import { registerServiceWorker } from './lib/pwa';
 import { ErrorBoundary } from './components/system/ErrorBoundary';
 import { CommercialGate } from './components/system/CommercialGate';
-import { runtimeConfig } from './config/runtime';
-import { Menu, Car, Smartphone, Monitor, Loader2 } from 'lucide-react';
+import { ArrowLeft, Loader2, Menu, ShieldAlert } from 'lucide-react';
 
 const MainAppContent: React.FC = () => {
   const { currentRole, activeModule, setNewTripModalOpen } = useApp();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const [driverViewMode, setDriverViewMode] = useState<'mobile' | 'desktop'>('mobile');
-
-  useEffect(() => {
-    registerServiceWorker();
-  }, []);
 
   useEffect(() => {
     const handleShortcut = (event: KeyboardEvent) => {
@@ -65,7 +58,7 @@ const MainAppContent: React.FC = () => {
     switch (activeModule) {
       case 'dashboard':
         if (currentRole === 'operator') return <OperatorConsole />;
-        if (currentRole === 'super_admin') return runtimeConfig.isCommercial ? <CommercialGlobalAdminDashboard /> : <GlobalAdminDashboard />;
+        if (currentRole === 'super_admin') return <CommercialGlobalAdminDashboard />;
         if (currentRole === 'regional_partner' || currentRole === 'sales_partner') return <PartnerDashboard />;
         return <DashboardModule />;
       case 'network_centrals': return <CentralsNetworkModule />;
@@ -73,8 +66,7 @@ const MainAppContent: React.FC = () => {
       case 'commissions_network': return <CommissionsNetworkModule />;
       case 'plans_network': return <PlansNetworkModule />;
       case 'network_support': return <NetworkSupportModule />;
-      case 'live_map':
-        return <div className="space-y-4"><h1 className="font-extrabold text-2xl text-white">Mapa en Tiempo Real</h1><LiveMap height="h-[calc(100vh-200px)]" /></div>;
+      case 'live_map': return <div className="space-y-4"><h1 className="font-extrabold text-2xl text-white">Mapa en Tiempo Real</h1><LiveMap height="h-[calc(100vh-200px)]" /></div>;
       case 'trips': return <TripsModule />;
       case 'drivers': return <DriversModule />;
       case 'vehicles': return <VehiclesModule />;
@@ -94,26 +86,11 @@ const MainAppContent: React.FC = () => {
   return (
     <div className="min-h-screen bg-[#09090b] text-zinc-100 flex flex-col font-sans selection:bg-blue-500/30">
       <Header onToggleNotifications={() => setNotificationsOpen(!notificationsOpen)} />
-
-      {currentRole === 'driver' ? (
-        <div className="p-4 max-w-7xl mx-auto w-full">
-          <div className="flex items-center justify-between bg-[#0d0d0f] p-2 rounded-xl border border-zinc-800 mb-4 shadow-xl">
-            <div className="flex items-center gap-2 text-xs text-blue-400 font-bold px-3 uppercase tracking-wider"><Car className="w-4 h-4" /><span>Rol Conductor Activo</span></div>
-            <div className="flex gap-2">
-              <button onClick={() => setDriverViewMode('mobile')} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 uppercase tracking-wider ${driverViewMode === 'mobile' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/30' : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200'}`}><Smartphone className="w-3.5 h-3.5" /> Vista PWA Smartphone</button>
-              <button onClick={() => setDriverViewMode('desktop')} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 uppercase tracking-wider ${driverViewMode === 'desktop' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/30' : 'bg-zinc-900 text-zinc-400 hover:text-zinc-200'}`}><Monitor className="w-3.5 h-3.5" /> Vista Escritorio</button>
-            </div>
-          </div>
-          {driverViewMode === 'mobile' ? <DriverMobileView /> : <div className="flex flex-1 relative"><Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} /><main className="flex-1 p-4 md:p-6 overflow-y-auto max-w-7xl mx-auto w-full">{renderModule()}</main></div>}
-        </div>
-      ) : (
-        <div className="flex-1 flex relative">
-          <button onClick={() => setSidebarOpen(!sidebarOpen)} className="md:hidden fixed bottom-5 right-5 z-40 p-3.5 bg-blue-600 text-white rounded-full shadow-2xl font-bold border border-blue-400/30 shadow-blue-900/50" aria-label="Abrir Menú"><Menu className="w-6 h-6" /></button>
-          <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-          <main className={`flex-1 overflow-y-auto mx-auto w-full min-h-[calc(100vh-65px)] ${currentRole === 'operator' ? 'p-2.5 md:p-3 max-w-[1800px]' : ['super_admin', 'regional_partner', 'sales_partner'].includes(currentRole) ? 'p-4 md:p-6 max-w-[1600px]' : 'p-4 md:p-6 max-w-7xl'}`}>{renderModule()}</main>
-        </div>
-      )}
-
+      <div className="flex-1 flex relative">
+        <button onClick={() => setSidebarOpen(!sidebarOpen)} className="md:hidden fixed bottom-5 right-5 z-40 p-3.5 bg-blue-600 text-white rounded-full shadow-2xl font-bold border border-blue-400/30" aria-label="Abrir menú"><Menu className="w-6 h-6" /></button>
+        <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+        <main className={`flex-1 overflow-y-auto mx-auto w-full min-h-[calc(100vh-65px)] ${currentRole === 'operator' ? 'p-2.5 md:p-3 max-w-[1800px]' : ['super_admin', 'regional_partner', 'sales_partner'].includes(currentRole) ? 'p-4 md:p-6 max-w-[1600px]' : 'p-4 md:p-6 max-w-7xl'}`}>{renderModule()}</main>
+      </div>
       <NewTripModal />
       <SOSAlertModal />
       <TripDetailModal />
@@ -123,18 +100,37 @@ const MainAppContent: React.FC = () => {
   );
 };
 
+const WrongDriverRoute: React.FC = () => (
+  <main className="min-h-screen bg-zinc-950 p-5 text-zinc-100 flex items-center justify-center">
+    <section className="w-full max-w-md rounded-3xl border border-amber-500/25 bg-[#0d0d0f] p-7 text-center">
+      <ShieldAlert className="mx-auto h-9 w-9 text-amber-300" />
+      <h1 className="mt-4 text-xl font-black">Acceso exclusivo para conductores</h1>
+      <p className="mt-2 text-sm text-zinc-400">Esta ruta instala y abre la app móvil del conductor. Tu cuenta utiliza el panel web de Central GO.</p>
+      <button onClick={() => { window.location.href = '/'; }} className="mt-5 inline-flex items-center gap-2 rounded-xl bg-amber-400 px-4 py-3 text-xs font-black text-zinc-950"><ArrowLeft className="h-4 w-4" />Volver al panel</button>
+    </section>
+  </main>
+);
+
 const AuthenticatedShell: React.FC = () => {
-  const { session, loading } = useAuth();
+  const { session, loading, effectiveRole } = useAuth();
+  const driverPath = window.location.pathname === '/driver' || window.location.pathname.startsWith('/driver/');
 
-  if (runtimeConfig.isCommercial && loading) {
-    return <main className="min-h-screen bg-zinc-950 text-zinc-200 flex items-center justify-center"><div className="flex items-center gap-3 text-sm font-bold"><Loader2 className="h-5 w-5 animate-spin text-amber-400" /> Validando sesión segura…</div></main>;
-  }
+  useEffect(() => {
+    registerServiceWorker();
+  }, []);
 
-  if (runtimeConfig.isCommercial && !session) return <LoginScreen />;
+  useEffect(() => {
+    if (!loading && session && effectiveRole === 'driver' && !driverPath) {
+      window.location.replace('/driver');
+    }
+  }, [loading, session, effectiveRole, driverPath]);
 
-  return runtimeConfig.isCommercial
-    ? <CommercialAppProvider><MainAppContent /></CommercialAppProvider>
-    : <AppProvider><MainAppContent /></AppProvider>;
+  if (loading) return <main className="min-h-screen bg-zinc-950 text-zinc-200 flex items-center justify-center"><div className="flex items-center gap-3 text-sm font-bold"><Loader2 className="h-5 w-5 animate-spin text-amber-400" />Validando sesión segura…</div></main>;
+  if (!session) return <LoginScreen />;
+  if (effectiveRole === 'driver' && !driverPath) return <main className="min-h-screen bg-zinc-950 text-zinc-300 flex items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-amber-400" /></main>;
+  if (driverPath && effectiveRole !== 'driver') return <WrongDriverRoute />;
+  if (driverPath) return <CommercialAppProvider><DriverMobileView /></CommercialAppProvider>;
+  return <CommercialAppProvider><MainAppContent /></CommercialAppProvider>;
 };
 
 export default function App() {
