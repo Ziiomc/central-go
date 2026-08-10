@@ -117,7 +117,7 @@ jobs:
           if psql -q -v ON_ERROR_STOP=1 <<SQL
           set role authenticated;
           set request.jwt.claim.sub='$DRIVER_USER';
-          insert into public.sos_events(company_id,driver_id,lat,lng,message)
+          insert into public.sos_events(company_id,driver_id,lat,lng,address)
           values('$COMPANY_B','$DRIVER_ROW',-35.84,-71.59,'SOS malicioso');
           SQL
           then
@@ -134,7 +134,7 @@ jobs:
           values('$COMPANY_A','$DRIVER_ROW',-35.84,-71.59);
           insert into public.driver_location_history(company_id,driver_id,lat,lng)
           values('$COMPANY_A','$DRIVER_ROW',-35.84,-71.59);
-          insert into public.sos_events(company_id,driver_id,lat,lng,message)
+          insert into public.sos_events(company_id,driver_id,lat,lng,address)
           values('$COMPANY_A','$DRIVER_ROW',-35.84,-71.59,'SOS válido');
           SQL
 
