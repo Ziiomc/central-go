@@ -34,11 +34,14 @@ import { VHFDispatchModal } from './components/modals/VHFDispatchModal';
 import { NotificationsDrawer } from './components/notifications/NotificationsDrawer';
 import { LoginScreen } from './components/auth/LoginScreen';
 import { PasswordSetupScreen } from './components/auth/PasswordSetupScreen';
-import { SalesDemoScreen } from './components/demo/SalesDemoScreen';
 import { registerServiceWorker } from './lib/pwa';
 import { ErrorBoundary } from './components/system/ErrorBoundary';
 import { CommercialGate } from './components/system/CommercialGate';
 import { ArrowLeft, Loader2, Menu, ShieldAlert } from 'lucide-react';
+
+const SalesDemoScreen = React.lazy(() =>
+  import('./components/demo/SalesDemoScreen').then((module) => ({ default: module.SalesDemoScreen }))
+);
 
 const MainAppContent: React.FC = () => {
   const { currentRole, activeModule, setNewTripModalOpen } = useApp();
@@ -144,7 +147,9 @@ export default function App() {
   if (demoRequested) {
     return (
       <ErrorBoundary>
-        <SalesDemoScreen />
+        <React.Suspense fallback={<main className="min-h-screen bg-zinc-950 text-zinc-300 flex items-center justify-center"><div className="flex items-center gap-3 text-sm font-bold"><Loader2 className="h-5 w-5 animate-spin text-amber-400" />Preparando demo comercial…</div></main>}>
+          <SalesDemoScreen />
+        </React.Suspense>
       </ErrorBoundary>
     );
   }
