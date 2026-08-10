@@ -1,0 +1,117 @@
+name: Entitlements Central GO
+
+on:
+  push:
+    branches: [main, commercial]
+  pull_request:
+    branches: [main, commercial]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  entitlements:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: centralgo_entitlements
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d centralgo_entitlements"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGDATABASE: centralgo_entitlements
+      PGUSER: postgres
+      PGPASSWORD: postgres
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Preparar PostgreSQL compatible con Supabase
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          create role anon nologin;
+          create role authenticated nologin;
+          create schema auth;
+          create table auth.users (
+            id uuid primary key,
+            email text,
+            email_confirmed_at timestamptz,
+            raw_user_meta_data jsonb not null default '{}'::jsonb
+          );
+          create or replace function auth.uid()
+          returns uuid language sql stable
+          as $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
+          grant usage on schema auth to anon, authenticated;
+          grant execute on function auth.uid() to anon, authenticated;
+          create publication supabase_realtime;
+          SQL
+          for migration in supabase/migrations/*.sql; do
+            psql -v ON_ERROR_STOP=1 -f "$migration" >/dev/null
+          done
+
+      - name: Verificar límites Start en PostgreSQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          SUPER='90000000-0000-4000-8000-000000000001'
+          OP1='90000000-0000-4000-8000-000000000002'
+          OP2='90000000-0000-4000-8000-000000000003'
+          OP3='90000000-0000-4000-8000-000000000004'
+          DRIVER='90000000-0000-4000-8000-000000000005'
+
+          psql -v ON_ERROR_STOP=1 <<SQL
+          insert into auth.users(id,email,email_confirmed_at,raw_user_meta_data) values
+            ('$SUPER','ent-owner@centralgo.test',now(),'{"name":"Owner Entitlements"}'),
+            ('$OP1','ent-op1@centralgo.test',now(),'{"name":"OP1"}'),
+            ('$OP2','ent-op2@centralgo.test',now(),'{"name":"OP2"}'),
+            ('$OP3','ent-op3@centralgo.test',now(),'{"name":"OP3"}'),
+            ('$DRIVER','ent-driver@centralgo.test',now(),'{"name":"Driver"}');
+          update public.profiles set global_role='super_admin' where id='$SUPER';
+          SQL
+
+          COMPANY=$(psql -qAt -v ON_ERROR_STOP=1 <<SQL
+          set role authenticated;
+          set request.jwt.claim.sub='$SUPER';
+          select public.centralgo_superadmin_create_company('Central Start Entitlements','START-ENT','Linares','CL',null,null,'start','annual',14,null,null);
+          SQL
+          )
+          test -n "$COMPANY"
+
+          for N in $(seq 1 10); do
+            psql -v ON_ERROR_STOP=1 -c "insert into public.vehicles(company_id,unit_number,license_plate,brand,model,year) values('$COMPANY','Móvil $N','ENT-$N','Toyota','Yaris',2022);" >/dev/null
+          done
+
+          if psql -q -v ON_ERROR_STOP=1 -c "insert into public.vehicles(company_id,unit_number,license_plate,brand,model,year) values('$COMPANY','Móvil 11','ENT-11','Toyota','Yaris',2022);"; then
+            echo 'ENTITLEMENT FAIL: Start permitió 11 móviles.'
+            exit 1
+          else
+            echo 'Límite de 10 móviles Start: OK'
+          fi
+
+          psql -v ON_ERROR_STOP=1 -c "insert into public.company_memberships(company_id,user_id,role,active) values('$COMPANY','$OP1','operator',true),('$COMPANY','$OP2','operator',true);" >/dev/null
+
+          if psql -q -v ON_ERROR_STOP=1 -c "insert into public.company_memberships(company_id,user_id,role,active) values('$COMPANY','$OP3','operator',true);"; then
+            echo 'ENTITLEMENT FAIL: Start permitió 3 operadoras.'
+            exit 1
+          else
+            echo 'Límite de 2 operadoras Start: OK'
+          fi
+
+          if psql -q -v ON_ERROR_STOP=1 -c "insert into public.company_memberships(company_id,user_id,role,active) values('$COMPANY','$DRIVER','driver',true);"; then
+            echo 'ENTITLEMENT FAIL: Start permitió acceso a app de conductor.'
+            exit 1
+          else
+            echo 'App de conductor bloqueada en Start: OK'
+          fi
