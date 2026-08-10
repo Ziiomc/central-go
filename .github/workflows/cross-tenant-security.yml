@@ -1,0 +1,147 @@
+name: Aislamiento GPS y SOS
+
+on:
+  push:
+    branches: [main, commercial]
+  pull_request:
+    branches: [main, commercial]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cross_tenant:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: centralgo_cross_tenant
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d centralgo_cross_tenant"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGDATABASE: centralgo_cross_tenant
+      PGUSER: postgres
+      PGPASSWORD: postgres
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Preparar PostgreSQL y migraciones
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          create role anon nologin;
+          create role authenticated nologin;
+          create schema auth;
+          create table auth.users (
+            id uuid primary key,
+            email text,
+            email_confirmed_at timestamptz,
+            raw_user_meta_data jsonb not null default '{}'::jsonb
+          );
+          create or replace function auth.uid()
+          returns uuid language sql stable
+          as $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
+          grant usage on schema auth to anon, authenticated;
+          grant execute on function auth.uid() to anon, authenticated;
+          create publication supabase_realtime;
+          SQL
+
+          for migration in supabase/migrations/*.sql; do
+            echo "Aplicando $migration"
+            psql -v ON_ERROR_STOP=1 -f "$migration" >/dev/null
+          done
+
+      - name: Impedir contaminación GPS y SOS entre centrales
+        shell: bash
+        run: |
+          set -euo pipefail
+          DRIVER_USER='81000000-0000-4000-8000-000000000001'
+          DRIVER_ROW='81000000-0000-4000-8000-000000000002'
+          COMPANY_A='81000000-0000-4000-8000-00000000000a'
+          COMPANY_B='81000000-0000-4000-8000-00000000000b'
+
+          psql -v ON_ERROR_STOP=1 <<SQL
+          insert into auth.users(id,email,email_confirmed_at,raw_user_meta_data)
+          values('$DRIVER_USER','cross-driver@centralgo.test',now(),'{"name":"Cross Tenant Driver"}');
+
+          insert into public.companies(id,name,code,active) values
+            ('$COMPANY_A','Central A Seguridad','SEC-A',true),
+            ('$COMPANY_B','Central B Seguridad','SEC-B',true);
+
+          insert into public.company_memberships(company_id,user_id,role,active)
+          values('$COMPANY_A','$DRIVER_USER','driver',true);
+
+          insert into public.drivers(id,company_id,user_id,unit_number,display_name,license_number,status)
+          values('$DRIVER_ROW','$COMPANY_A','$DRIVER_USER','Móvil SEC','Conductor Seguridad','LIC-SEC','available');
+          SQL
+
+          if psql -q -v ON_ERROR_STOP=1 <<SQL
+          set role authenticated;
+          set request.jwt.claim.sub='$DRIVER_USER';
+          insert into public.driver_locations(company_id,driver_id,lat,lng)
+          values('$COMPANY_B','$DRIVER_ROW',-35.84,-71.59);
+          SQL
+          then
+            echo 'SECURITY FAIL: conductor de Central A pudo escribir ubicación actual en Central B.'
+            exit 1
+          else
+            echo 'Cross-tenant ubicación actual: bloqueada correctamente.'
+          fi
+
+          if psql -q -v ON_ERROR_STOP=1 <<SQL
+          set role authenticated;
+          set request.jwt.claim.sub='$DRIVER_USER';
+          insert into public.driver_location_history(company_id,driver_id,lat,lng)
+          values('$COMPANY_B','$DRIVER_ROW',-35.84,-71.59);
+          SQL
+          then
+            echo 'SECURITY FAIL: conductor de Central A pudo escribir historial GPS en Central B.'
+            exit 1
+          else
+            echo 'Cross-tenant historial GPS: bloqueado correctamente.'
+          fi
+
+          if psql -q -v ON_ERROR_STOP=1 <<SQL
+          set role authenticated;
+          set request.jwt.claim.sub='$DRIVER_USER';
+          insert into public.sos_events(company_id,driver_id,lat,lng,message)
+          values('$COMPANY_B','$DRIVER_ROW',-35.84,-71.59,'SOS malicioso');
+          SQL
+          then
+            echo 'SECURITY FAIL: conductor de Central A pudo crear SOS en Central B.'
+            exit 1
+          else
+            echo 'Cross-tenant SOS: bloqueado correctamente.'
+          fi
+
+          psql -v ON_ERROR_STOP=1 <<SQL
+          set role authenticated;
+          set request.jwt.claim.sub='$DRIVER_USER';
+          insert into public.driver_locations(company_id,driver_id,lat,lng)
+          values('$COMPANY_A','$DRIVER_ROW',-35.84,-71.59);
+          insert into public.driver_location_history(company_id,driver_id,lat,lng)
+          values('$COMPANY_A','$DRIVER_ROW',-35.84,-71.59);
+          insert into public.sos_events(company_id,driver_id,lat,lng,message)
+          values('$COMPANY_A','$DRIVER_ROW',-35.84,-71.59,'SOS válido');
+          SQL
+
+          VALID_LOCATION=$(psql -qAt -v ON_ERROR_STOP=1 -c "select count(*) from public.driver_locations where company_id='$COMPANY_A' and driver_id='$DRIVER_ROW';")
+          VALID_HISTORY=$(psql -qAt -v ON_ERROR_STOP=1 -c "select count(*) from public.driver_location_history where company_id='$COMPANY_A' and driver_id='$DRIVER_ROW';")
+          VALID_SOS=$(psql -qAt -v ON_ERROR_STOP=1 -c "select count(*) from public.sos_events where company_id='$COMPANY_A' and driver_id='$DRIVER_ROW';")
+          test "$VALID_LOCATION" = "1" || exit 1
+          test "$VALID_HISTORY" = "1" || exit 1
+          test "$VALID_SOS" = "1" || exit 1
+          echo 'Escrituras válidas en la central propia: OK'
