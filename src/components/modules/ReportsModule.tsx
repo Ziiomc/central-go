@@ -1,128 +1,59 @@
-import React from 'react';
+import React, { useMemo } from 'react';
+import { BarChart3, Clock, DollarSign, Route, Users } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-  LineChart,
-  Line,
-} from 'recharts';
-import { BarChart3, TrendingUp, Clock, DollarSign, Award, Radio } from 'lucide-react';
+
+const paymentLabel: Record<string, string> = {
+  efectivo: 'Efectivo',
+  transferencia: 'Transferencia',
+  posnet_tarjeta: 'Tarjeta / POS',
+  cuenta_corriente: 'Cuenta corriente',
+};
 
 export const ReportsModule: React.FC = () => {
-  const { trips, drivers } = useApp();
+  const { trips, drivers, currentCompany } = useApp();
 
-  // Hourly trips density data
-  const hourlyData = [
-    { hour: '06:00', viajes: 12 },
-    { hour: '08:00', viajes: 38 },
-    { hour: '10:00', viajes: 24 },
-    { hour: '12:00', viajes: 31 },
-    { hour: '14:00', viajes: 29 },
-    { hour: '16:00', viajes: 42 },
-    { hour: '18:00', viajes: 58 },
-    { hour: '20:00', viajes: 49 },
-    { hour: '22:00', viajes: 22 },
-  ];
+  const stats = useMemo(() => {
+    const completed = trips.filter((trip) => trip.status === 'completed');
+    const cancelled = trips.filter((trip) => trip.status === 'cancelled');
+    const gross = completed.reduce((sum, trip) => sum + (trip.finalFare ?? trip.estimatedFare ?? 0), 0);
+    const assignmentSamples = trips
+      .filter((trip) => trip.assignedAt)
+      .map((trip) => Math.max(0, (new Date(trip.assignedAt!).getTime() - new Date(trip.createdAt).getTime()) / 1000));
+    const avgAssignment = assignmentSamples.length ? Math.round(assignmentSamples.reduce((sum, value) => sum + value, 0) / assignmentSamples.length) : null;
 
-  // Dispatch response time comparison data (PWA vs Radio VHF)
-  const speedComparisonData = [
-    { sistema: 'Radio VHF Tradicional', segundos: 300 }, // 5 mins
-    { sistema: 'CentralGo PWA', segundos: 18 }, // 18 seconds
-  ];
+    const hours = Array.from({ length: 24 }, (_, hour) => ({ hour, count: 0 }));
+    trips.forEach((trip) => {
+      const date = new Date(trip.createdAt);
+      if (!Number.isNaN(date.getTime())) hours[date.getHours()].count += 1;
+    });
+    const maxHour = Math.max(1, ...hours.map((item) => item.count));
 
-  // Payment methods pie chart data
-  const paymentData = [
-    { name: 'Efectivo', value: 55, color: '#10b981' },
-    { name: 'Transferencia / MP', value: 25, color: '#3b82f6' },
-    { name: 'Posnet / Tarjeta', value: 12, color: '#f59e0b' },
-    { name: 'Cuenta Corriente', value: 8, color: '#8b5cf6' },
-  ];
+    const payments = completed.reduce<Record<string, { count: number; amount: number }>>((acc, trip) => {
+      const key = trip.paymentMethod || 'efectivo';
+      acc[key] ??= { count: 0, amount: 0 };
+      acc[key].count += 1;
+      acc[key].amount += trip.finalFare ?? trip.estimatedFare ?? 0;
+      return acc;
+    }, {});
+
+    return { completed, cancelled, gross, avgAssignment, hours, maxHour, payments };
+  }, [trips]);
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="font-extrabold text-2xl text-white tracking-tight flex items-center gap-2 uppercase font-sans">
-          <BarChart3 className="w-6 h-6 text-blue-500" />
-          Reportes y Estadísticas de Operación
-        </h1>
-        <p className="text-xs text-zinc-400 mt-1 font-sans">
-          Análisis de rendimiento, horarios pico y eficiencia comparativa con la radio tradicional
-        </p>
+      <div><h1 className="font-extrabold text-2xl text-white tracking-tight flex items-center gap-2"><BarChart3 className="w-6 h-6 text-blue-500" />Reportes de operación</h1><p className="text-xs text-zinc-400 mt-1">Métricas calculadas exclusivamente con carreras persistidas de {currentCompany.name}.</p></div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4"><Metric icon={Route} label="Carreras completadas" value={String(stats.completed.length)} detail={`${stats.cancelled.length} canceladas`} /><Metric icon={DollarSign} label="Facturación registrada" value={`$${stats.gross.toLocaleString('es-CL')}`} detail="Suma de tarifas finales/registradas" /><Metric icon={Clock} label="Asignación promedio" value={stats.avgAssignment == null ? '—' : `${stats.avgAssignment} s`} detail="Desde creación hasta asignación" /><Metric icon={Users} label="Conductores cargados" value={String(drivers.length)} detail={`${drivers.filter((driver) => driver.status !== 'offline').length} no están fuera de línea`} /></div>
+
+      <div className="grid xl:grid-cols-2 gap-5">
+        <section className="rounded-2xl border border-zinc-800 bg-[#0d0d0f] p-5 shadow-xl"><div><h2 className="text-sm font-black text-white">Carreras por hora</h2><p className="mt-1 text-[10px] text-zinc-500">Distribución real del historial cargado.</p></div><div className="mt-5 space-y-2">{stats.hours.filter((item) => item.count > 0).map((item) => <div key={item.hour} className="grid grid-cols-[46px_1fr_36px] items-center gap-3"><span className="text-[10px] font-mono text-zinc-500">{String(item.hour).padStart(2,'0')}:00</span><div className="h-2.5 rounded-full bg-zinc-900 overflow-hidden"><div className="h-full rounded-full bg-blue-500" style={{ width: `${Math.max(5,(item.count/stats.maxHour)*100)}%` }} /></div><span className="text-right text-[10px] font-black text-zinc-300">{item.count}</span></div>)}{stats.hours.every((item) => item.count === 0) && <p className="py-10 text-center text-xs text-zinc-500">Aún no hay carreras para construir esta distribución.</p>}</div></section>
+
+        <section className="rounded-2xl border border-zinc-800 bg-[#0d0d0f] p-5 shadow-xl"><div><h2 className="text-sm font-black text-white">Medios de pago</h2><p className="mt-1 text-[10px] text-zinc-500">Solo carreras completadas.</p></div><div className="mt-5 space-y-3">{Object.entries(stats.payments).map(([method, value]) => <div key={method} className="flex items-center justify-between gap-4 rounded-xl border border-zinc-800 bg-zinc-950/60 p-3"><div><p className="text-xs font-black text-white">{paymentLabel[method] ?? method}</p><p className="mt-0.5 text-[9px] text-zinc-600">{value.count} carreras</p></div><p className="text-sm font-black text-emerald-300">${value.amount.toLocaleString('es-CL')}</p></div>)}{Object.keys(stats.payments).length === 0 && <p className="py-10 text-center text-xs text-zinc-500">Todavía no hay pagos registrados.</p>}</div></section>
       </div>
 
-      {/* Speed Comparison Banner */}
-      <div className="bg-[#0d0d0f] p-5 rounded-xl border border-zinc-800 flex flex-col md:flex-row items-center justify-between gap-4 shadow-xl">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2 text-blue-400 font-extrabold text-sm uppercase font-sans">
-            <Clock className="w-4 h-4" />
-            <span>Optimizador de Tiempos de Despacho</span>
-          </div>
-          <p className="text-xs text-zinc-300 font-sans">
-            CentralGo reduce el tiempo de asignación de <strong className="text-rose-400">5 minutos (300s)</strong> por radio a solo <strong className="text-emerald-400">18 segundos</strong> mediante GPS automático.
-          </p>
-        </div>
-
-        <div className="text-right font-mono shrink-0">
-          <div className="text-2xl font-extrabold text-emerald-400">92% MÁS RÁPIDO</div>
-          <div className="text-[10px] text-zinc-400 uppercase tracking-wider">Sin saturación de audio VHF</div>
-        </div>
-      </div>
-
-      {/* Charts Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Chart 1: Trips per hour */}
-        <div className="bg-[#0d0d0f] border border-zinc-800 rounded-xl p-5 space-y-3 shadow-xl">
-          <h3 className="font-bold text-sm text-white flex items-center gap-2 uppercase font-sans tracking-tight">
-            <TrendingUp className="w-4 h-4 text-blue-500" />
-            Densidad de Viajes Despachados por Hora
-          </h3>
-          <div className="h-64 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={hourlyData}>
-                <XAxis dataKey="hour" stroke="#71717a" fontSize={11} />
-                <YAxis stroke="#71717a" fontSize={11} />
-                <Tooltip contentStyle={{ backgroundColor: '#121215', borderColor: '#27272a', borderRadius: '8px', color: '#fff' }} />
-                <Bar dataKey="viajes" fill="#2563eb" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Chart 2: Payment Distribution */}
-        <div className="bg-[#0d0d0f] border border-zinc-800 rounded-xl p-5 space-y-3 shadow-xl">
-          <h3 className="font-bold text-sm text-white flex items-center gap-2 uppercase font-sans tracking-tight">
-            <DollarSign className="w-4 h-4 text-emerald-400" />
-            Distribución de Medios de Pago
-          </h3>
-          <div className="h-64 w-full flex items-center justify-center">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={paymentData}
-                  dataKey="value"
-                  nameKey="name"
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={80}
-                  label={(entry) => `${entry.name} (${entry.value}%)`}
-                >
-                  {paymentData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip contentStyle={{ backgroundColor: '#121215', borderColor: '#27272a', borderRadius: '8px', color: '#fff' }} />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      </div>
+      <section className="rounded-2xl border border-blue-500/20 bg-blue-500/[0.04] p-4"><p className="text-[10px] leading-relaxed text-blue-200/80"><strong className="text-blue-300">Sin comparaciones inventadas:</strong> retiramos del entorno oficial las cifras históricas fijas de “radio tradicional vs Central GO”. Cuando exista suficiente operación real, podremos calcular tendencias y SLA con los datos de cada central.</p></section>
     </div>
   );
 };
+
+const Metric: React.FC<{ icon: any; label:string; value:string; detail:string }> = ({icon:Icon,label,value,detail}) => <div className="rounded-2xl border border-zinc-800 bg-[#0d0d0f] p-4"><div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-wider text-zinc-600"><Icon className="h-4 w-4 text-blue-400" />{label}</div><p className="mt-2 text-2xl font-black text-white">{value}</p><p className="mt-1 text-[9px] text-zinc-600">{detail}</p></div>;
