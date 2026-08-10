@@ -20,6 +20,7 @@ import { SettingsModule } from './components/modules/SettingsModule';
 import { ProfileModule } from './components/modules/ProfileModule';
 import { HelpModule } from './components/modules/HelpModule';
 import { GlobalAdminDashboard } from './components/modules/GlobalAdminDashboard';
+import { CommercialGlobalAdminDashboard } from './components/modules/CommercialGlobalAdminDashboard';
 import { PartnerDashboard } from './components/modules/PartnerDashboard';
 import { CentralsNetworkModule } from './components/modules/CentralsNetworkModule';
 import { PartnersNetworkModule } from './components/modules/PartnersNetworkModule';
@@ -64,7 +65,7 @@ const MainAppContent: React.FC = () => {
     switch (activeModule) {
       case 'dashboard':
         if (currentRole === 'operator') return <OperatorConsole />;
-        if (currentRole === 'super_admin') return <GlobalAdminDashboard />;
+        if (currentRole === 'super_admin') return runtimeConfig.isCommercial ? <CommercialGlobalAdminDashboard /> : <GlobalAdminDashboard />;
         if (currentRole === 'regional_partner' || currentRole === 'sales_partner') return <PartnerDashboard />;
         return <DashboardModule />;
       case 'network_centrals': return <CentralsNetworkModule />;
