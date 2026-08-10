@@ -2,9 +2,9 @@ name: Calidad Central GO
 
 on:
   push:
-    branches: [main]
+    branches: [main, commercial]
   pull_request:
-    branches: [main]
+    branches: [main, commercial]
   workflow_dispatch:
 
 permissions:
@@ -13,7 +13,7 @@ permissions:
 jobs:
   quality:
     runs-on: ubuntu-latest
-    timeout-minutes: 18
+    timeout-minutes: 20
     services:
       postgres:
         image: postgres:16
@@ -64,6 +64,7 @@ jobs:
           create table auth.users (
             id uuid primary key,
             email text,
+            email_confirmed_at timestamptz,
             raw_user_meta_data jsonb not null default '{}'::jsonb
           );
           create or replace function auth.uid()
@@ -96,8 +97,8 @@ jobs:
           COMPANY_B='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
 
           psql -v ON_ERROR_STOP=1 <<SQL
-          insert into auth.users (id, email, raw_user_meta_data)
-          values ('$OPERATOR_ID', 'operator@centralgo.test', '{"name":"Operadora QA"}');
+          insert into auth.users (id, email, email_confirmed_at, raw_user_meta_data)
+          values ('$OPERATOR_ID', 'operator@centralgo.test', now(), '{"name":"Operadora QA"}');
 
           insert into public.companies (id, name, code, active)
           values
@@ -151,7 +152,7 @@ jobs:
           AUDIT_COUNT=$(psql -qAt -v ON_ERROR_STOP=1 -c "select count(*) from public.audit_logs where action = 'CI_TEST';")
           test "$AUDIT_COUNT" = "1" || { echo "AUDIT FAIL: registros=$AUDIT_COUNT"; exit 1; }
 
-      - name: Probar aprovisionamiento y flujo de rechazo del conductor
+      - name: Probar aprovisionamiento, partners y flujo del conductor
         shell: bash
         run: |
           set -euo pipefail
@@ -160,13 +161,19 @@ jobs:
           DRIVER_ID='33333333-3333-4333-8333-333333333333'
           DRIVER_ROW='44444444-4444-4444-8444-444444444444'
           TRIP_ID='55555555-5555-4555-8555-555555555555'
+          SALES_ID='66666666-6666-4666-8666-666666666666'
+          SALES_PARTNER='77777777-7777-4777-8777-777777777777'
           COMPANY_A='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 
           psql -v ON_ERROR_STOP=1 <<SQL
-          insert into auth.users (id,email,raw_user_meta_data) values
-            ('$SUPER_ID','owner@centralgo.test','{"name":"Owner QA"}'),
-            ('$DRIVER_ID','driver@centralgo.test','{"name":"Driver QA"}');
+          insert into auth.users (id,email,email_confirmed_at,raw_user_meta_data) values
+            ('$SUPER_ID','owner@centralgo.test',now(),'{"name":"Owner QA"}'),
+            ('$DRIVER_ID','driver@centralgo.test',now(),'{"name":"Driver QA"}'),
+            ('$SALES_ID','partner@centralgo.test',now(),'{"name":"Partner QA"}');
           update public.profiles set global_role='super_admin' where id='$SUPER_ID';
+          update public.profiles set global_role='sales_partner' where id='$SALES_ID';
+          insert into public.partners(id,user_id,kind,code,commission_percent,active)
+            values('$SALES_PARTNER','$SALES_ID','sales','PARTNER-QA',20,true);
           insert into public.company_memberships(company_id,user_id,role,active)
             values('$COMPANY_A','$DRIVER_ID','driver',true);
           insert into public.drivers(id,company_id,user_id,unit_number,display_name,license_number,status)
@@ -201,6 +208,33 @@ jobs:
           test -n "$NEW_COMPANY" || { echo 'PROVISIONING FAIL: no se creó central'; exit 1; }
           SUB_COUNT=$(psql -qAt -v ON_ERROR_STOP=1 -c "select count(*) from public.subscriptions where company_id='$NEW_COMPANY' and status='trialing';")
           test "$SUB_COUNT" = "1" || { echo "PROVISIONING FAIL: suscripciones=$SUB_COUNT"; exit 1; }
+
+          PARTNER_COMPANY_JSON=$(psql -qAt -v ON_ERROR_STOP=1 <<SQL
+          set role authenticated;
+          set request.jwt.claim.sub = '$SALES_ID';
+          select public.centralgo_partner_create_company('Central Partner QA','PARTNER-CENTRAL','Talca','CL',null,null,'pro','annual',null,14);
+          SQL
+          )
+          PARTNER_COMPANY=$(printf '%s' "$PARTNER_COMPANY_JSON" | sed -n 's/.*"companyId"[ ]*:[ ]*"\([^"]*\)".*/\1/p')
+          test -n "$PARTNER_COMPANY" || { echo "PARTNER PROVISION FAIL: $PARTNER_COMPANY_JSON"; exit 1; }
+          REF_COUNT=$(psql -qAt -v ON_ERROR_STOP=1 -c "select count(*) from public.referrals where company_id='$PARTNER_COMPANY' and partner_id='$SALES_PARTNER' and active;")
+          test "$REF_COUNT" = "1" || { echo "PARTNER ATTRIBUTION FAIL: referrals=$REF_COUNT"; exit 1; }
+
+          SUPER_VISIBLE=$(psql -qAt -v ON_ERROR_STOP=1 <<SQL
+          set role authenticated;
+          set request.jwt.claim.sub = '$SUPER_ID';
+          select jsonb_array_length(public.centralgo_visible_network_centrals());
+          SQL
+          )
+          test "$SUPER_VISIBLE" -ge 2 || { echo "NETWORK DIRECTORY FAIL: $SUPER_VISIBLE"; exit 1; }
+
+          PARTNER_VISIBLE=$(psql -qAt -v ON_ERROR_STOP=1 <<SQL
+          set role authenticated;
+          set request.jwt.claim.sub = '$SALES_ID';
+          select jsonb_array_length(public.centralgo_visible_network_centrals());
+          SQL
+          )
+          test "$PARTNER_VISIBLE" = "1" || { echo "PARTNER SCOPE FAIL: $PARTNER_VISIBLE"; exit 1; }
 
           psql -v ON_ERROR_STOP=1 <<SQL
           set role authenticated;
