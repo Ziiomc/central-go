@@ -49,6 +49,9 @@ for (const required of ["mode: 'official'", 'isDemo: false', 'isCommercial: true
 for (const forbidden of ['SUPERADMIN_PIN_HASH', 'handleLogoClick', 'showRoleSelector', 'Cambiar rol (Demo)']) {
   if (header.includes(forbidden)) fail(`Cabecera oficial contiene acceso/selector demo: ${forbidden}`);
 }
+for (const required of ['Ver como…', "setActiveModule('partners_network')", "view', view"]) {
+  if (!header.includes(required)) fail(`Superadmin perdió herramienta segura de inspección/comercial: ${required}`);
+}
 
 for (const forbidden of ['Simular como Móvil', 'Transmitir PTT', 'Simular carrera nueva', 'sendTestTrip']) {
   if (driver.includes(forbidden)) fail(`App de conductor contiene control de demostración: ${forbidden}`);
@@ -64,7 +67,21 @@ if (!login.includes('Modo Demo') || !app.includes("get('demo') === '1'") || !app
 for (const forbidden of ['supabase', 'requireSupabase', 'AuthProvider', 'CommercialAppProvider', '/__supabase']) {
   if (salesDemo.includes(forbidden)) fail(`La demo comercial quedó acoplada a producción: ${forbidden}`);
 }
-for (const required of ['requestDrivingRoute', 'advanceAlongRoute', 'Datos 100% simulados', 'Simular pedido', 'Acceso oficial']) {
+for (const required of [
+  'requestDrivingRoute',
+  'advanceAlongRoute',
+  'Datos 100% simulados',
+  'Simular pedido',
+  'Acceso oficial',
+  'Mesa de despacho',
+  'App independiente del conductor',
+  'Planes Central GO',
+  'Partner comercial',
+  'Partner regional',
+  'VHF de respaldo',
+  'Operadora virtual',
+  'Autoasignar móvil más cercano',
+]) {
   if (!salesDemo.includes(required)) fail(`Demo comercial incompleta: ${required}`);
 }
 

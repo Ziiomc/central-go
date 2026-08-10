@@ -49,7 +49,7 @@ export const LoginScreen: React.FC = () => {
   const openDemo = () => {
     const url = new URL(window.location.href);
     url.pathname = '/';
-    url.search = '?demo=1';
+    url.search = '?demo=1&view=operator';
     url.hash = '';
     window.location.href = url.toString();
   };
@@ -64,7 +64,7 @@ export const LoginScreen: React.FC = () => {
         <button type="button" onClick={openDemo} className="group mt-5 w-full rounded-2xl border border-purple-400/25 bg-gradient-to-r from-purple-500/15 via-zinc-950 to-amber-500/10 p-4 text-left transition hover:border-amber-400/45 hover:bg-zinc-900">
           <div className="flex items-center gap-3">
             <div className="rounded-xl border border-purple-400/20 bg-purple-500/10 p-2.5 text-purple-300 transition group-hover:text-amber-300"><MonitorPlay className="h-5 w-5" /></div>
-            <div className="min-w-0 flex-1"><div className="flex items-center gap-2"><p className="text-sm font-black text-white">Modo Demo</p><span className="rounded-full bg-amber-400 px-2 py-0.5 text-[8px] font-black uppercase text-zinc-950">Probar ahora</span></div><p className="mt-1 text-[10px] leading-relaxed text-zinc-500">Mira una central funcionando: taxis en vivo, pedidos, GPS y asignación automática. No requiere cuenta.</p></div>
+            <div className="min-w-0 flex-1"><div className="flex items-center gap-2"><p className="text-sm font-black text-white">Modo Demo</p><span className="rounded-full bg-amber-400 px-2 py-0.5 text-[8px] font-black uppercase text-zinc-950">Recorrido completo</span></div><p className="mt-1 text-[10px] leading-relaxed text-zinc-500">Prueba despacho, mapa con taxis, App Conductor, administrador, partners, VHF, operadora virtual y planes. No requiere cuenta.</p></div>
             <Sparkles className="h-4 w-4 shrink-0 text-amber-400" />
           </div>
         </button>
@@ -78,7 +78,7 @@ export const LoginScreen: React.FC = () => {
           <button disabled={busy} className="flex w-full items-center justify-center gap-2 rounded-xl bg-amber-400 px-4 py-3.5 text-sm font-black text-zinc-950 transition hover:bg-amber-300 disabled:opacity-60">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}{busy ? 'Validando…' : 'Entrar a Central GO'}</button>
         </form>
         <button type="button" disabled={busy} onClick={() => void recover()} className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-xs font-bold text-zinc-400 hover:text-white disabled:opacity-50"><KeyRound className="h-4 w-4" />Olvidé mi contraseña</button>
-        <p className="mt-5 text-center text-[10px] leading-relaxed text-zinc-600">Autenticación Supabase · permisos por central · datos persistentes.</p>
+        <p className="mt-5 text-center text-[10px] leading-relaxed text-zinc-600">Autenticación segura · permisos por central · datos persistentes.</p>
       </section>
     </main>
   );

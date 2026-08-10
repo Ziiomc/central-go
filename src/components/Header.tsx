@@ -7,12 +7,14 @@ import {
   Bell,
   Building2,
   ChevronDown,
+  Eye,
   Globe2,
   LogOut,
   MapPinned,
   Plus,
   ShieldAlert,
   ShieldCheck,
+  UsersRound,
   Volume2,
   VolumeX,
   Zap,
@@ -28,6 +30,7 @@ const roleLabels: Record<string, string> = {
   sales_partner: 'Partner Comercial',
   company_admin: 'Administrador de Central',
   operator: 'Operadora',
+  driver: 'Conductor',
 };
 
 export const Header: React.FC<HeaderProps> = ({ onToggleNotifications }) => {
@@ -50,6 +53,14 @@ export const Header: React.FC<HeaderProps> = ({ onToggleNotifications }) => {
   const isNetworkRole = ['super_admin', 'regional_partner', 'sales_partner'].includes(currentRole);
   const roleLabel = roleLabels[currentRole] ?? currentRole;
 
+  const openRolePreview = (view: string) => {
+    if (!view) return;
+    const url = new URL(window.location.origin);
+    url.searchParams.set('demo', '1');
+    url.searchParams.set('view', view);
+    window.open(url.toString(), '_blank', 'noopener,noreferrer');
+  };
+
   return (
     <header className="sticky top-0 z-40 w-full shrink-0 border-b border-zinc-800 bg-[#0d0d0f] px-3 py-2.5 shadow-xl md:px-6">
       <div className="mx-auto flex max-w-[1800px] items-center justify-between gap-3">
@@ -71,7 +82,9 @@ export const Header: React.FC<HeaderProps> = ({ onToggleNotifications }) => {
 
         <div className="flex shrink-0 items-center gap-2">
           {currentRole === 'operator' && <button onClick={() => setNewTripModalOpen(true)} className="hidden items-center gap-2 rounded-xl border border-amber-300 bg-amber-400 px-4 py-2 text-xs font-black uppercase text-zinc-950 shadow-lg shadow-amber-950/30 lg:flex"><Zap className="h-4 w-4" />Nueva carrera <kbd className="rounded bg-black/10 px-1.5 py-0.5 text-[9px]">F2</kbd></button>}
-          {isNetworkRole && <button onClick={() => setActiveModule('network_centrals')} className="hidden items-center gap-2 rounded-xl border border-purple-400/25 bg-purple-600 px-4 py-2 text-xs font-black text-white lg:flex"><Plus className="h-4 w-4" />Registrar central</button>}
+          {isNetworkRole && <button onClick={() => setActiveModule('network_centrals')} className="hidden items-center gap-2 rounded-xl border border-purple-400/25 bg-purple-600 px-4 py-2 text-xs font-black text-white xl:flex"><Plus className="h-4 w-4" />Registrar central</button>}
+          {currentRole === 'super_admin' && <button onClick={() => setActiveModule('partners_network')} className="hidden items-center gap-2 rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[10px] font-black text-amber-300 xl:flex" title="Partners y territorios"><UsersRound className="h-4 w-4" />Partners</button>}
+          {currentRole === 'super_admin' && <label className="hidden items-center gap-1.5 rounded-xl border border-blue-500/20 bg-blue-500/[0.06] px-2 py-1.5 lg:flex" title="Vista segura de inspección; no cambia permisos reales"><Eye className="h-4 w-4 text-blue-300" /><select defaultValue="" onChange={(event) => { openRolePreview(event.target.value); event.currentTarget.value = ''; }} className="max-w-[125px] bg-transparent text-[9px] font-black text-blue-200 outline-none"><option value="" className="bg-zinc-950">Ver como…</option><option value="operator" className="bg-zinc-950">Operadora</option><option value="company_admin" className="bg-zinc-950">Administrador</option><option value="driver" className="bg-zinc-950">Conductor</option><option value="sales_partner" className="bg-zinc-950">Partner comercial</option><option value="regional_partner" className="bg-zinc-950">Partner regional</option><option value="plans" className="bg-zinc-950">Planes</option></select></label>}
           {activeSOSDriver && !isNetworkRole && <button onClick={() => setActiveSOSDriver(activeSOSDriver)} className="hidden items-center gap-2 rounded-xl border border-red-400 bg-red-600 px-3 py-2 text-xs font-black text-white shadow-lg shadow-red-950/40 lg:flex"><ShieldAlert className="h-4 w-4" />SOS {activeSOSDriver.unitNumber}</button>}
           {!isNetworkRole && <button onClick={toggleSound} className={`rounded-lg border p-2 ${soundMuted ? 'border-zinc-800 bg-zinc-900 text-zinc-500' : 'border-blue-500/20 bg-blue-500/10 text-blue-400'}`} title={soundMuted ? 'Activar sonidos' : 'Silenciar sonidos'}>{soundMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}</button>}
           {isNetworkRole && <button onClick={() => setActiveModule('plans_network')} className="hidden rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-2 text-emerald-300 sm:block" title="Planes y valores"><BadgeDollarSign className="h-4 w-4" /></button>}
