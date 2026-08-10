@@ -1,9 +1,11 @@
 const OFFICIAL_SUPABASE_URL = 'https://cuazdzsvgwrnpczbvrgx.supabase.co';
 const OFFICIAL_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_ICfwSIQkutbSwAcHQdjBhA_aRPvM0lG';
+const OFFICIAL_APP_URL = 'https://central-go-one.vercel.app';
 
 const envSupabaseUrl = (import.meta.env.VITE_SUPABASE_URL ?? '').trim();
 const envSupabasePublishableKey = (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? '').trim();
 const envBackendFlag = import.meta.env.VITE_COMMERCIAL_BACKEND_ENABLED === 'true';
+const envPublicAppUrl = (import.meta.env.VITE_PUBLIC_APP_URL ?? '').trim();
 const production = import.meta.env.PROD;
 
 // En producción Central GO siempre debe hablar con el proyecto oficial.
@@ -13,6 +15,7 @@ const supabasePublishableKey = production
   ? OFFICIAL_SUPABASE_PUBLISHABLE_KEY
   : (envSupabasePublishableKey || OFFICIAL_SUPABASE_PUBLISHABLE_KEY);
 const backendFlag = production ? true : envBackendFlag;
+const officialAppUrl = (envPublicAppUrl || OFFICIAL_APP_URL).replace(/\/$/, '');
 
 // Central GO 2.0 opera exclusivamente contra el backend autenticado.
 // isDemo se conserva en false solo como compatibilidad con código legado no montado.
@@ -25,6 +28,7 @@ export const runtimeConfig = Object.freeze({
   supabaseUrl,
   supabasePublishableKey,
   officialSupabaseUrl: OFFICIAL_SUPABASE_URL,
+  officialAppUrl,
   hasSupabaseConfig: Boolean(supabaseUrl && supabasePublishableKey),
   backendFlag,
   commercialBackendIntegrated,

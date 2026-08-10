@@ -1,5 +1,7 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
+const OFFICIAL_APP_URL = 'https://central-go-one.vercel.app/';
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -14,13 +16,18 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 const allowedRole = (value: string): value is 'company_admin' | 'operator' | 'driver' => ['company_admin', 'operator', 'driver'].includes(value);
 
 const safeRedirect = (value?: string) => {
-  if (!value) return undefined;
   try {
-    const url = new URL(value);
-    const allowed = url.protocol === 'https:' && (url.hostname.endsWith('.vercel.app') || url.hostname === 'centralgo.app' || url.hostname.endsWith('.centralgo.app'));
-    const local = url.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(url.hostname);
-    return allowed || local ? url.toString() : undefined;
-  } catch { return undefined; }
+    if (value) {
+      const url = new URL(value);
+      const allowed = url.protocol === 'https:' && (
+        url.hostname === 'central-go-one.vercel.app' ||
+        url.hostname === 'centralgo.app' ||
+        url.hostname.endsWith('.centralgo.app')
+      );
+      if (allowed) return url.toString();
+    }
+  } catch { /* use official fallback */ }
+  return OFFICIAL_APP_URL;
 };
 
 Deno.serve(async (req) => {

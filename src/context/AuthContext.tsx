@@ -52,6 +52,11 @@ const mapCompany = (row: any): Company => ({
   logoUrl: row.logo_url ?? undefined,
 });
 
+const isOfficialOrigin = () => {
+  try { return window.location.origin === new URL(runtimeConfig.officialAppUrl).origin; }
+  catch { return false; }
+};
+
 export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<AuthProfile | null>(null);
@@ -120,8 +125,12 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
       if (error) { setIdentityError(error.message); setLoading(false); return; }
       void loadIdentity(data.session);
     });
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      if (mounted) void loadIdentity(nextSession);
+    const { data: listener } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      if (!mounted) return;
+      if (event === 'PASSWORD_RECOVERY' && window.location.pathname !== '/reset-password') {
+        window.history.replaceState({}, '', '/reset-password');
+      }
+      void loadIdentity(nextSession);
     });
     return () => { mounted = false; listener.subscription.unsubscribe(); };
   }, []);
@@ -158,8 +167,11 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   };
 
   const requestPasswordReset = async (email: string) => {
+    if (!isOfficialOrigin()) {
+      throw new Error(`Por seguridad, solicita la recuperación desde Central GO Oficial: ${runtimeConfig.officialAppUrl}`);
+    }
     const db = requireSupabase();
-    const { error } = await db.auth.resetPasswordForEmail(email.trim(), { redirectTo: `${window.location.origin}/reset-password` });
+    const { error } = await db.auth.resetPasswordForEmail(email.trim(), { redirectTo: `${runtimeConfig.officialAppUrl}/reset-password` });
     if (error) throw error;
   };
 

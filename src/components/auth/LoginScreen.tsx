@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { KeyRound, Loader2, LockKeyhole, Mail, ShieldCheck } from 'lucide-react';
+import { ExternalLink, KeyRound, Loader2, LockKeyhole, Mail, ShieldCheck } from 'lucide-react';
 import centralGoLogo from '../../assets/images/central-go-logo.svg';
 import { useAuth } from '../../context/AuthContext';
+import { runtimeConfig } from '../../config/runtime';
 
 const friendlyAuthError = (error: unknown) => {
   const message = error instanceof Error ? error.message : String(error ?? '');
@@ -21,6 +22,10 @@ export const LoginScreen: React.FC = () => {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const isOfficialOrigin = (() => {
+    try { return window.location.origin === new URL(runtimeConfig.officialAppUrl).origin; }
+    catch { return false; }
+  })();
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -46,6 +51,7 @@ export const LoginScreen: React.FC = () => {
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(245,158,11,0.12),transparent_42%)]" />
       <section className="relative w-full max-w-md rounded-3xl border border-zinc-800 bg-[#0d0d0f]/95 p-6 sm:p-8 shadow-2xl shadow-black/60 backdrop-blur">
         <div className="flex items-center gap-3"><img src={centralGoLogo} alt="Central GO" className="h-14 w-14 rounded-2xl border-2 border-amber-400/70 bg-zinc-950 p-1" /><div><p className="text-[10px] font-black uppercase tracking-[0.24em] text-amber-300">Central GO Oficial</p><h1 className="text-2xl font-black text-white">Acceso seguro</h1></div></div>
+        {!isOfficialOrigin && <div className="mt-5 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3.5 text-xs leading-relaxed text-amber-100"><p className="font-black">Estás en una dirección de desarrollo o no oficial.</p><p className="mt-1 text-amber-100/75">Para recuperar contraseñas e invitaciones usa la versión oficial de Central GO.</p><a href={runtimeConfig.officialAppUrl} className="mt-3 inline-flex items-center gap-2 rounded-lg bg-amber-400 px-3 py-2 font-black text-zinc-950"><ExternalLink className="h-4 w-4" />Abrir Central GO Oficial</a></div>}
         <div className="mt-5 rounded-2xl border border-blue-500/20 bg-blue-500/[0.05] p-3.5 text-[11px] leading-relaxed text-blue-200/80">Los accesos nuevos se crean desde el panel de la central o desde Superadmin. Si recibiste una invitación por correo, ábrela primero para activar tu cuenta y definir tu contraseña.</div>
         <form onSubmit={submit} className="mt-6 space-y-4">
           <label className="block"><span className="mb-1.5 flex items-center gap-2 text-xs font-bold text-zinc-400"><Mail className="h-4 w-4" />Correo</span><input required type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm outline-none transition focus:border-amber-400/70" placeholder="tu@correo.com" /></label>
