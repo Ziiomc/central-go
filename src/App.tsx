@@ -34,6 +34,7 @@ import { VHFDispatchModal } from './components/modals/VHFDispatchModal';
 import { NotificationsDrawer } from './components/notifications/NotificationsDrawer';
 import { LoginScreen } from './components/auth/LoginScreen';
 import { PasswordSetupScreen } from './components/auth/PasswordSetupScreen';
+import { SalesDemoScreen } from './components/demo/SalesDemoScreen';
 import { registerServiceWorker } from './lib/pwa';
 import { ErrorBoundary } from './components/system/ErrorBoundary';
 import { CommercialGate } from './components/system/CommercialGate';
@@ -138,6 +139,16 @@ const AuthenticatedShell: React.FC = () => {
 };
 
 export default function App() {
+  const demoRequested = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('demo') === '1';
+
+  if (demoRequested) {
+    return (
+      <ErrorBoundary>
+        <SalesDemoScreen />
+      </ErrorBoundary>
+    );
+  }
+
   return (
     <ErrorBoundary>
       <AuthProvider>
