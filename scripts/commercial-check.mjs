@@ -20,6 +20,7 @@ const runtime = mustRead('src/config/runtime.ts');
 const header = mustRead('src/components/Header.tsx');
 const driver = mustRead('src/components/pwa/DriverMobileView.tsx');
 const login = mustRead('src/components/auth/LoginScreen.tsx');
+const salesDemo = mustRead('src/components/demo/SalesDemoScreen.tsx');
 const plans = mustRead('src/components/network/PlanComparison.tsx');
 const users = mustRead('src/components/modules/UsersModule.tsx');
 const partnerDashboard = mustRead('src/components/modules/PartnerDashboard.tsx');
@@ -59,6 +60,13 @@ if (!driverManifest.includes('Central GO Conductor') || !driverManifest.includes
 
 if (login.includes('Crear cuenta segura') || login.includes("setMode('signup')")) fail('El acceso oficial volvió a habilitar registro público.');
 if (!login.includes('Olvidé mi contraseña')) fail('Falta recuperación de contraseña oficial.');
+if (!login.includes('Modo Demo') || !app.includes("get('demo') === '1'") || !app.includes('React.lazy')) fail('La demo comercial no está expuesta o no se carga de forma aislada.');
+for (const forbidden of ['supabase', 'requireSupabase', 'AuthProvider', 'CommercialAppProvider', '/__supabase']) {
+  if (salesDemo.includes(forbidden)) fail(`La demo comercial quedó acoplada a producción: ${forbidden}`);
+}
+for (const required of ['requestDrivingRoute', 'advanceAlongRoute', 'Datos 100% simulados', 'Simular pedido', 'Acceso oficial']) {
+  if (!salesDemo.includes(required)) fail(`Demo comercial incompleta: ${required}`);
+}
 
 for (const required of ['loadPlanCatalog', '<X ', 'App independiente para conductores', 'Múltiples sedes y ciudades', 'API e integraciones']) {
   if (!plans.includes(required)) fail(`Comparador de planes incompleto: ${required}`);
