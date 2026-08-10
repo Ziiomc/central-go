@@ -32,6 +32,8 @@ interface AuthContextValue {
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (name: string, email: string, password: string) => Promise<{ needsEmailConfirmation: boolean }>;
   signOut: () => Promise<void>;
+  updatePassword: (password: string) => Promise<void>;
+  requestPasswordReset: (email: string) => Promise<void>;
   refreshIdentity: () => Promise<void>;
 }
 
@@ -55,19 +57,14 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   const [profile, setProfile] = useState<AuthProfile | null>(null);
   const [memberships, setMemberships] = useState<Membership[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
-  const [loading, setLoading] = useState(runtimeConfig.isCommercial);
+  const [loading, setLoading] = useState(true);
   const [identityError, setIdentityError] = useState<string | null>(null);
 
   const loadIdentity = async (nextSession: Session | null) => {
     setSession(nextSession);
     setIdentityError(null);
-
-    if (!runtimeConfig.isCommercial || !nextSession) {
-      setProfile(null);
-      setMemberships([]);
-      setCompanies([]);
-      setLoading(false);
-      return;
+    if (!nextSession) {
+      setProfile(null); setMemberships([]); setCompanies([]); setLoading(false); return;
     }
 
     const db = requireSupabase();
@@ -77,7 +74,6 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
         db.from('profiles').select('id,name,phone,avatar_url,global_role,active').eq('id', nextSession.user.id).single(),
         db.from('company_memberships').select('company_id,role,active,companies(id,name,code,phone,address,vhf_frequency,logo_url,active)').eq('user_id', nextSession.user.id).eq('active', true),
       ]);
-
       if (profileError) throw profileError;
       if (membershipError) throw membershipError;
       if (!profileRow.active) throw new Error('Esta cuenta está suspendida. Contacta al administrador de Central GO.');
@@ -110,41 +106,24 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
         setCompanies(mapped.map((item) => item.company));
       }
     } catch (error) {
-      console.error('[Central GO] No fue posible cargar la identidad comercial', error);
-      setIdentityError(error instanceof Error ? error.message : 'No fue posible cargar el perfil comercial.');
-      setProfile(null);
-      setMemberships([]);
-      setCompanies([]);
-    } finally {
-      setLoading(false);
-    }
+      console.error('[Central GO] No fue posible cargar la identidad oficial', error);
+      setIdentityError(error instanceof Error ? error.message : 'No fue posible cargar el perfil.');
+      setProfile(null); setMemberships([]); setCompanies([]);
+    } finally { setLoading(false); }
   };
 
   useEffect(() => {
-    if (!runtimeConfig.isCommercial || !supabase) {
-      setLoading(false);
-      return;
-    }
-
+    if (!supabase) { setLoading(false); return; }
     let mounted = true;
     supabase.auth.getSession().then(({ data, error }) => {
       if (!mounted) return;
-      if (error) {
-        setIdentityError(error.message);
-        setLoading(false);
-        return;
-      }
+      if (error) { setIdentityError(error.message); setLoading(false); return; }
       void loadIdentity(data.session);
     });
-
     const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       if (mounted) void loadIdentity(nextSession);
     });
-
-    return () => {
-      mounted = false;
-      listener.subscription.unsubscribe();
-    };
+    return () => { mounted = false; listener.subscription.unsubscribe(); };
   }, []);
 
   const signIn = async (email: string, password: string) => {
@@ -158,7 +137,7 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     const { data, error } = await db.auth.signUp({
       email: email.trim(),
       password,
-      options: { data: { name: name.trim() } },
+      options: { data: { name: name.trim() }, emailRedirectTo: `${window.location.origin}/` },
     });
     if (error) throw error;
     return { needsEmailConfirmation: !data.session };
@@ -167,6 +146,20 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   const signOut = async () => {
     const db = requireSupabase();
     const { error } = await db.auth.signOut();
+    if (error) throw error;
+  };
+
+  const updatePassword = async (password: string) => {
+    if (password.length < 10) throw new Error('La contraseña debe tener al menos 10 caracteres.');
+    const db = requireSupabase();
+    const metadata = { ...(session?.user.user_metadata ?? {}), needs_password_setup: false };
+    const { error } = await db.auth.updateUser({ password, data: metadata });
+    if (error) throw error;
+  };
+
+  const requestPasswordReset = async (email: string) => {
+    const db = requireSupabase();
+    const { error } = await db.auth.resetPasswordForEmail(email.trim(), { redirectTo: `${window.location.origin}/reset-password` });
     if (error) throw error;
   };
 
@@ -187,6 +180,8 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     signIn,
     signUp,
     signOut,
+    updatePassword,
+    requestPasswordReset,
     refreshIdentity: () => loadIdentity(session),
   }), [session, profile, memberships, companies, effectiveRole, loading, identityError]);
 
