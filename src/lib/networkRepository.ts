@@ -80,7 +80,7 @@ export async function createNetworkCentral(
       p_plan_code: input.plan.toLowerCase(),
       p_billing_cycle: input.billing,
       p_owner_email: input.ownerEmail?.trim() || null,
-      p_trial_days: 14,
+      p_trial_days: 5,
     });
     if (error) throw error;
     return {
@@ -99,7 +99,7 @@ export async function createNetworkCentral(
     p_address: input.address?.trim() || null,
     p_plan_code: input.plan.toLowerCase(),
     p_billing_cycle: input.billing,
-    p_trial_days: 14,
+    p_trial_days: 5,
     p_center_lat: null,
     p_center_lng: null,
   });
