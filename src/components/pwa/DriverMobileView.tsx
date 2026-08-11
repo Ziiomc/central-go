@@ -189,10 +189,14 @@ export const DriverMobileView: React.FC = () => {
         )}
 
         <section className="rounded-2xl border border-zinc-800 bg-[#121215] p-4">
-          <div className="flex items-center justify-between gap-4">
-            <div className="min-w-0"><div className="flex items-center gap-2"><span className="text-lg font-black text-white">{driver.unitNumber}</span><span className="rounded-full border border-blue-500/25 bg-blue-500/10 px-2 py-0.5 text-[9px] font-black text-blue-300">★ {driver.rating.toFixed(2)}</span></div><p className="truncate text-xs text-zinc-400">{driver.name}</p></div>
-            <div className="text-right"><p className="text-[9px] font-bold uppercase text-zinc-600">Recaudado hoy</p><p className="text-sm font-black text-emerald-400">${driver.todayEarnings.toLocaleString('es-CL')}</p></div>
+          <div className="flex items-center gap-3">
+            <div className="min-w-0 flex-1"><div className="flex items-center gap-2"><span className="text-lg font-black text-white">{driver.unitNumber}</span><span className="rounded-full border border-blue-500/25 bg-blue-500/10 px-2 py-0.5 text-[9px] font-black text-blue-300">★ {driver.rating.toFixed(2)}</span></div><p className="truncate text-xs text-zinc-400">{driver.name}</p></div>
           </div>
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.05] p-3"><p className="text-[9px] font-bold uppercase text-zinc-600">Ganancias hoy</p><p className="mt-1 text-lg font-black text-emerald-400">${driver.todayEarnings.toLocaleString('es-CL')}</p></div>
+            <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.05] p-3"><p className="text-[9px] font-bold uppercase text-zinc-600">Comisiones pendientes</p><p className="mt-1 text-lg font-black text-amber-300">${driver.commissionBalance.toLocaleString('es-CL')}</p></div>
+          </div>
+          <div className="mt-2 text-center text-[9px] font-bold uppercase tracking-wider text-zinc-600">{driver.totalTripsCompleted} viajes completados</div>
         </section>
 
         <section className="rounded-2xl border border-zinc-800 bg-[#121215] p-3.5">
