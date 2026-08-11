@@ -1,6 +1,6 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
-const OFFICIAL_APP_URL = 'https://go-one.vercel.app/';
+const OFFICIAL_APP_URL = 'https://central-go-one.vercel.app/';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -20,7 +20,6 @@ const safeRedirect = (value?: string) => {
     if (value) {
       const url = new URL(value);
       const allowed = url.protocol === 'https:' && (
-        url.hostname === 'go-one.vercel.app' ||
         url.hostname === 'central-go-one.vercel.app' ||
         url.hostname === 'centralgo.app' ||
         url.hostname.endsWith('.centralgo.app')
