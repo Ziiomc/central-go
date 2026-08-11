@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import centralGoLogo from '../../assets/images/central-go-logo.svg';
 import { useAuth } from '../../context/AuthContext';
 
 const friendlyAuthError = (error: unknown, fallback: string) => {
   const message = error instanceof Error ? error.message : String(error ?? '');
   if (/email rate limit exceeded|over_email_send_rate_limit|too many requests|rate limit/i.test(message)) {
-    return 'Se alcanzó temporalmente el límite de correos de recuperación. No sigas solicitando enlaces; espera un momento y vuelve a intentarlo una sola vez.';
+    return 'Supabase alcanzó temporalmente el límite de correos del proyecto. Tu cuenta sigue activa. Si ya recibiste un correo de recuperación, usa únicamente el más reciente: pedir otro invalida el enlace anterior. Espera antes de volver a intentarlo y haz una sola solicitud.';
   }
   if (/invalid login credentials/i.test(message)) return 'Correo o contraseña incorrectos.';
   return message || fallback;
@@ -18,6 +18,13 @@ export const LoginScreen: React.FC = () => {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [recoveryCooldown, setRecoveryCooldown] = useState(0);
+
+  useEffect(() => {
+    if (recoveryCooldown <= 0) return;
+    const timer = window.setInterval(() => setRecoveryCooldown((value) => Math.max(0, value - 1)), 1000);
+    return () => window.clearInterval(timer);
+  }, [recoveryCooldown > 0]);
 
   const googleLogin = async () => {
     setBusy(true); setError(''); setNotice('');
@@ -36,11 +43,14 @@ export const LoginScreen: React.FC = () => {
   };
 
   const recoverPassword = async () => {
+    if (recoveryCooldown > 0) return;
     setBusy(true); setError(''); setNotice('');
     try {
       await requestPasswordReset(email);
-      setNotice('Te enviamos un enlace seguro. Ábrelo desde tu correo para crear una nueva contraseña.');
+      setRecoveryCooldown(60);
+      setNotice('Correo de recuperación enviado. Abre solamente el correo más reciente para crear tu contraseña. No solicites otro mientras tengas este enlace, porque el nuevo invalidaría al anterior.');
     } catch (err) {
+      setRecoveryCooldown(60);
       setError(friendlyAuthError(err, 'No fue posible enviar el enlace de recuperación.'));
     } finally { setBusy(false); }
   };
@@ -64,9 +74,10 @@ export const LoginScreen: React.FC = () => {
           <input required type="password" autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="Contraseña" className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm outline-none focus:border-amber-400/70" />
           <button disabled={busy} className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3.5 text-sm font-black text-white transition hover:bg-zinc-800 disabled:opacity-60">{busy ? 'Ingresando…' : 'Iniciar sesión'}</button>
         </form>
-        <button type="button" disabled={busy || !email.trim()} onClick={() => void recoverPassword()} className="mt-3 w-full py-2 text-xs font-bold text-amber-300 disabled:opacity-40">Olvidé mi contraseña</button>
+        <button type="button" disabled={busy || !email.trim() || recoveryCooldown > 0} onClick={() => void recoverPassword()} className="mt-3 w-full py-2 text-xs font-bold text-amber-300 disabled:opacity-40">{recoveryCooldown > 0 ? `Puedes volver a solicitar en ${recoveryCooldown}s` : 'Olvidé mi contraseña'}</button>
 
-        <p className="mt-5 text-center text-[10px] text-zinc-600">Las centrales se registran exclusivamente desde cuentas Partner Comercial</p>
+        <p className="mt-2 text-center text-[10px] leading-relaxed text-zinc-600">Los enlaces de recuperación son de un solo uso. Si solicitas más de uno, abre siempre el correo más reciente.</p>
+        <p className="mt-3 text-center text-[10px] text-zinc-600">Las centrales se registran exclusivamente desde cuentas Partner Comercial</p>
       </section>
     </main>
   );
