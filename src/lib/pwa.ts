@@ -2,18 +2,31 @@
 
 let deferredPrompt: any = null;
 let controllerReloaded = false;
+const FRESHNESS_KEY = 'centralgo-fresh-bundle-v4';
+
+async function purgeLegacyFrontendCaches() {
+  if (typeof window === 'undefined') return;
+  try {
+    if (localStorage.getItem(FRESHNESS_KEY) === '1') return;
+    if ('caches' in window) {
+      const names = await caches.keys();
+      await Promise.all(names.map((name) => caches.delete(name)));
+    }
+    localStorage.setItem(FRESHNESS_KEY, '1');
+  } catch (error) {
+    console.warn('CentralGo cache purge failed:', error);
+  }
+}
 
 export function registerServiceWorker() {
   if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+    void purgeLegacyFrontendCaches();
+
     window.addEventListener('load', () => {
       navigator.serviceWorker
         .register('/sw.js', { updateViaCache: 'none' })
         .then(async (reg) => {
           console.log('CentralGo ServiceWorker registered:', reg.scope);
-
-          // Buscar una versión nueva inmediatamente en vez de esperar al ciclo
-          // normal del navegador. Esto es especialmente importante para una PWA
-          // comercial que cambia con frecuencia durante pilotos y demostraciones.
           try {
             await reg.update();
           } catch (error) {
@@ -26,8 +39,6 @@ export function registerServiceWorker() {
     });
 
     navigator.serviceWorker.addEventListener('controllerchange', () => {
-      // Una sola recarga controlada garantiza que, cuando el nuevo worker toma
-      // el control, la interfaz visible corresponda al bundle recién desplegado.
       if (controllerReloaded) return;
       if (sessionStorage.getItem('centralgo-sw-refresh') === '1') {
         sessionStorage.removeItem('centralgo-sw-refresh');
@@ -55,11 +66,7 @@ export function promptPWAInstall(): Promise<boolean> {
     deferredPrompt.prompt();
     deferredPrompt.userChoice.then((choiceResult: { outcome: string }) => {
       deferredPrompt = null;
-      if (choiceResult.outcome === 'accepted') {
-        resolve(true);
-      } else {
-        resolve(false);
-      }
+      resolve(choiceResult.outcome === 'accepted');
     });
   });
 }
