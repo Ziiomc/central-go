@@ -4,6 +4,7 @@ import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 import type { NetworkCentral } from '../../data/networkMockData';
 import { loadNetworkCentrals } from '../../lib/networkRepository';
+import { ActivationRequestsPanel } from '../billing/ActivationRequestsPanel';
 import { CentralRegistrationModal } from '../network/CentralRegistrationModal';
 import { CountryFlag, money, NetworkKpi, StatusPill } from '../network/NetworkUi';
 
@@ -62,7 +63,7 @@ export const CommercialGlobalAdminDashboard: React.FC = () => {
               <ShieldCheck className="h-3.5 w-3.5" /> Superadmin · Producción
             </div>
             <h1 className="mt-4 text-3xl md:text-4xl font-black tracking-tight text-white">Central<span className="text-amber-400">GO</span> Network</h1>
-            <p className="mt-3 text-sm leading-relaxed text-zinc-400">Esta vista usa exclusivamente datos reales del backend comercial. No mezcla empresas, flota ni facturación de demostración.</p>
+            <p className="mt-3 text-sm leading-relaxed text-zinc-400">Datos reales de centrales, pruebas, activaciones y facturación. El registro público funciona por autoservicio y las cuentas nuevas comienzan con 5 días gratuitos.</p>
           </div>
           <div className="flex flex-col sm:flex-row gap-2">
             <button onClick={() => void reload()} disabled={loading} className="px-4 py-3 rounded-xl bg-zinc-950/70 hover:bg-zinc-900 border border-zinc-700 text-xs font-extrabold text-white flex items-center justify-center gap-2 disabled:opacity-50"><RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />Actualizar</button>
@@ -80,12 +81,14 @@ export const CommercialGlobalAdminDashboard: React.FC = () => {
         <NetworkKpi label="Cuentas operativas" value={String(totals.active + totals.trials)} detail="Activas o en periodo de prueba" icon={UsersRound} accent="amber" />
       </div>
 
+      <ActivationRequestsPanel />
+
       {!loading && centrals.length === 0 ? (
         <section className="rounded-3xl border border-amber-500/25 bg-amber-500/[0.06] px-6 py-12 text-center">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-amber-500/25 bg-amber-500/10 text-amber-300"><Building2 className="h-7 w-7" /></div>
           <h2 className="mt-5 text-xl font-black text-white">Todavía no hay centrales comerciales</h2>
-          <p className="mx-auto mt-2 max-w-xl text-sm leading-relaxed text-zinc-400">Tu cuenta Superadmin está funcionando correctamente. La base de producción parte vacía a propósito para no copiar datos ficticios de la demo. Crea ahora la primera central real o piloto.</p>
-          <button onClick={() => setRegisterOpen(true)} className="mt-6 inline-flex items-center gap-2 rounded-xl bg-amber-400 px-5 py-3 text-sm font-black text-zinc-950 hover:bg-amber-300"><Plus className="h-4 w-4" />Crear primera central</button>
+          <p className="mx-auto mt-2 max-w-xl text-sm leading-relaxed text-zinc-400">Las nuevas Centrales pueden registrarse solas con Google y comienzan automáticamente una prueba de 5 días. También puedes crear una manualmente desde Superadmin.</p>
+          <button onClick={() => setRegisterOpen(true)} className="mt-6 inline-flex items-center gap-2 rounded-xl bg-amber-400 px-5 py-3 text-sm font-black text-zinc-950 hover:bg-amber-300"><Plus className="h-4 w-4" />Crear central manualmente</button>
         </section>
       ) : centrals.length > 0 ? (
         <section className="rounded-2xl border border-zinc-800 bg-[#0d0d0f] overflow-hidden shadow-xl">

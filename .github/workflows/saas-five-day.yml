@@ -1,0 +1,156 @@
+name: SaaS 5 días
+
+on:
+  push:
+    branches: [saas-5day, main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  trial:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: centralgo_saas_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d centralgo_saas_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGDATABASE: centralgo_saas_test
+      PGUSER: postgres
+      PGPASSWORD: postgres
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Preparar compatibilidad Supabase
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          create role anon nologin;
+          create role authenticated nologin;
+          create schema auth;
+          create table auth.users (
+            id uuid primary key,
+            email text,
+            email_confirmed_at timestamptz,
+            raw_user_meta_data jsonb not null default '{}'::jsonb
+          );
+          create or replace function auth.uid()
+          returns uuid language sql stable
+          as $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
+          grant usage on schema auth to anon, authenticated;
+          grant execute on function auth.uid() to anon, authenticated;
+          create publication supabase_realtime;
+          SQL
+
+          for migration in supabase/migrations/*.sql; do
+            echo "Aplicando $migration"
+            psql -v ON_ERROR_STOP=1 -f "$migration" >/dev/null
+          done
+
+      - name: Probar alta de Central y vencimiento real
+        shell: bash
+        run: |
+          set -euo pipefail
+          CENTRAL_USER='91000000-0000-4000-8000-000000000001'
+          PARTNER_USER='92000000-0000-4000-8000-000000000001'
+
+          psql -v ON_ERROR_STOP=1 <<SQL
+          insert into auth.users(id,email,email_confirmed_at,raw_user_meta_data) values
+            ('$CENTRAL_USER','central-google@centralgo.test',now(),'{"full_name":"Central Google QA"}'),
+            ('$PARTNER_USER','partner-google@centralgo.test',now(),'{"full_name":"Partner Google QA"}');
+          SQL
+
+          psql -v ON_ERROR_STOP=1 <<SQL
+          set role authenticated;
+          set request.jwt.claim.sub='$CENTRAL_USER';
+          select public.centralgo_self_service_onboarding('central','Central Google QA','+56911111111','Linares','CL','Central Cinco Días QA');
+          SQL
+
+          COMPANY_ID=$(psql -qAt -v ON_ERROR_STOP=1 -c "select company_id from public.company_memberships where user_id='$CENTRAL_USER' and role='company_admin' limit 1;")
+          test -n "$COMPANY_ID" || { echo 'SAAS FAIL: no se creó la central'; exit 1; }
+          PLAN=$(psql -qAt -v ON_ERROR_STOP=1 -c "select sp.code from public.subscriptions s join public.subscription_plans sp on sp.id=s.plan_id where s.company_id='$COMPANY_ID';")
+          test "$PLAN" = "enterprise" || { echo "SAAS FAIL: trial plan=$PLAN"; exit 1; }
+          WINDOW=$(psql -qAt -v ON_ERROR_STOP=1 -c "select (trial_ends_at <= now()+interval '5 days 1 minute' and trial_ends_at >= now()+interval '4 days 23 hours')::text from public.subscriptions where company_id='$COMPANY_ID';")
+          test "$WINDOW" = "true" || { echo 'SAAS FAIL: la prueba no dura 5 días'; exit 1; }
+          ACCESS=$(psql -qAt -v ON_ERROR_STOP=1 <<SQL
+          set role authenticated;
+          set request.jwt.claim.sub='$CENTRAL_USER';
+          select (public.centralgo_my_access_state()->>'allowed');
+          SQL
+          )
+          test "$ACCESS" = "true" || { echo "SAAS FAIL: central nueva bloqueada=$ACCESS"; exit 1; }
+
+          psql -v ON_ERROR_STOP=1 -c "update public.subscriptions set trial_ends_at=now()-interval '1 minute',current_period_end=now()-interval '1 minute' where company_id='$COMPANY_ID';"
+
+          if psql -q -v ON_ERROR_STOP=1 <<SQL
+          set role authenticated;
+          set request.jwt.claim.sub='$CENTRAL_USER';
+          insert into public.clients(company_id,name,phone) values('$COMPANY_ID','Debe bloquearse','+56900000000');
+          SQL
+          then
+            echo 'SAAS FAIL: una Central vencida pudo seguir operando.'
+            exit 1
+          else
+            echo 'Trial vencido: operación bloqueada correctamente.'
+          fi
+
+          REQUEST_ID=$(psql -qAt -v ON_ERROR_STOP=1 <<SQL
+          set role authenticated;
+          set request.jwt.claim.sub='$CENTRAL_USER';
+          select public.centralgo_request_activation('pro','annual');
+          SQL
+          )
+          test -n "$REQUEST_ID" || { echo 'SAAS FAIL: no se pudo solicitar activación'; exit 1; }
+
+      - name: Probar Partner Comercial autoservicio
+        shell: bash
+        run: |
+          set -euo pipefail
+          PARTNER_USER='92000000-0000-4000-8000-000000000001'
+          psql -v ON_ERROR_STOP=1 <<SQL
+          set role authenticated;
+          set request.jwt.claim.sub='$PARTNER_USER';
+          select public.centralgo_self_service_onboarding('sales_partner','Partner Google QA','+56922222222','Talca','CL',null);
+          SQL
+          ROLE=$(psql -qAt -v ON_ERROR_STOP=1 -c "select global_role from public.profiles where id='$PARTNER_USER';")
+          test "$ROLE" = "sales_partner" || { echo "SAAS FAIL: partner role=$ROLE"; exit 1; }
+          DAYS=$(psql -qAt -v ON_ERROR_STOP=1 -c "select (trial_ends_at <= now()+interval '5 days 1 minute')::text from public.saas_accounts where user_id='$PARTNER_USER';")
+          test "$DAYS" = "true" || { echo 'SAAS FAIL: trial partner mayor a 5 días'; exit 1; }
+
+          psql -v ON_ERROR_STOP=1 -c "update public.saas_accounts set trial_started_at=now()-interval '6 days',trial_ends_at=now()-interval '1 day' where user_id='$PARTNER_USER';"
+          if psql -q -v ON_ERROR_STOP=1 <<SQL
+          set role authenticated;
+          set request.jwt.claim.sub='$PARTNER_USER';
+          select public.centralgo_partner_create_company('No debe crear','EXP-FAIL','Talca','CL',null,null,'pro','annual',null,14);
+          SQL
+          then
+            echo 'SAAS FAIL: partner vencido pudo registrar una Central.'
+            exit 1
+          else
+            echo 'Partner vencido: alta de Central bloqueada correctamente.'
+          fi
+
+          PARTNER_REQUEST=$(psql -qAt -v ON_ERROR_STOP=1 <<SQL
+          set role authenticated;
+          set request.jwt.claim.sub='$PARTNER_USER';
+          select public.centralgo_request_activation(null,'annual');
+          SQL
+          )
+          test -n "$PARTNER_REQUEST" || { echo 'SAAS FAIL: partner no pudo solicitar activación'; exit 1; }

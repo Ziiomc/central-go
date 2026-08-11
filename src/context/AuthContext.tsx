@@ -29,6 +29,7 @@ interface AuthContextValue {
   effectiveRole: UserRole | null;
   loading: boolean;
   identityError: string | null;
+  signInWithGoogle: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (name: string, email: string, password: string) => Promise<{ needsEmailConfirmation: boolean }>;
   signOut: () => Promise<void>;
@@ -135,18 +136,32 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     return () => { mounted = false; listener.subscription.unsubscribe(); };
   }, []);
 
+  const signInWithGoogle = async () => {
+    const db = requireSupabase();
+    const { error } = await db.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${runtimeConfig.officialAppUrl}/`,
+        queryParams: { prompt: 'select_account' },
+      },
+    });
+    if (error) throw error;
+  };
+
   const signIn = async (email: string, password: string) => {
     const db = requireSupabase();
     const { error } = await db.auth.signInWithPassword({ email: email.trim(), password });
     if (error) throw error;
   };
 
+  // Conservado únicamente para compatibilidad de cuentas internas existentes.
+  // El registro público nuevo usa Google + onboarding autoservicio.
   const signUp = async (name: string, email: string, password: string) => {
     const db = requireSupabase();
     const { data, error } = await db.auth.signUp({
       email: email.trim(),
       password,
-      options: { data: { name: name.trim() }, emailRedirectTo: `${window.location.origin}/` },
+      options: { data: { name: name.trim() }, emailRedirectTo: `${runtimeConfig.officialAppUrl}/` },
     });
     if (error) throw error;
     return { needsEmailConfirmation: !data.session };
@@ -189,6 +204,7 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     effectiveRole,
     loading,
     identityError,
+    signInWithGoogle,
     signIn,
     signUp,
     signOut,
