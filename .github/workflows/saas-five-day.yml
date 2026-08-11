@@ -134,7 +134,7 @@ jobs:
           DAYS=$(psql -qAt -v ON_ERROR_STOP=1 -c "select (trial_ends_at <= now()+interval '5 days 1 minute')::text from public.saas_accounts where user_id='$PARTNER_USER';")
           test "$DAYS" = "true" || { echo 'SAAS FAIL: trial partner mayor a 5 días'; exit 1; }
 
-          psql -v ON_ERROR_STOP=1 -c "update public.saas_accounts set trial_ends_at=now()-interval '1 minute' where user_id='$PARTNER_USER';"
+          psql -v ON_ERROR_STOP=1 -c "update public.saas_accounts set trial_started_at=now()-interval '6 days',trial_ends_at=now()-interval '1 day' where user_id='$PARTNER_USER';"
           if psql -q -v ON_ERROR_STOP=1 <<SQL
           set role authenticated;
           set request.jwt.claim.sub='$PARTNER_USER';
