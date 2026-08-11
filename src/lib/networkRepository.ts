@@ -69,7 +69,7 @@ export async function createNetworkCentral(
 ): Promise<{ companyId: string; ownerAssigned: boolean; attributedPartnerCode?: string }> {
   const db = requireSupabase();
 
-  if (actorRole === 'regional_partner' || actorRole === 'sales_partner') {
+  if (actorRole === 'sales_partner') {
     const { data, error } = await db.rpc('centralgo_partner_create_company', {
       p_name: input.name.trim(),
       p_code: input.code.trim(),
@@ -88,6 +88,10 @@ export async function createNetworkCentral(
       ownerAssigned: Boolean((data as any)?.ownerAssigned),
       attributedPartnerCode: (data as any)?.partnerCode ?? undefined,
     };
+  }
+
+  if (actorRole === 'regional_partner') {
+    throw new Error('Las centrales se registran exclusivamente desde cuentas Partner Comercial.');
   }
 
   const { data, error } = await db.rpc('centralgo_superadmin_create_company', {
