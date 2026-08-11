@@ -1,0 +1,9 @@
+import React from 'react';
+import {Clock3,LockKeyhole} from 'lucide-react';
+import {useAuth} from '../../context/AuthContext';
+
+const daysLeft=(end:string)=>Math.max(0,Math.ceil((new Date(end).getTime()-Date.now())/86400000));
+export const TrialGate:React.FC<React.PropsWithChildren>=({children})=>{const {saasAccount,profile}=useAuth();if(profile?.globalRole==='super_admin'||!saasAccount)return <>{children}</>;const days=daysLeft(saasAccount.trialEndsAt);const expired=saasAccount.status==='trialing'&&new Date(saasAccount.trialEndsAt).getTime()<=Date.now();const active=['active','paid'].includes(saasAccount.status);
+ if(expired&&!active)return <main className="min-h-screen bg-zinc-950 text-white flex items-center justify-center p-5"><section className="max-w-lg rounded-3xl border border-amber-400/30 bg-[#0d0d0f] p-8 text-center"><LockKeyhole className="mx-auto h-10 w-10 text-amber-300"/><h1 className="mt-4 text-2xl font-black">Tu prueba gratuita terminó</h1><p className="mt-3 text-sm text-zinc-400">Tus datos siguen seguros. Elige un plan para continuar operando Central GO.</p><button onClick={()=>{window.location.href='/?module=plans_network';}} className="mt-6 rounded-xl bg-amber-400 px-5 py-3 font-black text-zinc-950">Elegir plan</button></section></main>;
+ return <><div className="sticky top-0 z-[60] flex items-center justify-center gap-2 border-b border-amber-400/20 bg-amber-400 px-3 py-2 text-center text-xs font-black text-zinc-950"><Clock3 className="h-4 w-4"/>Te quedan {days} {days===1?'día':'días'} de prueba gratuita <button onClick={()=>{window.location.href='/?module=plans_network';}} className="ml-2 rounded-lg bg-zinc-950 px-3 py-1.5 text-white">Elegir plan</button></div>{children}</>;
+};
