@@ -28,13 +28,14 @@ const consumeTokenHashLink=async()=>{
  return data.session;
 };
 
-const consumeLegacyRecoveryHash=async()=>{
+const consumeLegacyAuthHash=async()=>{
  if(typeof window==='undefined'||!supabase||!window.location.hash)return null;
  const params=new URLSearchParams(window.location.hash.slice(1));
  const accessToken=params.get('access_token');
  const refreshToken=params.get('refresh_token');
  const type=params.get('type');
- if(!accessToken||!refreshToken||type!=='recovery')return null;
+ const allowedHashTypes=['recovery','invite','signup','magiclink'];
+ if(!accessToken||!refreshToken||!type||!allowedHashTypes.includes(type))return null;
  const {data,error}=await supabase.auth.setSession({access_token:accessToken,refresh_token:refreshToken});
  if(error)throw error;
  window.history.replaceState({},document.title,`${window.location.pathname}${window.location.search}`);
@@ -54,7 +55,7 @@ export const AuthProvider:React.FC<React.PropsWithChildren>=({children})=>{
   setSaasAccount(saasRow?{accountKind:saasRow.account_kind,companyId:saasRow.company_id,status:saasRow.status,trialStartedAt:saasRow.trial_started_at,trialEndsAt:saasRow.trial_ends_at,currentPeriodEnd:saasRow.current_period_end}:null);
   if(nextProfile.globalRole==='super_admin'){const {data,error}=await db.from('companies').select('id,name,code,phone,address,vhf_frequency,logo_url,active').order('name');if(error)throw error;setCompanies((data??[]).map(mapCompany));}else setCompanies(mapped.map(x=>x.company));
  }catch(error){console.error('[Central GO] identity',error);setIdentityError(error instanceof Error?error.message:'No fue posible cargar el perfil.');setProfile(null);setMemberships([]);setCompanies([]);setSaasAccount(null);}finally{setLoading(false);}};
- useEffect(()=>{if(!supabase){setLoading(false);return;}let mounted=true;const bootstrap=async()=>{try{const tokenHashSession=await consumeTokenHashLink();if(!mounted)return;if(tokenHashSession){await loadIdentity(tokenHashSession);return;}const recovered=await consumeLegacyRecoveryHash();if(!mounted)return;if(recovered){await loadIdentity(recovered);return;}const {data,error}=await supabase.auth.getSession();if(!mounted)return;if(error){setIdentityError(error.message);setLoading(false);return;}await loadIdentity(data.session);}catch(error){if(!mounted)return;setIdentityError(error instanceof Error?error.message:'No fue posible recuperar la sesión.');setLoading(false);}};void bootstrap();const {data:listener}=supabase.auth.onAuthStateChange((_event,next)=>{if(mounted)void loadIdentity(next);});return()=>{mounted=false;listener.subscription.unsubscribe();};},[]);
+ useEffect(()=>{if(!supabase){setLoading(false);return;}let mounted=true;const bootstrap=async()=>{try{const tokenHashSession=await consumeTokenHashLink();if(!mounted)return;if(tokenHashSession){await loadIdentity(tokenHashSession);return;}const recovered=await consumeLegacyAuthHash();if(!mounted)return;if(recovered){await loadIdentity(recovered);return;}const {data,error}=await supabase.auth.getSession();if(!mounted)return;if(error){setIdentityError(error.message);setLoading(false);return;}await loadIdentity(data.session);}catch(error){if(!mounted)return;setIdentityError(error instanceof Error?error.message:'No fue posible recuperar la sesión.');setLoading(false);}};void bootstrap();const {data:listener}=supabase.auth.onAuthStateChange((_event,next)=>{if(mounted)void loadIdentity(next);});return()=>{mounted=false;listener.subscription.unsubscribe();};},[]);
  const signInWithGoogle=async()=>{const db=requireSupabase();const {error}=await db.auth.signInWithOAuth({provider:'google',options:{redirectTo:`${runtimeConfig.officialAppUrl}/`}});if(error)throw error;};
  const signIn=async(email:string,password:string)=>{const db=requireSupabase();const {error}=await db.auth.signInWithPassword({email:email.trim(),password});if(error)throw error;};
  const signOut=async()=>{const {error}=await requireSupabase().auth.signOut();if(error)throw error;};
