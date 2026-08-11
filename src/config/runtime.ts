@@ -1,6 +1,6 @@
 const OFFICIAL_SUPABASE_URL = 'https://cuazdzsvgwrnpczbvrgx.supabase.co';
 const OFFICIAL_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_ICfwSIQkutbSwAcHQdjBhA_aRPvM0lG';
-const OFFICIAL_APP_URL = 'https://go-one.vercel.app';
+const OFFICIAL_APP_URL = 'https://central-go-one.vercel.app';
 
 const envSupabaseUrl = (import.meta.env.VITE_SUPABASE_URL ?? '').trim();
 const envSupabasePublishableKey = (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? '').trim();
