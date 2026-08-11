@@ -1,45 +1,24 @@
-const CACHE_NAME = 'centralgo-official-v3';
-const APP_SHELL = ['/', '/driver', '/index.html', '/manifest.json', '/driver-manifest.json', '/icon.svg'];
+const CACHE_NAME = 'centralgo-official-v4-fresh';
 
-self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)));
+self.addEventListener('install', () => {
   self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((names) => Promise.all(names.filter((name) => name !== CACHE_NAME).map((name) => caches.delete(name))))
+    caches.keys()
+      .then((names) => Promise.all(names.map((name) => caches.delete(name))))
+      .then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 
-  if (event.request.mode === 'navigate') {
-    // Las navegaciones siempre intentan red primero para impedir que el login o
-    // la demo queden atrapados en una versión anterior. Solo usamos el shell
-    // cacheado cuando realmente estamos sin conexión.
-    event.respondWith(
-      fetch(event.request, { cache: 'no-store' })
-        .then((response) => response)
-        .catch(() => caches.match('/index.html'))
-    );
-    return;
-  }
-
   const requestUrl = new URL(event.request.url);
   if (requestUrl.origin !== self.location.origin) return;
 
-  event.respondWith(
-    fetch(event.request)
-      .then((response) => {
-        if (response.ok) {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
-        }
-        return response;
-      })
-      .catch(() => caches.match(event.request))
-  );
+  // Durante la etapa de implementación comercial no servimos bundles viejos
+  // desde Cache Storage. Cada navegación, JS, CSS y asset se valida contra red.
+  event.respondWith(fetch(event.request, { cache: 'no-store' }));
 });
