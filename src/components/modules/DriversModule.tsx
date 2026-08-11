@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Car, MailCheck, Pencil, Plus, Search, Smartphone, Users } from 'lucide-react';
+import { Car, CheckCircle2, Clipboard, KeyRound, MailCheck, Pencil, Plus, Search, Send, Smartphone, Users } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { inviteCompanyUser } from '../../lib/userRepository';
 import { updateDriverProfile } from '../../lib/driverManagementRepository';
+import { requestDriverAccess } from '../../lib/driverAccessRepository';
 import type { Driver } from '../../types';
 
 export const DriversModule: React.FC = () => {
@@ -31,6 +32,10 @@ export const DriversModule: React.FC = () => {
   const [editSaving, setEditSaving] = useState(false);
   const [driverOverrides, setDriverOverrides] = useState<Record<string, Partial<Driver>>>({});
 
+  const [accessBusyId, setAccessBusyId] = useState<string | null>(null);
+  const [accessLinks, setAccessLinks] = useState<Record<string, string>>({});
+  const [accessMessages, setAccessMessages] = useState<Record<string, { text: string; kind: 'success' | 'warning' | 'info' }>>({});
+
   const visibleDrivers = drivers.map((driver) => driverOverrides[driver.id] ? { ...driver, ...driverOverrides[driver.id] } : driver);
   const filteredDrivers = visibleDrivers.filter((driver) =>
     driver.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -48,6 +53,9 @@ export const DriversModule: React.FC = () => {
     setSelectedVehicleId('');
     setFormError('');
   };
+
+  const vehicleIsOccupied = (vehicleId: string, exceptDriverId?: string) =>
+    visibleDrivers.some((driver) => driver.id !== exceptDriverId && driver.vehicleId === vehicleId);
 
   const openEdit = (driver: Driver) => {
     setNotice('');
@@ -78,6 +86,10 @@ export const DriversModule: React.FC = () => {
       setFormError('Ingresa el correo del conductor. Ese correo será su acceso personal a Central GO Conductor.');
       return;
     }
+    if (selectedVehicleId && vehicleIsOccupied(selectedVehicleId)) {
+      setFormError('Ese vehículo ya está asignado a otro conductor.');
+      return;
+    }
 
     setSaving(true);
     try {
@@ -89,7 +101,7 @@ export const DriversModule: React.FC = () => {
         redirectTo: 'https://central-go-one.vercel.app/driver',
       });
 
-      await addDriver({
+      const driver = await addDriver({
         userId: access.userId,
         companyId: currentCompany.id,
         vehicleId: selectedVehicleId || undefined,
@@ -110,11 +122,19 @@ export const DriversModule: React.FC = () => {
         sosActive: false,
       });
 
-      setNotice(
-        access.emailPending
-          ? `${name.trim()} quedó registrado y vinculado al móvil. El correo de acceso está pendiente porque Supabase alcanzó temporalmente su límite de envío; puedes reenviarlo desde Usuarios y Permisos.`
-          : `${name.trim()} quedó registrado. Enviamos el acceso a ${normalizedEmail}; al abrirlo podrá crear su contraseña y entrar directamente a Central GO Conductor.`
-      );
+      if (access.emailPending) {
+        setAccessMessages((current) => ({
+          ...current,
+          [driver.id]: {
+            kind: 'warning',
+            text: 'La cuenta profesional quedó creada, pero Supabase no pudo enviar el correo. Usa “Reenviar acceso” en esta tarjeta; si el límite continúa, Central GO te dará un enlace seguro para compartir.',
+          },
+        }));
+        setNotice(`${name.trim()} quedó registrado y vinculado. El correo está temporalmente pendiente, pero su cuenta no se perdió.`);
+      } else {
+        setNotice(`${name.trim()} quedó registrado. Enviamos el acceso a ${normalizedEmail}; al abrirlo podrá crear su contraseña y entrar a Central GO Conductor.`);
+      }
+
       resetForm();
       setIsAddModalOpen(false);
     } catch (err) {
@@ -160,7 +180,7 @@ export const DriversModule: React.FC = () => {
         });
       }, 1800);
 
-      setNotice(`${editName.trim()} fue actualizado correctamente. El vehículo y los datos del conductor quedaron sincronizados sin alterar su cuenta profesional.`);
+      setNotice(`${editName.trim()} fue actualizado correctamente. El vehículo y los datos quedaron sincronizados sin alterar su cuenta profesional.`);
       setEditingDriver(null);
     } catch (err) {
       setEditError(err instanceof Error ? err.message : 'No fue posible actualizar al conductor.');
@@ -169,12 +189,80 @@ export const DriversModule: React.FC = () => {
     }
   };
 
+  const handleDriverAccess = async (driver: Driver) => {
+    if (!driver.userId) {
+      setAccessMessages((current) => ({ ...current, [driver.id]: { kind: 'warning', text: 'Este conductor todavía no tiene una cuenta profesional vinculada.' } }));
+      return;
+    }
+
+    setAccessBusyId(driver.id);
+    setAccessMessages((current) => {
+      const next = { ...current };
+      delete next[driver.id];
+      return next;
+    });
+
+    try {
+      const result = await requestDriverAccess({ companyId: currentCompany.id, userId: driver.userId });
+      if (result.actionLink) {
+        setAccessLinks((current) => ({ ...current, [driver.id]: result.actionLink! }));
+      } else {
+        setAccessLinks((current) => {
+          const next = { ...current };
+          delete next[driver.id];
+          return next;
+        });
+      }
+
+      setAccessMessages((current) => ({
+        ...current,
+        [driver.id]: {
+          kind: result.active || result.sent ? 'success' : 'warning',
+          text: result.message,
+        },
+      }));
+    } catch (err) {
+      setAccessMessages((current) => ({
+        ...current,
+        [driver.id]: {
+          kind: 'warning',
+          text: err instanceof Error ? err.message : 'No fue posible generar el acceso del conductor.',
+        },
+      }));
+    } finally {
+      setAccessBusyId(null);
+    }
+  };
+
+  const copySecureLink = async (driver: Driver) => {
+    const link = accessLinks[driver.id];
+    if (!link) return;
+    try {
+      await navigator.clipboard.writeText(link);
+      setAccessMessages((current) => ({
+        ...current,
+        [driver.id]: {
+          kind: 'success',
+          text: 'Enlace seguro copiado. Envíalo únicamente al conductor por un canal privado. Es de un solo uso.',
+        },
+      }));
+    } catch {
+      setAccessMessages((current) => ({
+        ...current,
+        [driver.id]: {
+          kind: 'warning',
+          text: 'El navegador no permitió copiar automáticamente. Intenta nuevamente desde un navegador con permisos de portapapeles.',
+        },
+      }));
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="font-extrabold text-2xl text-white tracking-tight flex items-center gap-2"><Users className="w-6 h-6 text-blue-500" />Conductores</h1>
-          <p className="text-xs text-zinc-400 mt-1">Registra al conductor una sola vez: su correo recibe el acceso y queda vinculado al móvil automáticamente.</p>
+          <p className="text-xs text-zinc-400 mt-1">Registra al conductor una sola vez. Su cuenta profesional, móvil, vehículo y acceso quedan administrados desde aquí.</p>
         </div>
         <button onClick={() => { setNotice(''); setIsAddModalOpen(true); }} className="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-extrabold text-xs rounded-xl transition flex items-center gap-2"><Plus className="w-4 h-4" />Registrar conductor</button>
       </div>
@@ -189,6 +277,8 @@ export const DriversModule: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredDrivers.map((driver) => {
           const vehicle = vehicles.find((item) => item.id === driver.vehicleId);
+          const accessMessage = accessMessages[driver.id];
+          const hasSecureLink = Boolean(accessLinks[driver.id]);
           return (
             <article key={driver.id} className="bg-[#0d0d0f] border border-zinc-800 rounded-2xl p-5 shadow-xl">
               <div className="flex items-start justify-between gap-3">
@@ -206,7 +296,27 @@ export const DriversModule: React.FC = () => {
 
               <div className="mt-3 grid grid-cols-2 gap-2"><MiniStat label="Viajes completados" value={String(driver.totalTripsCompleted)} /><MiniStat label="Recaudado hoy" value={`$${driver.todayEarnings.toLocaleString('es-CL')}`} /></div>
 
-              <div className={`mt-3 flex items-center gap-2 rounded-xl border p-3 text-[10px] ${driver.userId ? 'border-emerald-500/20 bg-emerald-500/5 text-emerald-200' : 'border-zinc-800 bg-zinc-950/50 text-zinc-500'}`}><Smartphone className="h-4 w-4 shrink-0" /><span>{driver.userId ? 'Cuenta profesional vinculada: GPS, carreras, estados, ganancias, comisiones y SOS.' : 'Sin cuenta vinculada.'}</span></div>
+              <div className={`mt-3 rounded-xl border p-3 text-[10px] ${driver.userId ? 'border-emerald-500/20 bg-emerald-500/5 text-emerald-200' : 'border-zinc-800 bg-zinc-950/50 text-zinc-500'}`}>
+                <div className="flex items-start gap-2"><Smartphone className="h-4 w-4 shrink-0" /><span>{driver.userId ? 'Cuenta profesional vinculada: GPS, carreras, estados, ganancias, comisiones y SOS.' : 'Sin cuenta profesional vinculada.'}</span></div>
+                {driver.userId && (
+                  <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <button disabled={accessBusyId === driver.id} onClick={() => void handleDriverAccess(driver)} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-blue-500/25 bg-blue-500/10 px-2.5 py-2 text-[9px] font-black text-blue-200 transition hover:bg-blue-500/20 disabled:opacity-50">
+                      <Send className="h-3.5 w-3.5" />{accessBusyId === driver.id ? 'Preparando…' : 'Reenviar acceso'}
+                    </button>
+                    {hasSecureLink && (
+                      <button onClick={() => void copySecureLink(driver)} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-amber-500/25 bg-amber-500/10 px-2.5 py-2 text-[9px] font-black text-amber-200 transition hover:bg-amber-500/20">
+                        <Clipboard className="h-3.5 w-3.5" />Copiar enlace seguro
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {accessMessage && (
+                <div className={`mt-2 rounded-xl border px-3 py-2.5 text-[10px] font-semibold leading-relaxed ${accessMessage.kind === 'success' ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-200' : accessMessage.kind === 'warning' ? 'border-amber-500/25 bg-amber-500/10 text-amber-200' : 'border-blue-500/25 bg-blue-500/10 text-blue-200'}`}>
+                  {accessMessage.kind === 'success' ? <CheckCircle2 className="mr-1.5 inline h-3.5 w-3.5" /> : <KeyRound className="mr-1.5 inline h-3.5 w-3.5" />}{accessMessage.text}
+                </div>
+              )}
             </article>
           );
         })}
@@ -216,15 +326,15 @@ export const DriversModule: React.FC = () => {
       {isAddModalOpen && (
         <div className="fixed inset-0 bg-zinc-950/85 backdrop-blur-md z-50 flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-[#0d0d0f] border border-zinc-800 rounded-3xl max-w-lg w-full p-6 shadow-2xl my-auto">
-            <div><h3 className="font-black text-lg text-white">Registrar conductor y enviar acceso</h3><p className="mt-1 text-xs leading-relaxed text-zinc-500">Central GO creará la cuenta del conductor, enviará el enlace para definir su contraseña y lo vinculará a este móvil en un solo paso.</p></div>
+            <div><h3 className="font-black text-lg text-white">Registrar conductor y enviar acceso</h3><p className="mt-1 text-xs leading-relaxed text-zinc-500">Central GO creará la cuenta profesional, enviará el enlace para definir su contraseña y vinculará su móvil y vehículo en un solo proceso.</p></div>
             <form onSubmit={handleAddSubmit} className="mt-5 grid gap-3 sm:grid-cols-2">
               <Field label="Número de móvil" value={unitNumber} onChange={setUnitNumber} placeholder="Móvil 25" />
               <Field label="Nombre completo" value={name} onChange={setName} placeholder="Nombre y apellido" />
               <Field label="Teléfono" value={phone} onChange={setPhone} placeholder="+56 9 ..." />
               <Field label="Licencia" value={licenseNumber} onChange={setLicenseNumber} placeholder="N° licencia" />
               <label className="block"><span className="text-[10px] font-black uppercase tracking-wider text-zinc-500">Vencimiento licencia</span><div className="mt-1 flex w-full min-w-0 rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2.5"><input required type="date" value={licenseExpiry} onChange={(e) => setLicenseExpiry(e.target.value)} className="block w-full min-w-0 border-0 bg-transparent p-0 text-sm text-zinc-200" /></div></label>
-              <label className="block"><span className="text-[10px] font-black uppercase tracking-wider text-zinc-500">Vehículo asignado</span><select value={selectedVehicleId} onChange={(e) => setSelectedVehicleId(e.target.value)} className="mt-1 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-200"><option value="">Sin vehículo</option>{vehicles.map((vehicle) => <option key={vehicle.id} value={vehicle.id}>{vehicle.unitNumber} · {vehicle.licensePlate}</option>)}</select></label>
-              <div className="sm:col-span-2"><label className="text-[10px] font-black uppercase tracking-wider text-zinc-500">Correo personal del conductor</label><input required type="email" value={accountEmail} onChange={(e) => setAccountEmail(e.target.value)} placeholder="conductor@correo.cl" className="mt-1 w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2.5 text-sm text-zinc-200 focus:outline-none focus:border-blue-500" /><p className="mt-1.5 text-[10px] leading-relaxed text-zinc-600">A este correo llegará el acceso seguro. Al abrirlo creará su contraseña y Central GO lo llevará a su interfaz de conductor.</p></div>
+              <label className="block"><span className="text-[10px] font-black uppercase tracking-wider text-zinc-500">Vehículo asignado</span><select value={selectedVehicleId} onChange={(e) => setSelectedVehicleId(e.target.value)} className="mt-1 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-200"><option value="">Sin vehículo</option>{vehicles.map((vehicle) => <option key={vehicle.id} value={vehicle.id} disabled={vehicleIsOccupied(vehicle.id)}>{vehicle.unitNumber} · {vehicle.licensePlate}{vehicleIsOccupied(vehicle.id) ? ' · ya asignado' : ''}</option>)}</select></label>
+              <div className="sm:col-span-2"><label className="text-[10px] font-black uppercase tracking-wider text-zinc-500">Correo personal del conductor</label><input required type="email" value={accountEmail} onChange={(e) => setAccountEmail(e.target.value)} placeholder="conductor@correo.cl" className="mt-1 w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2.5 text-sm text-zinc-200 focus:outline-none focus:border-blue-500" /><p className="mt-1.5 text-[10px] leading-relaxed text-zinc-600">A este correo llegará el acceso. Si el proveedor de correo está limitado, la tarjeta permitirá generar un enlace seguro de un solo uso.</p></div>
               {formError && <div className="sm:col-span-2 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs leading-relaxed text-rose-200">{formError}</div>}
               <div className="sm:col-span-2 flex gap-2 pt-2"><button type="button" onClick={() => { resetForm(); setIsAddModalOpen(false); }} className="w-1/2 py-3 bg-zinc-800 text-zinc-300 font-bold text-xs rounded-xl">Cancelar</button><button type="submit" disabled={saving} className="w-1/2 py-3 bg-blue-600 hover:bg-blue-500 text-white font-black text-xs rounded-xl disabled:opacity-50">{saving ? 'Creando acceso…' : 'Registrar y enviar acceso'}</button></div>
             </form>
@@ -233,40 +343,18 @@ export const DriversModule: React.FC = () => {
       )}
 
       {editingDriver && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto bg-zinc-950/85 p-4 backdrop-blur-md">
-          <div className="my-auto w-full max-w-lg rounded-3xl border border-zinc-800 bg-[#0d0d0f] p-6 shadow-2xl">
-            <div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-blue-500/20 bg-blue-500/10 px-2.5 py-1 text-[9px] font-black uppercase tracking-wider text-blue-300"><Pencil className="h-3.5 w-3.5" />Editar conductor</div>
-              <h3 className="mt-3 text-lg font-black text-white">{editingDriver.name}</h3>
-              <p className="mt-1 text-xs leading-relaxed text-zinc-500">Puedes asignar ahora el vehículo que creaste o cambiar los datos operativos. Su cuenta profesional, contraseña, historial, ganancias y acceso permanecen intactos.</p>
-            </div>
-
+        <div className="fixed inset-0 bg-zinc-950/85 backdrop-blur-md z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-[#0d0d0f] border border-zinc-800 rounded-3xl max-w-lg w-full p-6 shadow-2xl my-auto">
+            <div><h3 className="font-black text-lg text-white">Editar conductor</h3><p className="mt-1 text-xs leading-relaxed text-zinc-500">Puedes cambiar móvil, vehículo y datos operativos sin alterar su usuario, contraseña, ganancias ni historial.</p></div>
             <form onSubmit={handleEditSubmit} className="mt-5 grid gap-3 sm:grid-cols-2">
               <Field label="Número de móvil" value={editUnitNumber} onChange={setEditUnitNumber} placeholder="Móvil 25" />
               <Field label="Nombre completo" value={editName} onChange={setEditName} placeholder="Nombre y apellido" />
               <Field label="Teléfono" value={editPhone} onChange={setEditPhone} placeholder="+56 9 ..." />
               <Field label="Licencia" value={editLicenseNumber} onChange={setEditLicenseNumber} placeholder="N° licencia" />
-
-              <label className="block">
-                <span className="text-[10px] font-black uppercase tracking-wider text-zinc-500">Vencimiento licencia</span>
-                <div className="mt-1 flex w-full min-w-0 rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2.5"><input required type="date" value={editLicenseExpiry} onChange={(e) => setEditLicenseExpiry(e.target.value)} className="block w-full min-w-0 border-0 bg-transparent p-0 text-sm text-zinc-200" /></div>
-              </label>
-
-              <label className="block">
-                <span className="text-[10px] font-black uppercase tracking-wider text-zinc-500">Vehículo asignado</span>
-                <select value={editVehicleId} onChange={(e) => setEditVehicleId(e.target.value)} className="mt-1 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-200">
-                  <option value="">Sin vehículo</option>
-                  {vehicles.map((vehicle) => {
-                    const occupant = visibleDrivers.find((driver) => driver.vehicleId === vehicle.id && driver.id !== editingDriver.id);
-                    return <option key={vehicle.id} value={vehicle.id} disabled={Boolean(occupant)}>{vehicle.unitNumber} · {vehicle.licensePlate}{occupant ? ` · asignado a ${occupant.unitNumber}` : ''}</option>;
-                  })}
-                </select>
-                <p className="mt-1.5 text-[9px] leading-relaxed text-zinc-600">Los vehículos utilizados por otro conductor aparecen bloqueados para evitar una doble asignación.</p>
-              </label>
-
-              <div className="sm:col-span-2 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 text-[10px] leading-relaxed text-emerald-200/80"><Smartphone className="mr-1.5 inline h-3.5 w-3.5" />La cuenta profesional vinculada a este conductor no será reemplazada ni desconectada.</div>
+              <label className="block"><span className="text-[10px] font-black uppercase tracking-wider text-zinc-500">Vencimiento licencia</span><div className="mt-1 flex w-full min-w-0 rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2.5"><input required type="date" value={editLicenseExpiry} onChange={(e) => setEditLicenseExpiry(e.target.value)} className="block w-full min-w-0 border-0 bg-transparent p-0 text-sm text-zinc-200" /></div></label>
+              <label className="block"><span className="text-[10px] font-black uppercase tracking-wider text-zinc-500">Vehículo asignado</span><select value={editVehicleId} onChange={(e) => setEditVehicleId(e.target.value)} className="mt-1 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-200"><option value="">Sin vehículo</option>{vehicles.map((vehicle) => <option key={vehicle.id} value={vehicle.id} disabled={vehicleIsOccupied(vehicle.id, editingDriver.id)}>{vehicle.unitNumber} · {vehicle.licensePlate}{vehicleIsOccupied(vehicle.id, editingDriver.id) ? ' · ya asignado' : ''}</option>)}</select></label>
               {editError && <div className="sm:col-span-2 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs leading-relaxed text-rose-200">{editError}</div>}
-              <div className="sm:col-span-2 flex gap-2 pt-2"><button type="button" onClick={closeEdit} disabled={editSaving} className="w-1/2 rounded-xl bg-zinc-800 py-3 text-xs font-bold text-zinc-300 disabled:opacity-50">Cancelar</button><button type="submit" disabled={editSaving} className="w-1/2 rounded-xl bg-blue-600 py-3 text-xs font-black text-white hover:bg-blue-500 disabled:opacity-50">{editSaving ? 'Guardando…' : 'Guardar cambios'}</button></div>
+              <div className="sm:col-span-2 flex gap-2 pt-2"><button type="button" onClick={closeEdit} className="w-1/2 py-3 bg-zinc-800 text-zinc-300 font-bold text-xs rounded-xl">Cancelar</button><button type="submit" disabled={editSaving} className="w-1/2 py-3 bg-blue-600 hover:bg-blue-500 text-white font-black text-xs rounded-xl disabled:opacity-50">{editSaving ? 'Guardando…' : 'Guardar cambios'}</button></div>
             </form>
           </div>
         </div>
