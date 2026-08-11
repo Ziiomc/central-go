@@ -30,6 +30,12 @@ const safeRedirect = (value?: string) => {
   return OFFICIAL_APP_URL;
 };
 
+const isEmailRateLimit = (error: unknown) => {
+  const value = error as { message?: string; code?: string; status?: number } | null;
+  const text = `${value?.message ?? ''} ${value?.code ?? ''}`;
+  return value?.status === 429 || /email rate limit|over_email_send_rate_limit|too many requests/i.test(text);
+};
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return json({ error: 'Método no permitido' }, 405);
@@ -37,6 +43,7 @@ Deno.serve(async (req) => {
   try {
     const authorization = req.headers.get('Authorization');
     if (!authorization) return json({ error: 'Sesión requerida' }, 401);
+
     const body = await req.json().catch(() => null) as {
       companyId?: string;
       email?: string;
@@ -45,18 +52,25 @@ Deno.serve(async (req) => {
       redirectTo?: string;
       password?: string;
     } | null;
+
     const companyId = body?.companyId?.trim();
     const email = body?.email?.trim().toLowerCase();
     const role = body?.role?.trim() ?? '';
     const name = body?.name?.trim() ?? '';
     const password = body?.password ?? '';
-    if (!companyId || !email || !email.includes('@') || !allowedRole(role)) return json({ error: 'Central, correo y rol válidos son obligatorios' }, 400);
+
+    if (!companyId || !email || !email.includes('@') || !allowedRole(role)) {
+      return json({ error: 'Central, correo y rol válidos son obligatorios' }, 400);
+    }
     if (password && password.length < 10) return json({ error: 'La contraseña inicial debe tener al menos 10 caracteres' }, 400);
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const userClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: authorization } }, auth: { persistSession: false } });
+    const userClient = createClient(supabaseUrl, anonKey, {
+      global: { headers: { Authorization: authorization } },
+      auth: { persistSession: false },
+    });
     const service = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
 
     const { data: userData, error: userError } = await userClient.auth.getUser();
@@ -69,9 +83,17 @@ Deno.serve(async (req) => {
     let authorized = isSuper;
 
     if (!authorized && role !== 'company_admin') {
-      const { data: membership } = await service.from('company_memberships').select('id').eq('company_id', companyId).eq('user_id', callerId).eq('role', 'company_admin').eq('active', true).maybeSingle();
+      const { data: membership } = await service
+        .from('company_memberships')
+        .select('id')
+        .eq('company_id', companyId)
+        .eq('user_id', callerId)
+        .eq('role', 'company_admin')
+        .eq('active', true)
+        .maybeSingle();
       authorized = Boolean(membership);
     }
+
     if (!authorized && role === 'company_admin') {
       const { data: ownPartner } = await service.from('partners').select('id,kind').eq('user_id', callerId).eq('active', true).maybeSingle();
       if (ownPartner) {
@@ -83,18 +105,28 @@ Deno.serve(async (req) => {
         }
       }
     }
-    if (!authorized) return json({ error: 'No tienes permiso para administrar este acceso' }, 403);
-    if (password && (!isSuper || role !== 'company_admin')) return json({ error: 'Solo Superadmin puede definir la contraseña inicial del administrador' }, 403);
 
-    let targetUser: any = null;
-    for (let page = 1; page <= 10 && !targetUser; page += 1) {
-      const { data, error } = await service.auth.admin.listUsers({ page, perPage: 1000 });
-      if (error) throw error;
-      targetUser = data.users.find((item) => item.email?.toLowerCase() === email) ?? null;
-      if (data.users.length < 1000) break;
+    if (!authorized) return json({ error: 'No tienes permiso para administrar este acceso' }, 403);
+    if (password && (!isSuper || role !== 'company_admin')) {
+      return json({ error: 'Solo Superadmin puede definir la contraseña inicial del administrador' }, 403);
     }
 
+    const findUser = async () => {
+      for (let page = 1; page <= 10; page += 1) {
+        const { data, error } = await service.auth.admin.listUsers({ page, perPage: 1000 });
+        if (error) throw error;
+        const found = data.users.find((item) => item.email?.toLowerCase() === email);
+        if (found) return found;
+        if (data.users.length < 1000) break;
+      }
+      return null;
+    };
+
+    const redirectTo = safeRedirect(body?.redirectTo);
+    const requestedMetadata = { ...(name ? { name } : {}), needs_password_setup: !password };
+    let targetUser: any = await findUser();
     let invited = false;
+    let emailPending = false;
     let passwordReady = false;
     let passwordUpdated = false;
 
@@ -104,20 +136,35 @@ Deno.serve(async (req) => {
           email,
           password,
           email_confirm: true,
-          user_metadata: { ...(name ? { name } : {}), needs_password_setup: false },
+          user_metadata: requestedMetadata,
         });
         if (error) throw error;
         targetUser = data.user;
         passwordReady = true;
       } else {
-        const redirectTo = safeRedirect(body?.redirectTo);
         const { data, error } = await service.auth.admin.inviteUserByEmail(email, {
-          data: { ...(name ? { name } : {}), needs_password_setup: true },
+          data: requestedMetadata,
           redirectTo,
         });
-        if (error) throw error;
-        targetUser = data.user;
-        invited = true;
+
+        if (!error) {
+          targetUser = data.user;
+          invited = true;
+        } else if (isEmailRateLimit(error)) {
+          targetUser = await findUser();
+          if (!targetUser) {
+            const { data: generated, error: generateError } = await service.auth.admin.generateLink({
+              type: 'invite',
+              email,
+              options: { data: requestedMetadata, redirectTo },
+            });
+            if (generateError) throw generateError;
+            targetUser = generated.user;
+          }
+          emailPending = true;
+        } else {
+          throw error;
+        }
       }
     } else if (password && isSuper && role === 'company_admin') {
       const metadata = targetUser.user_metadata ?? {};
@@ -132,21 +179,51 @@ Deno.serve(async (req) => {
         passwordReady = true;
         passwordUpdated = true;
       }
+    } else if (!password && targetUser.user_metadata?.needs_password_setup === true) {
+      const metadata = targetUser.user_metadata ?? {};
+      const { data: updated, error: updateError } = await service.auth.admin.updateUserById(targetUser.id, {
+        user_metadata: { ...metadata, ...(name ? { name } : {}), needs_password_setup: true },
+      });
+      if (updateError) throw updateError;
+      targetUser = updated.user;
+
+      const { error: recoveryError } = await service.auth.resetPasswordForEmail(email, { redirectTo });
+      if (!recoveryError) invited = true;
+      else if (isEmailRateLimit(recoveryError)) emailPending = true;
+      else throw recoveryError;
     }
+
     if (!targetUser) return json({ error: 'No fue posible crear o localizar el usuario' }, 500);
 
-    const { error: membershipError } = await service.from('company_memberships').upsert({ company_id: companyId, user_id: targetUser.id, role, active: true }, { onConflict: 'company_id,user_id,role' });
+    const { error: membershipError } = await service.from('company_memberships').upsert({
+      company_id: companyId,
+      user_id: targetUser.id,
+      role,
+      active: true,
+    }, { onConflict: 'company_id,user_id,role' });
     if (membershipError) throw membershipError;
 
+    const roleName = role === 'driver' ? 'conductor' : role === 'operator' ? 'operadora' : 'administrador';
     const message = passwordReady
       ? (passwordUpdated ? 'Contraseña inicial definida y administrador vinculado' : 'Administrador creado con contraseña y vinculado')
-      : invited
-        ? 'Invitación enviada por correo'
-        : password
-          ? 'Usuario existente vinculado; su contraseña previa no fue reemplazada por seguridad'
-          : 'Usuario existente vinculado a la central';
+      : emailPending
+        ? `Cuenta de ${roleName} creada y vinculada. El correo quedó pendiente porque Supabase alcanzó temporalmente su límite de envío. Reenvía la invitación más tarde.`
+        : invited
+          ? `Invitación de ${roleName} enviada por correo`
+          : `Usuario existente vinculado como ${roleName}`;
 
-    return json({ ok: true, userId: targetUser.id, email, role, invited, passwordReady, passwordUpdated, message });
+    return json({
+      ok: true,
+      userId: targetUser.id,
+      email,
+      role,
+      invited,
+      emailPending,
+      passwordReady,
+      passwordUpdated,
+      needsPasswordSetup: targetUser.user_metadata?.needs_password_setup === true,
+      message,
+    });
   } catch (error) {
     console.error('invite-company-user', error);
     return json({ error: error instanceof Error ? error.message : 'No fue posible administrar el usuario' }, 500);
