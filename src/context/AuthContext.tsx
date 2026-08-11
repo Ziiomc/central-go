@@ -6,7 +6,7 @@ import type { Company, UserRole } from '../types';
 interface AuthProfile { id:string; name:string; phone:string|null; avatarUrl:string|null; globalRole:'super_admin'|'regional_partner'|'sales_partner'|null; active:boolean; }
 interface Membership { companyId:string; role:'company_admin'|'operator'|'driver'; active:boolean; company:Company; }
 export interface SaaSAccount { accountKind:'central'|'sales_partner'; companyId:string|null; status:string; trialStartedAt:string; trialEndsAt:string; currentPeriodEnd:string|null; }
-interface AuthContextValue { session:Session|null; authUser:SupabaseUser|null; profile:AuthProfile|null; memberships:Membership[]; companies:Company[]; saasAccount:SaaSAccount|null; effectiveRole:UserRole|null; loading:boolean; identityError:string|null; signInWithGoogle:()=>Promise<void>; signIn:(email:string,password:string)=>Promise<void>; signOut:()=>Promise<void>; refreshIdentity:()=>Promise<void>; }
+interface AuthContextValue { session:Session|null; authUser:SupabaseUser|null; profile:AuthProfile|null; memberships:Membership[]; companies:Company[]; saasAccount:SaaSAccount|null; effectiveRole:UserRole|null; loading:boolean; identityError:string|null; signInWithGoogle:()=>Promise<void>; signIn:(email:string,password:string)=>Promise<void>; signOut:()=>Promise<void>; updatePassword:(password:string)=>Promise<void>; refreshIdentity:()=>Promise<void>; }
 const AuthContext=createContext<AuthContextValue|undefined>(undefined);
 const mapCompany=(row:any):Company=>({id:row.id,name:row.name,code:row.code,phone:row.phone??'',address:row.address??'',vhfFrequency:row.vhf_frequency??undefined,totalVehicles:0,totalDrivers:0,active:row.active??true,logoUrl:row.logo_url??undefined});
 
@@ -27,8 +27,9 @@ export const AuthProvider:React.FC<React.PropsWithChildren>=({children})=>{
  const signInWithGoogle=async()=>{const db=requireSupabase();const {error}=await db.auth.signInWithOAuth({provider:'google',options:{redirectTo:`${window.location.origin}/`}});if(error)throw error;};
  const signIn=async(email:string,password:string)=>{const db=requireSupabase();const {error}=await db.auth.signInWithPassword({email:email.trim(),password});if(error)throw error;};
  const signOut=async()=>{const {error}=await requireSupabase().auth.signOut();if(error)throw error;};
+ const updatePassword=async(password:string)=>{if(password.length<10)throw new Error('La contraseña debe tener al menos 10 caracteres.');const db=requireSupabase();const metadata={...(session?.user.user_metadata??{}),needs_password_setup:false};const {data,error}=await db.auth.updateUser({password,data:metadata});if(error)throw error;if(data.user&&session)setSession({...session,user:data.user});};
  const effectiveRole=useMemo<UserRole|null>(()=>profile?.globalRole??memberships[0]?.role??null,[profile,memberships]);
- const value=useMemo(()=>({session,authUser:session?.user??null,profile,memberships,companies,saasAccount,effectiveRole,loading,identityError,signInWithGoogle,signIn,signOut,refreshIdentity:()=>loadIdentity(session)}),[session,profile,memberships,companies,saasAccount,effectiveRole,loading,identityError]);
+ const value=useMemo(()=>({session,authUser:session?.user??null,profile,memberships,companies,saasAccount,effectiveRole,loading,identityError,signInWithGoogle,signIn,signOut,updatePassword,refreshIdentity:()=>loadIdentity(session)}),[session,profile,memberships,companies,saasAccount,effectiveRole,loading,identityError]);
  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 export const useAuth=()=>{const c=useContext(AuthContext);if(!c)throw new Error('useAuth must be used within AuthProvider');return c;};
