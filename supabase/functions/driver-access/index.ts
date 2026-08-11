@@ -1,7 +1,7 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
-const OFFICIAL_APP_URL = 'https://central-go-one.vercel.app/';
 const OFFICIAL_DRIVER_URL = 'https://central-go-one.vercel.app/driver';
+const OFFICIAL_APP_URL = 'https://central-go-one.vercel.app/';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -20,21 +20,20 @@ const isEmailRateLimit = (error: unknown) => {
   return value?.status === 429 || /email rate limit|over_email_send_rate_limit|too many requests/i.test(text);
 };
 
-const buildCentralGoLink = (generated: any) => {
-  const actionLink = typeof generated?.properties?.action_link === 'string'
-    ? generated.properties.action_link
+const buildCentralGoLink = (generated: any, requestedType: 'invite' | 'recovery') => {
+  const tokenHash = typeof generated?.properties?.hashed_token === 'string'
+    ? generated.properties.hashed_token
     : '';
-  if (!actionLink) throw new Error('Supabase no devolvió un enlace de activación válido.');
+  const verificationType = generated?.properties?.verification_type === 'invite' || generated?.properties?.verification_type === 'recovery'
+    ? generated.properties.verification_type
+    : requestedType;
 
-  const confirmationUrl = new URL(actionLink);
-  if (confirmationUrl.protocol !== 'https:' || confirmationUrl.hostname !== 'cuazdzsvgwrnpczbvrgx.supabase.co' || confirmationUrl.pathname !== '/auth/v1/verify') {
-    throw new Error('Supabase devolvió un enlace de activación inesperado.');
-  }
-  confirmationUrl.searchParams.set('redirect_to', OFFICIAL_DRIVER_URL);
+  if (!tokenHash) throw new Error('Supabase no devolvió un token de activación válido.');
 
   const wrapper = new URL(OFFICIAL_APP_URL);
   wrapper.searchParams.set('driver_activation', '1');
-  wrapper.searchParams.set('confirmation_url', confirmationUrl.toString());
+  wrapper.searchParams.set('driver_token_hash', tokenHash);
+  wrapper.searchParams.set('driver_type', verificationType);
   return wrapper.toString();
 };
 
@@ -145,7 +144,7 @@ Deno.serve(async (req) => {
         },
       });
       if (generateError) throw generateError;
-      return buildCentralGoLink(generated);
+      return buildCentralGoLink(generated, linkType);
     };
 
     if (action === 'link') {
@@ -162,8 +161,8 @@ Deno.serve(async (req) => {
         message: active
           ? 'Generamos un enlace seguro de recuperación protegido por Central GO.'
           : emailConfirmed
-            ? 'Generamos un enlace seguro para crear la contraseña. El conductor deberá confirmar la activación dentro de Central GO.'
-            : 'Generamos un enlace seguro de activación. El conductor deberá confirmar la activación dentro de Central GO.',
+            ? 'Generamos un enlace seguro para crear la contraseña dentro de Central GO.'
+            : 'Generamos un enlace seguro de activación dentro de Central GO.',
       });
     }
 
