@@ -30,11 +30,14 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => null) as {
       companyId?: string;
       userId?: string;
+      action?: 'status' | 'send' | 'link';
     } | null;
 
     const companyId = body?.companyId?.trim();
     const userId = body?.userId?.trim();
+    const action = body?.action ?? 'send';
     if (!companyId || !userId) return json({ error: 'Central y conductor son obligatorios' }, 400);
+    if (!['status', 'send', 'link'].includes(action)) return json({ error: 'Acción inválida' }, 400);
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
@@ -89,7 +92,54 @@ Deno.serve(async (req) => {
     const email = targetUser.email?.trim().toLowerCase();
     if (!email) return json({ error: 'El conductor no tiene un correo asociado' }, 400);
 
-    const needsSetup = targetUser.user_metadata?.needs_password_setup === true || !targetUser.email_confirmed_at;
+    const emailConfirmed = Boolean(targetUser.email_confirmed_at);
+    const needsSetup = targetUser.user_metadata?.needs_password_setup === true || !emailConfirmed;
+    const active = !needsSetup;
+
+    if (action === 'status') {
+      return json({
+        ok: true,
+        email,
+        active,
+        sent: false,
+        emailPending: false,
+        needsSetup,
+        emailConfirmed,
+        message: active
+          ? 'Cuenta activada y lista para iniciar sesión.'
+          : 'Cuenta pendiente de activación o creación de contraseña.',
+      });
+    }
+
+    const metadata = targetUser.user_metadata ?? {};
+
+    if (action === 'link') {
+      const linkType = emailConfirmed ? 'recovery' : 'invite';
+      const { data: generated, error: generateError } = await service.auth.admin.generateLink({
+        type: linkType,
+        email,
+        options: {
+          data: needsSetup ? { ...metadata, needs_password_setup: true } : metadata,
+          redirectTo: OFFICIAL_DRIVER_URL,
+        },
+      });
+      if (generateError) throw generateError;
+
+      return json({
+        ok: true,
+        email,
+        active,
+        sent: false,
+        emailPending: false,
+        needsSetup,
+        emailConfirmed,
+        actionLink: generated.properties?.action_link ?? null,
+        message: active
+          ? 'Generamos un enlace seguro de recuperación para este conductor.'
+          : 'Generamos un enlace seguro de activación para este conductor.',
+      });
+    }
+
     if (!needsSetup) {
       return json({
         ok: true,
@@ -97,11 +147,12 @@ Deno.serve(async (req) => {
         active: true,
         sent: false,
         emailPending: false,
+        needsSetup: false,
+        emailConfirmed,
         message: 'La cuenta del conductor ya está activada y lista para iniciar sesión.',
       });
     }
 
-    const metadata = targetUser.user_metadata ?? {};
     if (metadata.needs_password_setup !== true) {
       const { error: metadataError } = await service.auth.admin.updateUserById(userId, {
         user_metadata: { ...metadata, needs_password_setup: true },
@@ -120,13 +171,15 @@ Deno.serve(async (req) => {
         active: false,
         sent: true,
         emailPending: false,
+        needsSetup: true,
+        emailConfirmed,
         message: `Enviamos un nuevo acceso a ${email}. Debe abrir el correo más reciente para crear su contraseña.`,
       });
     }
 
     if (!isEmailRateLimit(sendError)) throw sendError;
 
-    const linkType = targetUser.email_confirmed_at ? 'recovery' : 'invite';
+    const linkType = emailConfirmed ? 'recovery' : 'invite';
     const { data: generated, error: generateError } = await service.auth.admin.generateLink({
       type: linkType,
       email,
@@ -143,11 +196,13 @@ Deno.serve(async (req) => {
       active: false,
       sent: false,
       emailPending: true,
+      needsSetup: true,
+      emailConfirmed,
       actionLink: generated.properties?.action_link ?? null,
       message: 'Supabase alcanzó temporalmente su límite de correos. Generamos un enlace seguro de activación para que puedas enviárselo directamente al conductor.',
     });
   } catch (error) {
     console.error('driver-access', error);
-    return json({ error: error instanceof Error ? error.message : 'No fue posible generar el acceso del conductor' }, 500);
+    return json({ error: error instanceof Error ? error.message : 'No fue posible administrar el acceso del conductor' }, 500);
   }
 });
