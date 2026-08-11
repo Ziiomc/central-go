@@ -1,5 +1,39 @@
 @import "tailwindcss";
 
+/* Mobile viewport safety: allow long forms to scroll past browser UI and gesture bars. */
+html,
+body,
+#root {
+  min-height: 100%;
+  min-height: 100dvh;
+}
+
+html,
+body {
+  width: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: auto;
+}
+
+body {
+  margin: 0;
+}
+
+.mobile-safe-page {
+  min-height: 100dvh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: calc(7rem + env(safe-area-inset-bottom, 0px));
+}
+
+.mobile-sticky-action {
+  position: sticky;
+  bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
+  z-index: 20;
+}
+
 /* Leaflet map marker smooth movement animation */
 .leaflet-marker-icon.custom-taxi-pin {
   transition: transform 1.2s cubic-bezier(0.25, 1, 0.5, 1) !important;
