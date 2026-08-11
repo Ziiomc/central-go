@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Car, Plus, Search, Smartphone, Users } from 'lucide-react';
+import { Car, MailCheck, Plus, Search, Smartphone, Users } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { inviteCompanyUser } from '../../lib/userRepository';
 
 export const DriversModule: React.FC = () => {
-  const { drivers, vehicles, addDriver } = useApp();
+  const { drivers, vehicles, addDriver, currentCompany } = useApp();
   const [searchTerm, setSearchTerm] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [unitNumber, setUnitNumber] = useState('Móvil ');
@@ -14,6 +15,7 @@ export const DriversModule: React.FC = () => {
   const [licenseExpiry, setLicenseExpiry] = useState('');
   const [selectedVehicleId, setSelectedVehicleId] = useState('');
   const [formError, setFormError] = useState('');
+  const [notice, setNotice] = useState('');
   const [saving, setSaving] = useState(false);
 
   const filteredDrivers = drivers.filter((driver) =>
@@ -36,15 +38,27 @@ export const DriversModule: React.FC = () => {
   const handleAddSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setFormError('');
-    if (accountEmail.trim() && !accountEmail.includes('@')) {
-      setFormError('El correo de acceso no es válido. Déjalo vacío si el conductor no usará la app.');
+    setNotice('');
+
+    const normalizedEmail = accountEmail.trim().toLowerCase();
+    if (!normalizedEmail.includes('@')) {
+      setFormError('Ingresa el correo del conductor. Ese correo será su acceso personal a Central GO Conductor.');
       return;
     }
+
     setSaving(true);
     try {
+      const access = await inviteCompanyUser({
+        companyId: currentCompany.id,
+        name: name.trim(),
+        email: normalizedEmail,
+        role: 'driver',
+        redirectTo: 'https://central-go-one.vercel.app/driver',
+      });
+
       await addDriver({
-        userId: accountEmail.trim(),
-        companyId: '',
+        userId: access.userId,
+        companyId: currentCompany.id,
         vehicleId: selectedVehicleId || undefined,
         unitNumber: unitNumber.trim(),
         name: name.trim(),
@@ -62,6 +76,12 @@ export const DriversModule: React.FC = () => {
         commissionBalance: 0,
         sosActive: false,
       });
+
+      setNotice(
+        access.emailPending
+          ? `${name.trim()} quedó registrado y vinculado al móvil. El correo de acceso está pendiente porque Supabase alcanzó temporalmente su límite de envío; puedes reenviarlo desde Usuarios y Permisos.`
+          : `${name.trim()} quedó registrado. Enviamos el acceso a ${normalizedEmail}; al abrirlo podrá crear su contraseña y entrar directamente a Central GO Conductor.`
+      );
       resetForm();
       setIsAddModalOpen(false);
     } catch (err) {
@@ -76,10 +96,13 @@ export const DriversModule: React.FC = () => {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="font-extrabold text-2xl text-white tracking-tight flex items-center gap-2"><Users className="w-6 h-6 text-blue-500" />Conductores</h1>
-          <p className="text-xs text-zinc-400 mt-1">Padrón real de conductores, vehículo asignado y acceso opcional a Central GO Conductor.</p>
+          <p className="text-xs text-zinc-400 mt-1">Registra al conductor una sola vez: su correo recibe el acceso y queda vinculado al móvil automáticamente.</p>
         </div>
-        <button onClick={() => setIsAddModalOpen(true)} className="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-extrabold text-xs rounded-xl transition flex items-center gap-2"><Plus className="w-4 h-4" />Registrar conductor</button>
+        <button onClick={() => { setNotice(''); setIsAddModalOpen(true); }} className="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-extrabold text-xs rounded-xl transition flex items-center gap-2"><Plus className="w-4 h-4" />Registrar conductor</button>
       </div>
+
+      {notice && <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-xs font-bold leading-relaxed text-emerald-200"><MailCheck className="mr-2 inline h-4 w-4" />{notice}</div>}
+      {formError && !isAddModalOpen && <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-xs font-bold text-rose-200">{formError}</div>}
 
       <div className="bg-[#0d0d0f] p-4 rounded-xl border border-zinc-800">
         <div className="relative w-full md:w-96"><Search className="w-4 h-4 text-zinc-500 absolute left-3 top-3" /><input type="text" placeholder="Buscar por nombre, móvil o teléfono..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-[#121215] border border-zinc-800 rounded-lg pl-9 pr-4 py-2 text-xs text-zinc-200 focus:outline-none focus:border-blue-500" /></div>
@@ -102,7 +125,7 @@ export const DriversModule: React.FC = () => {
 
               <div className="mt-3 grid grid-cols-2 gap-2"><MiniStat label="Viajes completados" value={String(driver.totalTripsCompleted)} /><MiniStat label="Recaudado hoy" value={`$${driver.todayEarnings.toLocaleString('es-CL')}`} /></div>
 
-              <div className={`mt-3 flex items-center gap-2 rounded-xl border p-3 text-[10px] ${driver.userId ? 'border-emerald-500/20 bg-emerald-500/5 text-emerald-200' : 'border-zinc-800 bg-zinc-950/50 text-zinc-500'}`}><Smartphone className="h-4 w-4 shrink-0" /><span>{driver.userId ? 'Cuenta vinculada: puede usar Central GO Conductor si su plan lo permite.' : 'Sin cuenta vinculada: disponible para despacho manual, sin PWA/GPS.'}</span></div>
+              <div className={`mt-3 flex items-center gap-2 rounded-xl border p-3 text-[10px] ${driver.userId ? 'border-emerald-500/20 bg-emerald-500/5 text-emerald-200' : 'border-zinc-800 bg-zinc-950/50 text-zinc-500'}`}><Smartphone className="h-4 w-4 shrink-0" /><span>{driver.userId ? 'Cuenta profesional vinculada: GPS, carreras, estados, ganancias, comisiones y SOS.' : 'Sin cuenta vinculada.'}</span></div>
             </article>
           );
         })}
@@ -110,9 +133,9 @@ export const DriversModule: React.FC = () => {
       {filteredDrivers.length === 0 && <div className="rounded-2xl border border-zinc-800 bg-[#0d0d0f] p-10 text-center text-xs text-zinc-500">No hay conductores con este filtro.</div>}
 
       {isAddModalOpen && (
-        <div className="fixed inset-0 bg-zinc-950/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
-          <div className="bg-[#0d0d0f] border border-zinc-800 rounded-3xl max-w-lg w-full p-6 shadow-2xl">
-            <div><h3 className="font-black text-lg text-white">Registrar conductor</h3><p className="mt-1 text-xs text-zinc-500">El correo de acceso es opcional. Para usar la app móvil, primero invita la cuenta desde Usuarios y Permisos.</p></div>
+        <div className="fixed inset-0 bg-zinc-950/85 backdrop-blur-md z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-[#0d0d0f] border border-zinc-800 rounded-3xl max-w-lg w-full p-6 shadow-2xl my-auto">
+            <div><h3 className="font-black text-lg text-white">Registrar conductor y enviar acceso</h3><p className="mt-1 text-xs leading-relaxed text-zinc-500">Central GO creará la cuenta del conductor, enviará el enlace para definir su contraseña y lo vinculará a este móvil en un solo paso.</p></div>
             <form onSubmit={handleAddSubmit} className="mt-5 grid gap-3 sm:grid-cols-2">
               <Field label="Número de móvil" value={unitNumber} onChange={setUnitNumber} placeholder="Móvil 25" />
               <Field label="Nombre completo" value={name} onChange={setName} placeholder="Nombre y apellido" />
@@ -120,9 +143,9 @@ export const DriversModule: React.FC = () => {
               <Field label="Licencia" value={licenseNumber} onChange={setLicenseNumber} placeholder="N° licencia" />
               <label className="block"><span className="text-[10px] font-black uppercase tracking-wider text-zinc-500">Vencimiento licencia</span><div className="mt-1 flex w-full min-w-0 rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2.5"><input required type="date" value={licenseExpiry} onChange={(e) => setLicenseExpiry(e.target.value)} className="block w-full min-w-0 border-0 bg-transparent p-0 text-sm text-zinc-200" /></div></label>
               <label className="block"><span className="text-[10px] font-black uppercase tracking-wider text-zinc-500">Vehículo asignado</span><select value={selectedVehicleId} onChange={(e) => setSelectedVehicleId(e.target.value)} className="mt-1 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-200"><option value="">Sin vehículo</option>{vehicles.map((vehicle) => <option key={vehicle.id} value={vehicle.id}>{vehicle.unitNumber} · {vehicle.licensePlate}</option>)}</select></label>
-              <div className="sm:col-span-2"><label className="text-[10px] font-black uppercase tracking-wider text-zinc-500">Correo de cuenta Central GO <span className="normal-case font-normal text-zinc-700">(opcional)</span></label><input type="email" value={accountEmail} onChange={(e) => setAccountEmail(e.target.value)} placeholder="conductor@correo.cl" className="mt-1 w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2.5 text-sm text-zinc-200 focus:outline-none focus:border-blue-500" /><p className="mt-1.5 text-[10px] text-zinc-600">Start: déjalo vacío para despacho manual. Pro/Enterprise: invita primero al conductor y luego usa el mismo correo aquí.</p></div>
-              {formError && <div className="sm:col-span-2 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">{formError}</div>}
-              <div className="sm:col-span-2 flex gap-2 pt-2"><button type="button" onClick={() => { resetForm(); setIsAddModalOpen(false); }} className="w-1/2 py-3 bg-zinc-800 text-zinc-300 font-bold text-xs rounded-xl">Cancelar</button><button type="submit" disabled={saving} className="w-1/2 py-3 bg-blue-600 hover:bg-blue-500 text-white font-black text-xs rounded-xl disabled:opacity-50">{saving ? 'Guardando…' : 'Guardar conductor'}</button></div>
+              <div className="sm:col-span-2"><label className="text-[10px] font-black uppercase tracking-wider text-zinc-500">Correo personal del conductor</label><input required type="email" value={accountEmail} onChange={(e) => setAccountEmail(e.target.value)} placeholder="conductor@correo.cl" className="mt-1 w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2.5 text-sm text-zinc-200 focus:outline-none focus:border-blue-500" /><p className="mt-1.5 text-[10px] leading-relaxed text-zinc-600">A este correo llegará el acceso seguro. Al abrirlo creará su contraseña y Central GO lo llevará a su interfaz de conductor.</p></div>
+              {formError && <div className="sm:col-span-2 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs leading-relaxed text-rose-200">{formError}</div>}
+              <div className="sm:col-span-2 flex gap-2 pt-2"><button type="button" onClick={() => { resetForm(); setIsAddModalOpen(false); }} className="w-1/2 py-3 bg-zinc-800 text-zinc-300 font-bold text-xs rounded-xl">Cancelar</button><button type="submit" disabled={saving} className="w-1/2 py-3 bg-blue-600 hover:bg-blue-500 text-white font-black text-xs rounded-xl disabled:opacity-50">{saving ? 'Creando acceso…' : 'Registrar y enviar acceso'}</button></div>
             </form>
           </div>
         </div>
