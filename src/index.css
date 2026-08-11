@@ -1,30 +1,67 @@
 @import "tailwindcss";
 
-/* Mobile viewport safety: allow long forms to scroll past browser UI and gesture bars. */
+/* Mobile viewport safety: use the browser page as the only vertical scroller for forms. */
 html,
 body,
 #root {
+  width: 100%;
   min-height: 100%;
-  min-height: 100dvh;
 }
 
 html,
 body {
-  width: 100%;
+  margin: 0;
   overflow-x: hidden;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: auto;
 }
 
-body {
-  margin: 0;
+@media (max-width: 767px) {
+  html,
+  body,
+  #root {
+    height: auto !important;
+    max-height: none !important;
+    min-height: 100% !important;
+    overflow: visible !important;
+    position: static !important;
+  }
+
+  body {
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    touch-action: pan-y;
+  }
+
+  /* Auth/onboarding pages must never become an inner viewport on phones. */
+  main:has(form),
+  main.mobile-safe-page {
+    height: auto !important;
+    max-height: none !important;
+    min-height: 100svh !important;
+    overflow: visible !important;
+    position: relative !important;
+    padding-bottom: calc(9rem + env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  main:has(form) > *,
+  main.mobile-safe-page > * {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  main:has(form) form,
+  main.mobile-safe-page form {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    padding-bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
+  }
 }
 
 .mobile-safe-page {
   min-height: 100dvh;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
   padding-bottom: calc(7rem + env(safe-area-inset-bottom, 0px));
 }
 
