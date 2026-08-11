@@ -1,5 +1,6 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
+const OFFICIAL_APP_URL = 'https://central-go-one.vercel.app/';
 const OFFICIAL_DRIVER_URL = 'https://central-go-one.vercel.app/driver';
 
 const corsHeaders = {
@@ -19,21 +20,22 @@ const isEmailRateLimit = (error: unknown) => {
   return value?.status === 429 || /email rate limit|over_email_send_rate_limit|too many requests/i.test(text);
 };
 
-const buildCentralGoLink = (generated: any, fallbackType: 'invite' | 'recovery') => {
-  const properties = generated?.properties ?? {};
-  const tokenHash = typeof properties.hashed_token === 'string' ? properties.hashed_token : '';
-  const verificationType = typeof properties.verification_type === 'string' ? properties.verification_type : fallbackType;
+const buildCentralGoLink = (generated: any) => {
+  const actionLink = typeof generated?.properties?.action_link === 'string'
+    ? generated.properties.action_link
+    : '';
+  if (!actionLink) throw new Error('Supabase no devolvió un enlace de activación válido.');
 
-  if (!tokenHash) {
-    const actionLink = typeof properties.action_link === 'string' ? properties.action_link : '';
-    if (!actionLink) throw new Error('Supabase no devolvió un token de activación válido.');
-    return actionLink;
+  const confirmationUrl = new URL(actionLink);
+  if (confirmationUrl.protocol !== 'https:' || confirmationUrl.hostname !== 'cuazdzsvgwrnpczbvrgx.supabase.co' || confirmationUrl.pathname !== '/auth/v1/verify') {
+    throw new Error('Supabase devolvió un enlace de activación inesperado.');
   }
+  confirmationUrl.searchParams.set('redirect_to', OFFICIAL_DRIVER_URL);
 
-  const url = new URL(OFFICIAL_DRIVER_URL);
-  url.searchParams.set('token_hash', tokenHash);
-  url.searchParams.set('type', verificationType);
-  return url.toString();
+  const wrapper = new URL(OFFICIAL_APP_URL);
+  wrapper.searchParams.set('driver_activation', '1');
+  wrapper.searchParams.set('confirmation_url', confirmationUrl.toString());
+  return wrapper.toString();
 };
 
 Deno.serve(async (req) => {
@@ -132,17 +134,22 @@ Deno.serve(async (req) => {
 
     const metadata = targetUser.user_metadata ?? {};
 
-    if (action === 'link') {
+    const generateSafeLink = async () => {
       const linkType: 'invite' | 'recovery' = emailConfirmed ? 'recovery' : 'invite';
       const { data: generated, error: generateError } = await service.auth.admin.generateLink({
         type: linkType,
         email,
         options: {
           data: needsSetup ? { ...metadata, needs_password_setup: true } : metadata,
+          redirectTo: OFFICIAL_DRIVER_URL,
         },
       });
       if (generateError) throw generateError;
+      return buildCentralGoLink(generated);
+    };
 
+    if (action === 'link') {
+      const actionLink = await generateSafeLink();
       return json({
         ok: true,
         email,
@@ -151,12 +158,12 @@ Deno.serve(async (req) => {
         emailPending: false,
         needsSetup,
         emailConfirmed,
-        actionLink: buildCentralGoLink(generated, linkType),
+        actionLink,
         message: active
-          ? 'Generamos un enlace seguro de recuperación directamente en Central GO.'
+          ? 'Generamos un enlace seguro de recuperación protegido por Central GO.'
           : emailConfirmed
-            ? 'Generamos un enlace seguro para crear la contraseña directamente en Central GO.'
-            : 'Generamos un enlace seguro de activación directamente en Central GO.',
+            ? 'Generamos un enlace seguro para crear la contraseña. El conductor deberá confirmar la activación dentro de Central GO.'
+            : 'Generamos un enlace seguro de activación. El conductor deberá confirmar la activación dentro de Central GO.',
       });
     }
 
@@ -199,16 +206,7 @@ Deno.serve(async (req) => {
 
     if (!isEmailRateLimit(sendError)) throw sendError;
 
-    const linkType: 'invite' | 'recovery' = emailConfirmed ? 'recovery' : 'invite';
-    const { data: generated, error: generateError } = await service.auth.admin.generateLink({
-      type: linkType,
-      email,
-      options: {
-        data: { ...metadata, needs_password_setup: true },
-      },
-    });
-    if (generateError) throw generateError;
-
+    const actionLink = await generateSafeLink();
     return json({
       ok: true,
       email,
@@ -217,8 +215,8 @@ Deno.serve(async (req) => {
       emailPending: true,
       needsSetup: true,
       emailConfirmed,
-      actionLink: buildCentralGoLink(generated, linkType),
-      message: 'El correo está temporalmente limitado. Generamos un enlace seguro que abre directamente Central GO para crear la contraseña.',
+      actionLink,
+      message: 'El correo está temporalmente limitado. Generamos un enlace protegido por Central GO para que puedas enviárselo directamente al conductor.',
     });
   } catch (error) {
     console.error('driver-access', error);
