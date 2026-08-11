@@ -2,6 +2,15 @@ import React, { useState } from 'react';
 import centralGoLogo from '../../assets/images/central-go-logo.svg';
 import { useAuth } from '../../context/AuthContext';
 
+const friendlyAuthError = (error: unknown, fallback: string) => {
+  const message = error instanceof Error ? error.message : String(error ?? '');
+  if (/email rate limit exceeded|over_email_send_rate_limit|too many requests|rate limit/i.test(message)) {
+    return 'Se alcanzó temporalmente el límite de correos de recuperación. No sigas solicitando enlaces; espera un momento y vuelve a intentarlo una sola vez.';
+  }
+  if (/invalid login credentials/i.test(message)) return 'Correo o contraseña incorrectos.';
+  return message || fallback;
+};
+
 export const LoginScreen: React.FC = () => {
   const { signInWithGoogle, signIn, requestPasswordReset, identityError } = useAuth();
   const [email, setEmail] = useState('');
@@ -13,7 +22,7 @@ export const LoginScreen: React.FC = () => {
   const googleLogin = async () => {
     setBusy(true); setError(''); setNotice('');
     try { await signInWithGoogle(); }
-    catch (err) { setError(err instanceof Error ? err.message : 'No fue posible continuar con Google.'); setBusy(false); }
+    catch (err) { setError(friendlyAuthError(err, 'No fue posible continuar con Google.')); setBusy(false); }
   };
 
   const emailLogin = async (event: React.FormEvent) => {
@@ -21,8 +30,7 @@ export const LoginScreen: React.FC = () => {
     setBusy(true); setError(''); setNotice('');
     try { await signIn(email, password); }
     catch (err) {
-      const message = err instanceof Error ? err.message : '';
-      setError(/invalid login credentials/i.test(message) ? 'Correo o contraseña incorrectos.' : (message || 'No fue posible iniciar sesión.'));
+      setError(friendlyAuthError(err, 'No fue posible iniciar sesión.'));
       setBusy(false);
     }
   };
@@ -33,7 +41,7 @@ export const LoginScreen: React.FC = () => {
       await requestPasswordReset(email);
       setNotice('Te enviamos un enlace seguro. Ábrelo desde tu correo para crear una nueva contraseña.');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'No fue posible enviar el enlace de recuperación.');
+      setError(friendlyAuthError(err, 'No fue posible enviar el enlace de recuperación.'));
     } finally { setBusy(false); }
   };
 
