@@ -43,7 +43,7 @@ if (!app.includes("location.replace('/driver')")) fail('Falta redirección autom
 if (!app.includes('PasswordSetupGate') || !app.includes('needs_password_setup')) fail('Falta onboarding de contraseña para invitaciones.');
 if (!auth.includes('updatePassword') || !auth.includes('needs_password_setup:false')) fail('El flujo de activación no completa la creación de contraseña.');
 
-for (const required of ["mode: 'official'", 'isDemo: false', 'isCommercial: true', 'commercialBackendIntegrated = true', "OFFICIAL_APP_URL = 'https://go-one.vercel.app'"]) {
+for (const required of ["mode: 'official'", 'isDemo: false', 'isCommercial: true', 'commercialBackendIntegrated = true', "OFFICIAL_APP_URL = 'https://central-go-one.vercel.app'"]) {
   if (!runtime.includes(required)) fail(`Runtime oficial incompleto: ${required}`);
 }
 
@@ -123,6 +123,6 @@ for (const source of [inviteCompanyUser, inviteNetworkUser]) {
   if (!source.includes('SUPABASE_SERVICE_ROLE_KEY')) fail('Edge Function de invitación no usa canal administrativo del servidor.');
 }
 
-if (!inviteCompanyUser.includes('go-one.vercel.app')) fail('Las invitaciones de centrales no apuntan al dominio oficial actual.');
+if (!inviteCompanyUser.includes('central-go-one.vercel.app')) fail('Las invitaciones de centrales no apuntan al dominio oficial actual.');
 
 if (!process.exitCode) console.log('Central GO official static checks: OK');
