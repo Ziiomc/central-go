@@ -34,14 +34,12 @@ import { VHFDispatchModal } from './components/modals/VHFDispatchModal';
 import { NotificationsDrawer } from './components/notifications/NotificationsDrawer';
 import { LoginScreen } from './components/auth/LoginScreen';
 import { PasswordSetupScreen } from './components/auth/PasswordSetupScreen';
+import { SelfServiceOnboarding } from './components/auth/SelfServiceOnboarding';
+import { SaasAccessGate } from './components/billing/SaasAccessGate';
 import { registerServiceWorker } from './lib/pwa';
 import { ErrorBoundary } from './components/system/ErrorBoundary';
 import { CommercialGate } from './components/system/CommercialGate';
 import { ArrowLeft, Loader2, Menu, ShieldAlert } from 'lucide-react';
-
-const SalesDemoScreen = React.lazy(() =>
-  import('./components/demo/SalesDemoScreen').then((module) => ({ default: module.SalesDemoScreen }))
-);
 
 const MainAppContent: React.FC = () => {
   const { currentRole, activeModule, setNewTripModalOpen } = useApp();
@@ -117,14 +115,12 @@ const WrongDriverRoute: React.FC = () => (
 );
 
 const AuthenticatedShell: React.FC = () => {
-  const { session, authUser, loading, effectiveRole } = useAuth();
+  const { session, authUser, profile, loading, effectiveRole, identityError } = useAuth();
   const driverPath = window.location.pathname === '/driver' || window.location.pathname.startsWith('/driver/');
   const recoveryPath = window.location.pathname === '/reset-password' || window.location.pathname.startsWith('/reset-password/');
   const needsPasswordSetup = Boolean(authUser?.user_metadata?.needs_password_setup);
 
-  useEffect(() => {
-    registerServiceWorker();
-  }, []);
+  useEffect(() => { registerServiceWorker(); }, []);
 
   useEffect(() => {
     if (!loading && session && !needsPasswordSetup && !recoveryPath && effectiveRole === 'driver' && !driverPath) {
@@ -134,26 +130,16 @@ const AuthenticatedShell: React.FC = () => {
 
   if (loading) return <main className="min-h-screen bg-zinc-950 text-zinc-200 flex items-center justify-center"><div className="flex items-center gap-3 text-sm font-bold"><Loader2 className="h-5 w-5 animate-spin text-amber-400" />Validando sesión segura…</div></main>;
   if (!session) return <LoginScreen />;
+  if (identityError && !profile) return <main className="min-h-screen bg-zinc-950 p-5 text-zinc-100 flex items-center justify-center"><section className="max-w-md rounded-3xl border border-rose-500/25 bg-[#0d0d0f] p-7 text-center"><ShieldAlert className="mx-auto h-8 w-8 text-rose-300" /><h1 className="mt-4 text-xl font-black">No pudimos cargar tu cuenta</h1><p className="mt-2 text-sm text-zinc-400">{identityError}</p></section></main>;
   if (needsPasswordSetup || recoveryPath) return <PasswordSetupScreen recovery={recoveryPath} />;
+  if (!effectiveRole) return <SelfServiceOnboarding />;
   if (effectiveRole === 'driver' && !driverPath) return <main className="min-h-screen bg-zinc-950 text-zinc-300 flex items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-amber-400" /></main>;
   if (driverPath && effectiveRole !== 'driver') return <WrongDriverRoute />;
-  if (driverPath) return <CommercialAppProvider><DriverMobileView /></CommercialAppProvider>;
-  return <CommercialAppProvider><MainAppContent /></CommercialAppProvider>;
+  if (driverPath) return <SaasAccessGate><CommercialAppProvider><DriverMobileView /></CommercialAppProvider></SaasAccessGate>;
+  return <SaasAccessGate><CommercialAppProvider><MainAppContent /></CommercialAppProvider></SaasAccessGate>;
 };
 
 export default function App() {
-  const demoRequested = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('demo') === '1';
-
-  if (demoRequested) {
-    return (
-      <ErrorBoundary>
-        <React.Suspense fallback={<main className="min-h-screen bg-zinc-950 text-zinc-300 flex items-center justify-center"><div className="flex items-center gap-3 text-sm font-bold"><Loader2 className="h-5 w-5 animate-spin text-amber-400" />Preparando demo comercial…</div></main>}>
-          <SalesDemoScreen />
-        </React.Suspense>
-      </ErrorBoundary>
-    );
-  }
-
   return (
     <ErrorBoundary>
       <AuthProvider>
