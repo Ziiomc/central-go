@@ -5,6 +5,7 @@ import { inviteCompanyUser } from '../../lib/userRepository';
 import { updateDriverProfile } from '../../lib/driverManagementRepository';
 import { requestDriverAccess } from '../../lib/driverAccessRepository';
 import type { Driver } from '../../types';
+import { DriverAccountAccessPanel } from './DriverAccountAccessPanel';
 
 export const DriversModule: React.FC = () => {
   const { drivers, vehicles, addDriver, currentCompany } = useApp();
@@ -203,7 +204,7 @@ export const DriversModule: React.FC = () => {
     });
 
     try {
-      const result = await requestDriverAccess({ companyId: currentCompany.id, userId: driver.userId });
+      const result = await requestDriverAccess({ companyId: currentCompany.id, userId: driver.userId, action: 'send' });
       if (result.actionLink) {
         setAccessLinks((current) => ({ ...current, [driver.id]: result.actionLink! }));
       } else {
@@ -353,6 +354,7 @@ export const DriversModule: React.FC = () => {
               <Field label="Licencia" value={editLicenseNumber} onChange={setEditLicenseNumber} placeholder="N° licencia" />
               <label className="block"><span className="text-[10px] font-black uppercase tracking-wider text-zinc-500">Vencimiento licencia</span><div className="mt-1 flex w-full min-w-0 rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2.5"><input required type="date" value={editLicenseExpiry} onChange={(e) => setEditLicenseExpiry(e.target.value)} className="block w-full min-w-0 border-0 bg-transparent p-0 text-sm text-zinc-200" /></div></label>
               <label className="block"><span className="text-[10px] font-black uppercase tracking-wider text-zinc-500">Vehículo asignado</span><select value={editVehicleId} onChange={(e) => setEditVehicleId(e.target.value)} className="mt-1 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-200"><option value="">Sin vehículo</option>{vehicles.map((vehicle) => <option key={vehicle.id} value={vehicle.id} disabled={vehicleIsOccupied(vehicle.id, editingDriver.id)}>{vehicle.unitNumber} · {vehicle.licensePlate}{vehicleIsOccupied(vehicle.id, editingDriver.id) ? ' · ya asignado' : ''}</option>)}</select></label>
+              <DriverAccountAccessPanel driver={editingDriver} companyId={currentCompany.id} />
               {editError && <div className="sm:col-span-2 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs leading-relaxed text-rose-200">{editError}</div>}
               <div className="sm:col-span-2 flex gap-2 pt-2"><button type="button" onClick={closeEdit} className="w-1/2 py-3 bg-zinc-800 text-zinc-300 font-bold text-xs rounded-xl">Cancelar</button><button type="submit" disabled={editSaving} className="w-1/2 py-3 bg-blue-600 hover:bg-blue-500 text-white font-black text-xs rounded-xl disabled:opacity-50">{editSaving ? 'Guardando…' : 'Guardar cambios'}</button></div>
             </form>
