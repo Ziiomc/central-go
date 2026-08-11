@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Car, Headphones, Loader2, Lock, MailPlus, RefreshCw, ShieldCheck, UserRound, X } from 'lucide-react';
+import { Car, Headphones, KeyRound, Loader2, Lock, MailPlus, RefreshCw, ShieldCheck, UserRound, X } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { inviteCompanyUser, loadCompanyUsers, type CompanyUserDirectoryItem, type CompanyUserRole } from '../../lib/userRepository';
 
@@ -16,7 +16,7 @@ const roleIcon: Record<CompanyUserRole, React.ReactNode> = {
 };
 
 export const UsersModule: React.FC = () => {
-  const { currentCompany } = useApp();
+  const { currentCompany, currentRole } = useApp();
   const [users, setUsers] = useState<CompanyUserDirectoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -24,6 +24,9 @@ export const UsersModule: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState('');
   const [form, setForm] = useState({ name: '', email: '', role: 'operator' as 'operator' | 'driver' });
+  const [passwordUser, setPasswordUser] = useState<CompanyUserDirectoryItem | null>(null);
+  const [initialPassword, setInitialPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
 
   const reload = async () => {
     if (!currentCompany.id || currentCompany.id === 'network') return;
@@ -57,7 +60,7 @@ export const UsersModule: React.FC = () => {
         name: form.name,
         email: form.email,
         role: form.role,
-        redirectTo: `${window.location.origin}${form.role === 'driver' ? '/driver' : '/'}`,
+        redirectTo: `https://central-go-one.vercel.app${form.role === 'driver' ? '/driver' : '/'}`,
       });
       setNotice(result.message + (form.role === 'driver' ? '. Luego vincula su móvil desde Conductores.' : '.'));
       setInviteOpen(false);
@@ -70,13 +73,43 @@ export const UsersModule: React.FC = () => {
     }
   };
 
+  const saveInitialPassword = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!passwordUser) return;
+    if (initialPassword.length < 10) { setError('La contraseña debe tener al menos 10 caracteres.'); return; }
+    if (initialPassword !== confirmPassword) { setError('Las contraseñas no coinciden.'); return; }
+    setSaving(true); setError(''); setNotice('');
+    try {
+      const result = await inviteCompanyUser({
+        companyId: currentCompany.id,
+        name: passwordUser.name,
+        email: passwordUser.email,
+        role: 'company_admin',
+        initialPassword,
+      });
+      if (result.passwordReady) {
+        setNotice(`Acceso listo para ${passwordUser.email}. Ya puede iniciar sesión con la contraseña definida.`);
+      } else {
+        setNotice(result.message);
+      }
+      setPasswordUser(null);
+      setInitialPassword('');
+      setConfirmPassword('');
+      await reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No fue posible definir la contraseña inicial.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
         <div>
           <div className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.18em] text-blue-300 mb-2"><Lock className="w-3.5 h-3.5" />Accesos reales</div>
           <h1 className="text-2xl md:text-3xl font-black text-white tracking-tight">Usuarios y permisos</h1>
-          <p className="text-xs text-zinc-400 mt-1">Cuentas sincronizadas con Supabase para {currentCompany.name}. Las invitaciones llegan por correo.</p>
+          <p className="text-xs text-zinc-400 mt-1">Cuentas sincronizadas con Supabase para {currentCompany.name}. Superadmin puede dejar listo el acceso inicial del propietario sin depender de un correo.</p>
         </div>
         <div className="flex gap-2">
           <button onClick={() => void reload()} disabled={loading} className="px-4 py-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-xs font-bold text-zinc-300 flex items-center gap-2 disabled:opacity-50"><RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />Actualizar</button>
@@ -95,8 +128,8 @@ export const UsersModule: React.FC = () => {
 
       <section className="bg-[#0d0d0f] border border-zinc-800 rounded-2xl overflow-hidden shadow-xl">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[760px] text-left">
-            <thead className="bg-zinc-950/60 border-b border-zinc-800"><tr>{['Usuario', 'Correo', 'Rol', 'Estado', 'Alta'].map((label) => <th key={label} className="p-3.5 text-[9px] uppercase tracking-widest font-black text-zinc-600">{label}</th>)}</tr></thead>
+          <table className="w-full min-w-[820px] text-left">
+            <thead className="bg-zinc-950/60 border-b border-zinc-800"><tr>{['Usuario', 'Correo', 'Rol', 'Estado', 'Alta', 'Acceso'].map((label) => <th key={label} className="p-3.5 text-[9px] uppercase tracking-widest font-black text-zinc-600">{label}</th>)}</tr></thead>
             <tbody className="divide-y divide-zinc-900">
               {users.map((user) => (
                 <tr key={`${user.userId}-${user.role}`} className="hover:bg-zinc-900/30">
@@ -105,6 +138,7 @@ export const UsersModule: React.FC = () => {
                   <td className="p-3.5"><div className="flex items-center gap-2 text-[10px] font-bold text-zinc-300">{roleIcon[user.role]}{roleLabel[user.role]}</div></td>
                   <td className="p-3.5"><span className={`rounded-full border px-2.5 py-1 text-[9px] font-black uppercase ${user.active ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-300' : 'border-zinc-700 bg-zinc-900 text-zinc-500'}`}>{user.active ? 'Activo' : 'Inactivo'}</span></td>
                   <td className="p-3.5 text-[10px] text-zinc-500">{user.createdAt ? new Date(user.createdAt).toLocaleDateString('es-CL') : '—'}</td>
+                  <td className="p-3.5">{currentRole === 'super_admin' && user.role === 'company_admin' && user.email ? <button onClick={() => { setPasswordUser(user); setInitialPassword(''); setConfirmPassword(''); setError(''); }} className="inline-flex items-center gap-1.5 rounded-lg border border-amber-400/25 bg-amber-400/10 px-2.5 py-2 text-[9px] font-black text-amber-200"><KeyRound className="h-3.5 w-3.5" />Definir clave</button> : <span className="text-[10px] text-zinc-700">—</span>}</td>
                 </tr>
               ))}
             </tbody>
@@ -125,6 +159,16 @@ export const UsersModule: React.FC = () => {
               {form.role === 'driver' && <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 text-[10px] leading-relaxed text-emerald-200/80">El conductor recibirá acceso a la app independiente. Después debes asociarlo a un móvil en la sección Conductores.</div>}
             </div>
             <button disabled={saving || !form.email.trim()} className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-xs font-black text-white hover:bg-blue-500 disabled:opacity-50">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <MailPlus className="h-4 w-4" />}{saving ? 'Enviando invitación…' : 'Enviar invitación segura'}</button>
+          </form>
+        </div>
+      )}
+
+      {passwordUser && (
+        <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/85 p-4 backdrop-blur-sm">
+          <form onSubmit={saveInitialPassword} className="w-full max-w-md rounded-3xl border border-amber-400/25 bg-[#0d0d0f] p-6 shadow-2xl">
+            <div className="flex items-start justify-between gap-3"><div><div className="inline-flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-amber-300"><KeyRound className="h-3.5 w-3.5" />Acceso inicial</div><h2 className="mt-2 text-lg font-black text-white">Definir contraseña</h2><p className="mt-1 text-xs text-zinc-500">{passwordUser.email}</p></div><button type="button" onClick={() => setPasswordUser(null)} className="p-2 rounded-xl border border-zinc-800 bg-zinc-900 text-zinc-400"><X className="h-4 w-4" /></button></div>
+            <div className="mt-5 space-y-4"><Field label="Nueva contraseña" type="password" value={initialPassword} onChange={setInitialPassword} placeholder="Mínimo 10 caracteres" /><Field label="Repetir contraseña" type="password" value={confirmPassword} onChange={setConfirmPassword} placeholder="Repite la contraseña" /><div className="rounded-xl border border-blue-500/20 bg-blue-500/5 p-3 text-[10px] leading-relaxed text-blue-200/80">Por seguridad, esta herramienta solo completa cuentas cuyo acceso inicial todavía está pendiente. No reemplaza silenciosamente la contraseña de una cuenta que ya estaba configurada.</div></div>
+            <button disabled={saving || initialPassword.length < 10 || initialPassword !== confirmPassword} className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-amber-400 px-4 py-3 text-xs font-black text-zinc-950 hover:bg-amber-300 disabled:opacity-50">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}{saving ? 'Guardando…' : 'Guardar contraseña y habilitar acceso'}</button>
           </form>
         </div>
       )}
