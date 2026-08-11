@@ -19,6 +19,23 @@ const isEmailRateLimit = (error: unknown) => {
   return value?.status === 429 || /email rate limit|over_email_send_rate_limit|too many requests/i.test(text);
 };
 
+const buildCentralGoLink = (generated: any, fallbackType: 'invite' | 'recovery') => {
+  const properties = generated?.properties ?? {};
+  const tokenHash = typeof properties.hashed_token === 'string' ? properties.hashed_token : '';
+  const verificationType = typeof properties.verification_type === 'string' ? properties.verification_type : fallbackType;
+
+  if (!tokenHash) {
+    const actionLink = typeof properties.action_link === 'string' ? properties.action_link : '';
+    if (!actionLink) throw new Error('Supabase no devolvió un token de activación válido.');
+    return actionLink;
+  }
+
+  const url = new URL(OFFICIAL_DRIVER_URL);
+  url.searchParams.set('token_hash', tokenHash);
+  url.searchParams.set('type', verificationType);
+  return url.toString();
+};
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return json({ error: 'Método no permitido' }, 405);
@@ -107,20 +124,21 @@ Deno.serve(async (req) => {
         emailConfirmed,
         message: active
           ? 'Cuenta activada y lista para iniciar sesión.'
-          : 'Cuenta pendiente de activación o creación de contraseña.',
+          : emailConfirmed
+            ? 'Correo confirmado. Falta que el conductor cree su contraseña.'
+            : 'Cuenta pendiente de activación y creación de contraseña.',
       });
     }
 
     const metadata = targetUser.user_metadata ?? {};
 
     if (action === 'link') {
-      const linkType = emailConfirmed ? 'recovery' : 'invite';
+      const linkType: 'invite' | 'recovery' = emailConfirmed ? 'recovery' : 'invite';
       const { data: generated, error: generateError } = await service.auth.admin.generateLink({
         type: linkType,
         email,
         options: {
           data: needsSetup ? { ...metadata, needs_password_setup: true } : metadata,
-          redirectTo: OFFICIAL_DRIVER_URL,
         },
       });
       if (generateError) throw generateError;
@@ -133,10 +151,12 @@ Deno.serve(async (req) => {
         emailPending: false,
         needsSetup,
         emailConfirmed,
-        actionLink: generated.properties?.action_link ?? null,
+        actionLink: buildCentralGoLink(generated, linkType),
         message: active
-          ? 'Generamos un enlace seguro de recuperación para este conductor.'
-          : 'Generamos un enlace seguro de activación para este conductor.',
+          ? 'Generamos un enlace seguro de recuperación directamente en Central GO.'
+          : emailConfirmed
+            ? 'Generamos un enlace seguro para crear la contraseña directamente en Central GO.'
+            : 'Generamos un enlace seguro de activación directamente en Central GO.',
       });
     }
 
@@ -179,13 +199,12 @@ Deno.serve(async (req) => {
 
     if (!isEmailRateLimit(sendError)) throw sendError;
 
-    const linkType = emailConfirmed ? 'recovery' : 'invite';
+    const linkType: 'invite' | 'recovery' = emailConfirmed ? 'recovery' : 'invite';
     const { data: generated, error: generateError } = await service.auth.admin.generateLink({
       type: linkType,
       email,
       options: {
         data: { ...metadata, needs_password_setup: true },
-        redirectTo: OFFICIAL_DRIVER_URL,
       },
     });
     if (generateError) throw generateError;
@@ -198,8 +217,8 @@ Deno.serve(async (req) => {
       emailPending: true,
       needsSetup: true,
       emailConfirmed,
-      actionLink: generated.properties?.action_link ?? null,
-      message: 'Supabase alcanzó temporalmente su límite de correos. Generamos un enlace seguro de activación para que puedas enviárselo directamente al conductor.',
+      actionLink: buildCentralGoLink(generated, linkType),
+      message: 'El correo está temporalmente limitado. Generamos un enlace seguro que abre directamente Central GO para crear la contraseña.',
     });
   } catch (error) {
     console.error('driver-access', error);
