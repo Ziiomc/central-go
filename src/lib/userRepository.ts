@@ -34,7 +34,8 @@ export async function inviteCompanyUser(input: {
   role: CompanyUserRole;
   name?: string;
   redirectTo?: string;
-}): Promise<{ invited: boolean; message: string; userId: string }> {
+  initialPassword?: string;
+}): Promise<{ invited: boolean; passwordReady: boolean; message: string; userId: string }> {
   const db = requireSupabase();
   const { data, error } = await db.functions.invoke('invite-company-user', {
     body: {
@@ -43,12 +44,14 @@ export async function inviteCompanyUser(input: {
       role: input.role,
       name: input.name?.trim() || undefined,
       redirectTo: input.redirectTo,
+      password: input.initialPassword || undefined,
     },
   });
   if (error) throw error;
   if (data?.error) throw new Error(String(data.error));
   return {
     invited: Boolean(data?.invited),
+    passwordReady: Boolean(data?.passwordReady),
     message: data?.message ?? 'Usuario vinculado',
     userId: String(data?.userId ?? ''),
   };
