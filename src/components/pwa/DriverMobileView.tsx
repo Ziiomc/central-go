@@ -5,6 +5,7 @@ import {
   BarChart3,
   BellRing,
   CheckCircle,
+  ChevronDown,
   Clock,
   DollarSign,
   Download,
@@ -76,6 +77,7 @@ export const DriverMobileView: React.FC = () => {
   const [radioBanner, setRadioBanner] = useState<string | null>(null);
   const [analytics, setAnalytics] = useState<DriverAnalytics | null>(null);
   const [analyticsError, setAnalyticsError] = useState('');
+  const [analyticsOpen, setAnalyticsOpen] = useState(false);
   const gpsWatchId = useRef<number | null>(null);
   const lastGpsSent = useRef<{ at: number; lat: number; lng: number } | null>(null);
   const lastRadioNotificationId = useRef<string | null>(null);
@@ -215,8 +217,11 @@ export const DriverMobileView: React.FC = () => {
   };
 
   useEffect(() => {
-    const installed = () => setStandalone(true);
-    const installable = () => setInstallHint('Lista para instalar en este dispositivo.');
+    const installed = () => {
+      setStandalone(true);
+      setInstallHint('Central GO Conductor quedó instalada en este dispositivo.');
+    };
+    const installable = () => setInstallHint('Lista para instalar. Pulsa el botón para confirmar con el sistema.');
     window.addEventListener('appinstalled', installed);
     window.addEventListener('pwa-installable', installable);
     return () => {
@@ -248,12 +253,25 @@ export const DriverMobileView: React.FC = () => {
   }, [incomingOffer, offerTimer, rejectTripOffer]);
 
   const installDriverApp = async () => {
-    const installed = await promptPWAInstall();
-    if (installed) {
-      setInstallHint('Instalación aceptada. Busca Central GO Conductor en tu pantalla de inicio.');
+    if (isPWAStandalone()) {
+      setStandalone(true);
+      setInstallHint('Esta app ya está abierta en modo instalado.');
       return;
     }
-    setInstallHint('Si no aparece el instalador, abre el menú del navegador y elige “Instalar aplicación” o “Agregar a pantalla principal”. En iPhone usa Compartir → Agregar a inicio.');
+
+    const installed = await promptPWAInstall();
+    if (installed) {
+      setInstallHint('Instalación aceptada. Android terminará de agregar Central GO Conductor al dispositivo.');
+      return;
+    }
+
+    const ua = navigator.userAgent || '';
+    const isIOS = /iPad|iPhone|iPod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    if (isIOS) {
+      setInstallHint('En iPhone no se puede instalar automáticamente: abre Compartir y elige “Agregar a pantalla de inicio”.');
+      return;
+    }
+    setInstallHint('Este navegador no entregó el instalador automático. Abre el menú ⋮ y elige “Instalar aplicación” o “Agregar a pantalla principal”.');
   };
 
   if (!driver) {
@@ -338,20 +356,40 @@ export const DriverMobileView: React.FC = () => {
           </div>
           <div className="mt-4 grid grid-cols-2 gap-2">
             <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.05] p-3"><p className="text-[9px] font-bold uppercase text-zinc-600">Ganancias hoy</p><p className="mt-1 text-lg font-black text-emerald-400">${(analytics?.earnings ?? driver.todayEarnings).toLocaleString('es-CL')}</p></div>
-            <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.05] p-3"><p className="text-[9px] font-bold uppercase text-zinc-600">Comisiones pendientes</p><p className="mt-1 text-lg font-black text-amber-300">${driver.commissionBalance.toLocaleString('es-CL')}</p></div>
+            <div className="rounded-xl border border-blue-500/20 bg-blue-500/[0.05] p-3"><p className="text-[9px] font-bold uppercase text-zinc-600">Viajes hoy</p><p className="mt-1 text-lg font-black text-blue-300">{analytics?.tripsCompleted ?? driver.totalTripsCompleted}</p></div>
           </div>
         </section>
 
-        <section className="rounded-2xl border border-zinc-800 bg-gradient-to-br from-[#13151a] to-[#0e0f12] p-4">
-          <div className="flex items-center justify-between"><div><p className="flex items-center gap-2 text-xs font-black text-white"><BarChart3 className="h-4 w-4 text-violet-400"/>Mi jornada de hoy</p><p className="mt-1 text-[9px] text-zinc-600">Métricas sincronizadas con carreras y sesiones reales</p></div><button onClick={() => void refreshAnalytics()} className="rounded-lg border border-zinc-700 px-2.5 py-1.5 text-[9px] font-bold text-zinc-400">Actualizar</button></div>
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            <Metric icon={<Activity className="h-4 w-4"/>} label="Conectado" value={analytics ? formatDuration(analytics.connectedSeconds) : '—'} />
-            <Metric icon={<Gauge className="h-4 w-4"/>} label="Conduciendo" value={analytics ? formatDuration(analytics.drivingSeconds) : '—'} />
-            <Metric icon={<Route className="h-4 w-4"/>} label="Km de servicio" value={analytics ? `${analytics.serviceKm.toFixed(1)} km` : '—'} />
-            <Metric icon={<CheckCircle className="h-4 w-4"/>} label="Viajes hoy" value={String(analytics?.tripsCompleted ?? 0)} />
-          </div>
-          <div className="mt-2 flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-950/70 px-3 py-2.5 text-[10px]"><span className="text-zinc-500">Promedio por viaje</span><span className="font-black text-zinc-200">{analytics?.avgTripSeconds ? formatDuration(analytics.avgTripSeconds) : 'Sin viajes completados'}</span></div>
-          {analyticsError && <p className="mt-2 text-[9px] text-amber-300">{analyticsError}</p>}
+        <section className="overflow-hidden rounded-2xl border border-zinc-800 bg-gradient-to-br from-[#13151a] to-[#0e0f12]">
+          <button
+            type="button"
+            onClick={() => setAnalyticsOpen((value) => !value)}
+            aria-expanded={analyticsOpen}
+            className="flex w-full items-center justify-between gap-3 p-4 text-left"
+          >
+            <div className="min-w-0">
+              <p className="flex items-center gap-2 text-xs font-black text-white"><BarChart3 className="h-4 w-4 text-violet-400"/>Mi jornada de hoy</p>
+              <p className="mt-1 truncate text-[9px] text-zinc-600">{analytics ? `${formatDuration(analytics.connectedSeconds)} conectado · ${analytics.serviceKm.toFixed(1)} km · ${analytics.tripsCompleted} viajes` : 'Ver tiempo, kilómetros y actividad'}</p>
+            </div>
+            <span className="flex shrink-0 items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-950 px-2.5 py-2 text-[9px] font-black text-zinc-400">
+              {analyticsOpen ? 'Ocultar' : 'Ver analíticas'}
+              <ChevronDown className={`h-4 w-4 transition-transform ${analyticsOpen ? 'rotate-180' : ''}`} />
+            </span>
+          </button>
+
+          {analyticsOpen && (
+            <div className="border-t border-zinc-800 px-4 pb-4 pt-3">
+              <div className="mb-3 flex items-center justify-between gap-3"><p className="text-[9px] text-zinc-600">Métricas sincronizadas con carreras, GPS y sesiones reales</p><button onClick={() => void refreshAnalytics()} className="rounded-lg border border-zinc-700 px-2.5 py-1.5 text-[9px] font-bold text-zinc-400">Actualizar</button></div>
+              <div className="grid grid-cols-2 gap-2">
+                <Metric icon={<Activity className="h-4 w-4"/>} label="Conectado" value={analytics ? formatDuration(analytics.connectedSeconds) : '—'} />
+                <Metric icon={<Gauge className="h-4 w-4"/>} label="Conduciendo" value={analytics ? formatDuration(analytics.drivingSeconds) : '—'} />
+                <Metric icon={<Route className="h-4 w-4"/>} label="Km de servicio" value={analytics ? `${analytics.serviceKm.toFixed(1)} km` : '—'} />
+                <Metric icon={<CheckCircle className="h-4 w-4"/>} label="Viajes hoy" value={String(analytics?.tripsCompleted ?? 0)} />
+              </div>
+              <div className="mt-2 flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-950/70 px-3 py-2.5 text-[10px]"><span className="text-zinc-500">Promedio por viaje</span><span className="font-black text-zinc-200">{analytics?.avgTripSeconds ? formatDuration(analytics.avgTripSeconds) : 'Sin viajes completados'}</span></div>
+              {analyticsError && <p className="mt-2 text-[9px] text-amber-300">{analyticsError}</p>}
+            </div>
+          )}
         </section>
 
         {radioMessages.length > 0 && (
