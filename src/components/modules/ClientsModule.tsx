@@ -1,218 +1,26 @@
-import React, { useState } from 'react';
-import { useApp } from '../../context/AppContext';
-import {
-  UserCheck,
-  Search,
-  Plus,
-  Phone,
-  MapPin,
-  Star,
-  Award,
-  CreditCard,
-} from 'lucide-react';
+import React,{useEffect,useState}from'react';
+import{Ban,CheckCircle2,CreditCard,MapPin,Plus,Search,ShieldAlert,UserCheck,X}from'lucide-react';
+import{useApp}from'../../context/AppContext';
+import{loadClientDriverBlocks,setClientDriverBlock}from'../../lib/operationalIntelligenceRepository';
+import type{Client,ClientDriverBlock}from'../../types';
 
-export const ClientsModule: React.FC = () => {
-  const { clients, addClient } = useApp();
-  const [searchTerm, setSearchTerm] = useState('');
-  const [isModalOpen, setIsModalOpen] = useState(false);
-
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [email, setEmail] = useState('');
-  const [address, setAddress] = useState('');
-  const [isVIP, setIsVIP] = useState(false);
-  const [hasCurrentAccount, setHasCurrentAccount] = useState(false);
-
-  const filteredClients = clients.filter(
-    (c) =>
-      c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      c.phone.includes(searchTerm)
-  );
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    addClient({
-      companyId: 'comp-1',
-      name,
-      phone,
-      email,
-      frequentAddresses: address
-        ? [{ label: 'Frecuente', address, lat: -35.8454, lng: -71.5979 }]
-        : [],
-      rating: 5.0,
-      isVIP,
-      hasCurrentAccount,
-    });
-    setIsModalOpen(false);
-  };
-
-  return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="font-extrabold text-2xl text-white tracking-tight flex items-center gap-2 uppercase font-sans">
-            <UserCheck className="w-6 h-6 text-blue-500" />
-            Directorio de Clientes Frecuentes & Empresas
-          </h1>
-          <p className="text-xs text-zinc-400 mt-1 font-sans">
-            Gestión de pasajes habituales, cuentas corrientes corporativas y notas especiales
-          </p>
-        </div>
-
-        <button
-          onClick={() => setIsModalOpen(true)}
-          className="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-extrabold text-xs rounded-lg shadow-lg shadow-blue-900/30 transition flex items-center gap-2 border border-blue-400/20 uppercase tracking-wider"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Registrar Cliente</span>
-        </button>
-      </div>
-
-      <div className="bg-[#0d0d0f] p-4 rounded-xl border border-zinc-800 shadow-lg">
-        <div className="relative w-full md:w-96">
-          <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-3" />
-          <input
-            type="text"
-            placeholder="Buscar por nombre o teléfono..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full bg-[#121215] border border-zinc-800 rounded-lg pl-9 pr-4 py-2 text-xs text-zinc-200 focus:outline-none focus:border-blue-500 transition"
-          />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filteredClients.map((client) => (
-          <div
-            key={client.id}
-            className="bg-[#0d0d0f] border border-zinc-800 rounded-xl p-5 space-y-4 shadow-xl hover:border-blue-500/30 transition"
-          >
-            <div className="flex items-start justify-between">
-              <div>
-                <div className="font-extrabold text-base text-white flex items-center gap-2">
-                  <span>{client.name}</span>
-                  {client.isVIP && (
-                    <span className="text-xs bg-blue-500/20 text-blue-300 font-mono px-2 py-0.5 rounded border border-blue-500/30 uppercase tracking-wider">
-                      VIP
-                    </span>
-                  )}
-                </div>
-                <div className="text-xs text-zinc-400 font-mono mt-0.5">{client.phone}</div>
-              </div>
-              <span className="text-xs text-blue-400 font-mono font-bold">
-                ★ {client.rating.toFixed(1)}
-              </span>
-            </div>
-
-            {/* Frequent Addresses */}
-            <div className="space-y-1 bg-[#121215] p-3 rounded-lg border border-zinc-800 text-xs text-zinc-300">
-              <div className="text-[10px] text-zinc-400 font-mono uppercase tracking-wider">Domicilios Frecuentes</div>
-              {client.frequentAddresses.map((addr, idx) => (
-                <div key={idx} className="flex items-center gap-1.5 truncate">
-                  <MapPin className="w-3 h-3 text-emerald-400 shrink-0" />
-                  <span className="truncate">{addr.address}</span>
-                </div>
-              ))}
-            </div>
-
-            {client.notes && (
-              <p className="text-xs text-zinc-400 italic bg-[#121215]/60 p-2.5 rounded-lg border border-zinc-800">
-                "{client.notes}"
-              </p>
-            )}
-
-            <div className="flex items-center justify-between text-xs font-mono pt-2 border-t border-zinc-800">
-              <span className="text-zinc-400 uppercase tracking-wider">Viajes: <strong className="text-white">{client.totalTrips}</strong></span>
-              {client.hasCurrentAccount && (
-                <span className="text-blue-400 font-bold flex items-center gap-1 uppercase tracking-wider">
-                  <CreditCard className="w-3.5 h-3.5" /> Cta Corriente
-                </span>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-zinc-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
-          <div className="bg-[#0d0d0f] border border-zinc-800 rounded-xl max-w-md w-full p-6 space-y-4 shadow-2xl">
-            <h3 className="font-bold text-lg text-white uppercase tracking-tight">Nuevo Cliente / Cuenta Corriente</h3>
-            <form onSubmit={handleSubmit} className="space-y-3">
-              <div>
-                <label className="text-xs text-zinc-300 font-mono uppercase tracking-wider block">Nombre / Razón Social</label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Ej: Estudio Jurídico Alvear"
-                  required
-                  className="w-full bg-[#121215] border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-blue-500 transition"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs text-zinc-300 font-mono uppercase tracking-wider block">Teléfono</label>
-                <input
-                  type="text"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="+56 9 8712 3456"
-                  required
-                  className="w-full bg-[#121215] border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-blue-500 transition"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs text-zinc-300 font-mono uppercase tracking-wider block">Dirección Habitual</label>
-                <input
-                  type="text"
-                  value={address}
-                  onChange={(e) => setAddress(e.target.value)}
-                  placeholder="Calle Manuel Rodríguez 450, Linares"
-                  className="w-full bg-[#121215] border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-blue-500 transition"
-                />
-              </div>
-
-              <div className="flex gap-4 pt-2 text-xs text-zinc-300 font-mono">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={isVIP}
-                    onChange={(e) => setIsVIP(e.target.checked)}
-                    className="rounded bg-[#121215] border-zinc-800 text-blue-600 focus:ring-0"
-                  />
-                  <span>Cliente VIP</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={hasCurrentAccount}
-                    onChange={(e) => setHasCurrentAccount(e.target.checked)}
-                    className="rounded bg-[#121215] border-zinc-800 text-blue-600 focus:ring-0"
-                  />
-                  <span>Cuenta Corriente</span>
-                </label>
-              </div>
-
-              <div className="flex gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="w-1/2 py-2 bg-zinc-800 text-zinc-300 font-bold text-xs rounded-lg uppercase tracking-wider"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="w-1/2 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-lg shadow uppercase tracking-wider"
-                >
-                  Guardar Cliente
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+export const ClientsModule:React.FC=()=>{
+ const{clients,drivers,addClient,currentCompany}=useApp();
+ const[searchTerm,setSearchTerm]=useState(''),[isModalOpen,setIsModalOpen]=useState(false);
+ const[name,setName]=useState(''),[phone,setPhone]=useState(''),[email,setEmail]=useState(''),[address,setAddress]=useState(''),[isVIP,setIsVIP]=useState(false),[hasCurrentAccount,setHasCurrentAccount]=useState(false);
+ const[blockClient,setBlockClient]=useState<Client|null>(null),[blocks,setBlocks]=useState<ClientDriverBlock[]>([]),[blockDriverId,setBlockDriverId]=useState(''),[blockReason,setBlockReason]=useState(''),[savingBlock,setSavingBlock]=useState(false),[notice,setNotice]=useState('');
+ const filteredClients=clients.filter(c=>c.name.toLowerCase().includes(searchTerm.toLowerCase())||c.phone.includes(searchTerm));
+ const reset=()=>{setName('');setPhone('');setEmail('');setAddress('');setIsVIP(false);setHasCurrentAccount(false);};
+ const handleSubmit=async(e:React.FormEvent)=>{e.preventDefault();await addClient({companyId:currentCompany.id,name:name.trim(),phone:phone.trim(),email:email.trim()||undefined,frequentAddresses:address.trim()?[{label:'Frecuente',address:address.trim(),lat:0,lng:0}]:[],rating:5,isVIP,hasCurrentAccount});reset();setIsModalOpen(false);};
+ const openBlocks=async(client:Client)=>{setBlockClient(client);setBlockDriverId('');setBlockReason('');setNotice('');try{setBlocks(await loadClientDriverBlocks(currentCompany.id,client.id));}catch(e){setNotice(e instanceof Error?e.message:'No fue posible cargar las restricciones.');}};
+ const saveBlock=async(e:React.FormEvent)=>{e.preventDefault();if(!blockClient||!blockDriverId||!blockReason.trim())return;setSavingBlock(true);try{await setClientDriverBlock(blockClient.id,blockDriverId,blockReason,true);setBlocks(await loadClientDriverBlocks(currentCompany.id,blockClient.id));setBlockDriverId('');setBlockReason('');setNotice('Restricción guardada. El despacho automático y manual evitarán este móvil para el cliente.');}catch(err){setNotice(err instanceof Error?err.message:'No fue posible guardar la restricción.');}finally{setSavingBlock(false);}};
+ const disableBlock=async(item:ClientDriverBlock)=>{if(!blockClient)return;try{await setClientDriverBlock(item.clientId,item.driverId,item.reason,false);setBlocks(await loadClientDriverBlocks(currentCompany.id,blockClient.id));}catch(err){setNotice(err instanceof Error?err.message:'No fue posible quitar la restricción.');}};
+ return <div className="space-y-6">
+  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div><h1 className="flex items-center gap-2 text-2xl font-extrabold text-white"><UserCheck className="h-6 w-6 text-blue-500"/>Clientes</h1><p className="mt-1 text-xs text-zinc-400">Direcciones frecuentes, cuentas corrientes y móviles rechazados por cada cliente.</p></div><button onClick={()=>setIsModalOpen(true)} className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-black text-white"><Plus className="h-4 w-4"/>Registrar cliente</button></div>
+  <div className="rounded-xl border border-zinc-800 bg-[#0d0d0f] p-4"><div className="relative max-w-md"><Search className="absolute left-3 top-3 h-4 w-4 text-zinc-500"/><input value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} placeholder="Buscar por nombre o teléfono…" className="w-full rounded-lg border border-zinc-800 bg-[#121215] py-2 pl-9 pr-3 text-xs text-zinc-200 outline-none focus:border-blue-500"/></div></div>
+  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">{filteredClients.map(client=><article key={client.id} className="rounded-2xl border border-zinc-800 bg-[#0d0d0f] p-5 shadow-xl"><div className="flex items-start justify-between gap-3"><div><div className="flex items-center gap-2"><p className="font-extrabold text-white">{client.name}</p>{client.isVIP&&<span className="rounded border border-blue-500/30 bg-blue-500/15 px-2 py-0.5 text-[9px] font-black text-blue-300">VIP</span>}</div><p className="mt-0.5 text-xs text-zinc-500">{client.phone}</p></div>{client.hasCurrentAccount&&<CreditCard className="h-5 w-5 text-blue-400"/>}</div><div className="mt-4 rounded-xl border border-zinc-800 bg-zinc-950/60 p-3"><p className="text-[9px] font-black uppercase tracking-wider text-zinc-600">Domicilios frecuentes</p>{client.frequentAddresses.length?client.frequentAddresses.map((a,i)=><p key={i} className="mt-1 flex items-center gap-1.5 truncate text-xs text-zinc-300"><MapPin className="h-3 w-3 shrink-0 text-emerald-400"/>{a.address}</p>):<p className="mt-1 text-xs text-zinc-600">Sin domicilios guardados</p>}</div>{client.notes&&<p className="mt-3 rounded-xl border border-zinc-800 bg-zinc-950/50 p-3 text-xs italic text-zinc-400">{client.notes}</p>}<div className="mt-4 flex items-center justify-between border-t border-zinc-800 pt-3"><span className="text-[10px] text-zinc-500">Viajes: <strong className="text-white">{client.totalTrips}</strong></span><button onClick={()=>void openBlocks(client)} className="flex items-center gap-1.5 rounded-lg border border-rose-500/25 bg-rose-500/10 px-2.5 py-2 text-[9px] font-black text-rose-300"><Ban className="h-3.5 w-3.5"/>Móviles rechazados</button></div></article>)}</div>
+  {isModalOpen&&<div className="fixed inset-0 z-[90] flex items-center justify-center overflow-y-auto bg-black/80 p-4 backdrop-blur-md"><form onSubmit={handleSubmit} className="w-full max-w-md rounded-3xl border border-zinc-800 bg-[#0d0d0f] p-6"><div className="flex items-center justify-between"><h2 className="text-lg font-black text-white">Nuevo cliente</h2><button type="button" onClick={()=>setIsModalOpen(false)} className="p-2 text-zinc-500"><X className="h-4 w-4"/></button></div><div className="mt-5 space-y-3"><Field label="Nombre / razón social" value={name} onChange={setName}/><Field label="Teléfono" value={phone} onChange={setPhone}/><Field label="Correo (opcional)" type="email" value={email} onChange={setEmail} required={false}/><Field label="Dirección habitual" value={address} onChange={setAddress} required={false}/><div className="flex gap-5 text-xs text-zinc-300"><label className="flex gap-2"><input type="checkbox" checked={isVIP} onChange={e=>setIsVIP(e.target.checked)}/>VIP</label><label className="flex gap-2"><input type="checkbox" checked={hasCurrentAccount} onChange={e=>setHasCurrentAccount(e.target.checked)}/>Cuenta corriente</label></div></div><div className="mt-5 flex gap-2"><button type="button" onClick={()=>setIsModalOpen(false)} className="w-1/2 rounded-xl bg-zinc-800 py-3 text-xs font-bold text-zinc-300">Cancelar</button><button className="w-1/2 rounded-xl bg-blue-600 py-3 text-xs font-black text-white">Guardar</button></div></form></div>}
+  {blockClient&&<div className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-black/85 p-4 backdrop-blur-md"><section className="w-full max-w-xl rounded-3xl border border-zinc-700 bg-[#0d0d0f] p-6"><div className="flex items-start justify-between"><div><p className="text-[9px] font-black uppercase tracking-widest text-rose-300">Restricciones de despacho</p><h2 className="mt-1 text-lg font-black text-white">{blockClient.name}</h2><p className="mt-1 text-xs text-zinc-500">Registra móviles que este cliente no acepta y el motivo. Central GO los excluirá automáticamente.</p></div><button onClick={()=>setBlockClient(null)} className="p-2 text-zinc-500"><X className="h-4 w-4"/></button></div><form onSubmit={saveBlock} className="mt-5 grid gap-3 sm:grid-cols-[1fr_1.5fr_auto]"><select required value={blockDriverId} onChange={e=>setBlockDriverId(e.target.value)} className="rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2.5 text-xs text-white"><option value="">Seleccionar móvil</option>{drivers.filter(d=>!blocks.some(b=>b.driverId===d.id)).map(d=><option key={d.id} value={d.id}>{d.unitNumber} · {d.name}</option>)}</select><input required value={blockReason} onChange={e=>setBlockReason(e.target.value)} placeholder="Motivo del rechazo" className="rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2.5 text-xs text-white outline-none focus:border-rose-500"/><button disabled={savingBlock} className="rounded-xl bg-rose-600 px-4 py-2.5 text-xs font-black text-white">Agregar</button></form>{notice&&<div className="mt-3 rounded-xl border border-blue-500/20 bg-blue-500/10 p-3 text-xs text-blue-200">{notice}</div>}<div className="mt-4 space-y-2">{blocks.map(item=>{const driver=drivers.find(d=>d.id===item.driverId);return <div key={item.id} className="flex items-center justify-between gap-3 rounded-xl border border-zinc-800 bg-zinc-950/60 p-3"><div><p className="text-xs font-black text-white">{driver?.unitNumber??'Móvil'} · {driver?.name??''}</p><p className="mt-0.5 text-[10px] text-zinc-500">{item.reason}</p></div><button onClick={()=>void disableBlock(item)} className="rounded-lg border border-zinc-700 px-2.5 py-1.5 text-[9px] font-black text-zinc-400">Quitar</button></div>})}{!blocks.length&&<div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4 text-center text-xs text-emerald-300"><CheckCircle2 className="mx-auto mb-2 h-5 w-5"/>Este cliente no tiene móviles bloqueados.</div>}</div></section></div>}
+ </div>;
 };
+const Field=({label,value,onChange,type='text',required=true}:{label:string;value:string;onChange:(v:string)=>void;type?:string;required?:boolean})=><label className="block"><span className="text-[10px] font-black uppercase text-zinc-500">{label}</span><input required={required} type={type} value={value} onChange={e=>onChange(e.target.value)} className="mt-1 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2.5 text-sm text-white outline-none focus:border-blue-500"/></label>;
