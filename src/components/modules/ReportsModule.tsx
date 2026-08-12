@@ -1,59 +1,28 @@
-import React, { useMemo } from 'react';
-import { BarChart3, Clock, DollarSign, Route, Users } from 'lucide-react';
-import { useApp } from '../../context/AppContext';
+import React,{useEffect,useMemo,useState}from'react';
+import{BarChart3,Clock,Download,FileText,PhoneCall,Plus,Route,Users,X}from'lucide-react';
+import{useApp}from'../../context/AppContext';
+import{addCallLog,loadCallLogs,loadDispatchEvents}from'../../lib/operationalIntelligenceRepository';
+import{exportTableToExcel,printTableAsPdf}from'../../lib/exportUtils';
+import type{CallLog,TripDispatchEvent}from'../../types';
 
-const paymentLabel: Record<string, string> = {
-  efectivo: 'Efectivo',
-  transferencia: 'Transferencia',
-  posnet_tarjeta: 'Tarjeta / POS',
-  cuenta_corriente: 'Cuenta corriente',
+const paymentLabel:Record<string,string>={efectivo:'Efectivo',transferencia:'Transferencia',posnet_tarjeta:'Tarjeta/POS',cuenta_corriente:'Cuenta corriente'};
+const todayStart=()=>{const d=new Date();d.setHours(0,0,0,0);return d.toISOString();};
+const isNight=(date:string)=>{const h=new Date(date).getHours();return h<7||h>=20;};
+
+export const ReportsModule:React.FC=()=>{
+ const{trips,drivers,currentCompany}=useApp();
+ const[calls,setCalls]=useState<CallLog[]>([]),[events,setEvents]=useState<TripDispatchEvent[]>([]),[callOpen,setCallOpen]=useState(false),[callPhone,setCallPhone]=useState(''),[callName,setCallName]=useState(''),[callOutcome,setCallOutcome]=useState<CallLog['outcome']>('pedido'),[callNotes,setCallNotes]=useState(''),[callError,setCallError]=useState('');
+ const reload=async()=>{if(currentCompany.id==='network')return;try{const[c,e]=await Promise.all([loadCallLogs(currentCompany.id,todayStart()),loadDispatchEvents(currentCompany.id)]);setCalls(c);setEvents(e);}catch(err){setCallError(err instanceof Error?err.message:'No fue posible cargar métricas complementarias.');}};
+ useEffect(()=>{void reload();},[currentCompany.id]);
+ const stats=useMemo(()=>{const today=trips.filter(t=>new Date(t.createdAt).getTime()>=new Date(todayStart()).getTime());const completed=today.filter(t=>t.status==='completed'),cancelled=today.filter(t=>t.status==='cancelled');const day=today.filter(t=>!isNight(t.createdAt)),night=today.filter(t=>isNight(t.createdAt));const gross=completed.reduce((s,t)=>s+(t.finalFare??t.estimatedFare??0),0);const payments=completed.reduce<Record<string,{count:number;amount:number}>>((a,t)=>{const k=t.paymentMethod||'efectivo';a[k]??={count:0,amount:0};a[k].count++;a[k].amount+=t.finalFare??t.estimatedFare??0;return a;},{});const rejected=events.filter(e=>e.eventType==='rejected'&&new Date(e.createdAt)>=new Date(todayStart())).length;return{today,completed,cancelled,day,night,gross,payments,rejected};},[trips,events]);
+ const reportHeaders=['Fecha','Código','Cliente','Teléfono','Origen','Destino','Móvil','Chofer','Estado','Pago','Tarifa'];const reportRows=stats.today.map(t=>[new Date(t.createdAt).toLocaleString('es-CL'),t.code,t.clientName,t.clientPhone,t.origin.address,t.destination.address,t.driverUnitNumber??'',t.driverName??'',t.status,paymentLabel[t.paymentMethod]??t.paymentMethod,t.finalFare??t.estimatedFare]);
+ const submitCall=async(e:React.FormEvent)=>{e.preventDefault();setCallError('');try{await addCallLog(currentCompany.id,{clientName:callName,phone:callPhone,outcome:callOutcome,notes:callNotes});setCallOpen(false);setCallPhone('');setCallName('');setCallNotes('');setCallOutcome('pedido');await reload();}catch(err){setCallError(err instanceof Error?err.message:'No fue posible registrar la llamada.');}};
+ return <div className="space-y-6"><div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between"><div><h1 className="flex items-center gap-2 text-2xl font-extrabold text-white"><BarChart3 className="h-6 w-6 text-blue-500"/>Reportes de operación</h1><p className="mt-1 text-xs text-zinc-400">Cierre diario, métricas diurnas/nocturnas, pagos, llamadas y rechazos.</p></div><div className="flex flex-wrap gap-2"><button onClick={()=>setCallOpen(true)} className="flex items-center gap-2 rounded-xl bg-blue-600 px-3 py-2 text-xs font-black text-white"><PhoneCall className="h-4 w-4"/>Registrar llamada</button><button onClick={()=>exportTableToExcel(`central-go-${currentCompany.code}-${new Date().toISOString().slice(0,10)}.xls`,reportHeaders,reportRows)} className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-black text-emerald-300"><Download className="h-4 w-4"/>Excel día</button><button onClick={()=>printTableAsPdf(`Cierre diario ${currentCompany.name}`,reportHeaders,reportRows)} className="flex items-center gap-2 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs font-black text-rose-300"><FileText className="h-4 w-4"/>PDF día</button></div></div>
+ <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6"><Metric label="Carreras hoy" value={String(stats.today.length)} detail={`${stats.completed.length} completadas`} icon={Route}/><Metric label="Diurnas" value={String(stats.day.length)} detail="07:00–19:59" icon={Clock}/><Metric label="Nocturnas" value={String(stats.night.length)} detail="20:00–06:59" icon={Clock}/><Metric label="Facturación" value={`$${Math.round(stats.gross).toLocaleString('es-CL')}`} detail="completadas hoy" icon={BarChart3}/><Metric label="Rechazos chofer" value={String(stats.rejected)} detail="ofertas rechazadas hoy" icon={Users}/><Metric label="Llamadas" value={String(calls.length)} detail="registradas hoy" icon={PhoneCall}/></div>
+ <div className="grid gap-5 xl:grid-cols-2"><section className="rounded-2xl border border-zinc-800 bg-[#0d0d0f] p-5"><h2 className="text-sm font-black text-white">Medios de pago</h2><div className="mt-4 space-y-2">{Object.entries(stats.payments).map(([k,v])=><div key={k} className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-950/60 p-3"><div><p className="text-xs font-black text-white">{paymentLabel[k]??k}</p><p className="text-[9px] text-zinc-600">{v.count} carreras</p></div><p className="font-black text-emerald-300">${Math.round(v.amount).toLocaleString('es-CL')}</p></div>)}{!Object.keys(stats.payments).length&&<p className="py-8 text-center text-xs text-zinc-600">Sin pagos completados hoy.</p>}</div></section><section className="rounded-2xl border border-zinc-800 bg-[#0d0d0f] p-5"><div className="flex items-center justify-between"><div><h2 className="text-sm font-black text-white">Registro de llamadas</h2><p className="mt-1 text-[10px] text-zinc-500">Bitácora operacional de la central.</p></div><button onClick={()=>setCallOpen(true)} className="rounded-lg border border-blue-500/25 bg-blue-500/10 p-2 text-blue-300"><Plus className="h-4 w-4"/></button></div><div className="mt-4 max-h-72 space-y-2 overflow-y-auto">{calls.map(c=><div key={c.id} className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-3"><div className="flex items-center justify-between"><p className="text-xs font-black text-white">{c.clientName||c.phone}</p><span className="text-[9px] text-zinc-600">{new Date(c.createdAt).toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'})}</span></div><p className="text-[10px] text-blue-300">{c.phone} · {c.outcome}</p>{c.notes&&<p className="mt-1 text-[10px] text-zinc-500">{c.notes}</p>}</div>)}{!calls.length&&<p className="py-8 text-center text-xs text-zinc-600">No hay llamadas registradas hoy.</p>}</div></section></div>
+ {callError&&<div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200">{callError}</div>}
+ {callOpen&&<div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/85 p-4 backdrop-blur-md"><form onSubmit={submitCall} className="w-full max-w-md rounded-3xl border border-zinc-700 bg-[#0d0d0f] p-6"><div className="flex items-center justify-between"><div><h2 className="text-lg font-black text-white">Registrar llamada</h2><p className="mt-1 text-xs text-zinc-500">Para consulta, pedido, cancelación o reclamo.</p></div><button type="button" onClick={()=>setCallOpen(false)} className="p-2 text-zinc-500"><X className="h-4 w-4"/></button></div><div className="mt-5 space-y-3"><input required value={callPhone} onChange={e=>setCallPhone(e.target.value)} placeholder="Teléfono" className={inputClass}/><input value={callName} onChange={e=>setCallName(e.target.value)} placeholder="Cliente (opcional)" className={inputClass}/><select value={callOutcome} onChange={e=>setCallOutcome(e.target.value as CallLog['outcome'])} className={inputClass}><option value="pedido">Pedido</option><option value="consulta">Consulta</option><option value="cancelacion">Cancelación</option><option value="reclamo">Reclamo</option><option value="otro">Otro</option></select><textarea value={callNotes} onChange={e=>setCallNotes(e.target.value)} placeholder="Notas" className={`${inputClass} min-h-24`}/></div><button className="mt-5 w-full rounded-xl bg-blue-600 py-3 text-xs font-black text-white">Guardar llamada</button></form></div>}
+ </div>;
 };
-
-export const ReportsModule: React.FC = () => {
-  const { trips, drivers, currentCompany } = useApp();
-
-  const stats = useMemo(() => {
-    const completed = trips.filter((trip) => trip.status === 'completed');
-    const cancelled = trips.filter((trip) => trip.status === 'cancelled');
-    const gross = completed.reduce((sum, trip) => sum + (trip.finalFare ?? trip.estimatedFare ?? 0), 0);
-    const assignmentSamples = trips
-      .filter((trip) => trip.assignedAt)
-      .map((trip) => Math.max(0, (new Date(trip.assignedAt!).getTime() - new Date(trip.createdAt).getTime()) / 1000));
-    const avgAssignment = assignmentSamples.length ? Math.round(assignmentSamples.reduce((sum, value) => sum + value, 0) / assignmentSamples.length) : null;
-
-    const hours = Array.from({ length: 24 }, (_, hour) => ({ hour, count: 0 }));
-    trips.forEach((trip) => {
-      const date = new Date(trip.createdAt);
-      if (!Number.isNaN(date.getTime())) hours[date.getHours()].count += 1;
-    });
-    const maxHour = Math.max(1, ...hours.map((item) => item.count));
-
-    const payments = completed.reduce<Record<string, { count: number; amount: number }>>((acc, trip) => {
-      const key = trip.paymentMethod || 'efectivo';
-      acc[key] ??= { count: 0, amount: 0 };
-      acc[key].count += 1;
-      acc[key].amount += trip.finalFare ?? trip.estimatedFare ?? 0;
-      return acc;
-    }, {});
-
-    return { completed, cancelled, gross, avgAssignment, hours, maxHour, payments };
-  }, [trips]);
-
-  return (
-    <div className="space-y-6">
-      <div><h1 className="font-extrabold text-2xl text-white tracking-tight flex items-center gap-2"><BarChart3 className="w-6 h-6 text-blue-500" />Reportes de operación</h1><p className="text-xs text-zinc-400 mt-1">Métricas calculadas exclusivamente con carreras persistidas de {currentCompany.name}.</p></div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4"><Metric icon={Route} label="Carreras completadas" value={String(stats.completed.length)} detail={`${stats.cancelled.length} canceladas`} /><Metric icon={DollarSign} label="Facturación registrada" value={`$${stats.gross.toLocaleString('es-CL')}`} detail="Suma de tarifas finales/registradas" /><Metric icon={Clock} label="Asignación promedio" value={stats.avgAssignment == null ? '—' : `${stats.avgAssignment} s`} detail="Desde creación hasta asignación" /><Metric icon={Users} label="Conductores cargados" value={String(drivers.length)} detail={`${drivers.filter((driver) => driver.status !== 'offline').length} no están fuera de línea`} /></div>
-
-      <div className="grid xl:grid-cols-2 gap-5">
-        <section className="rounded-2xl border border-zinc-800 bg-[#0d0d0f] p-5 shadow-xl"><div><h2 className="text-sm font-black text-white">Carreras por hora</h2><p className="mt-1 text-[10px] text-zinc-500">Distribución real del historial cargado.</p></div><div className="mt-5 space-y-2">{stats.hours.filter((item) => item.count > 0).map((item) => <div key={item.hour} className="grid grid-cols-[46px_1fr_36px] items-center gap-3"><span className="text-[10px] font-mono text-zinc-500">{String(item.hour).padStart(2,'0')}:00</span><div className="h-2.5 rounded-full bg-zinc-900 overflow-hidden"><div className="h-full rounded-full bg-blue-500" style={{ width: `${Math.max(5,(item.count/stats.maxHour)*100)}%` }} /></div><span className="text-right text-[10px] font-black text-zinc-300">{item.count}</span></div>)}{stats.hours.every((item) => item.count === 0) && <p className="py-10 text-center text-xs text-zinc-500">Aún no hay carreras para construir esta distribución.</p>}</div></section>
-
-        <section className="rounded-2xl border border-zinc-800 bg-[#0d0d0f] p-5 shadow-xl"><div><h2 className="text-sm font-black text-white">Medios de pago</h2><p className="mt-1 text-[10px] text-zinc-500">Solo carreras completadas.</p></div><div className="mt-5 space-y-3">{Object.entries(stats.payments).map(([method, value]) => <div key={method} className="flex items-center justify-between gap-4 rounded-xl border border-zinc-800 bg-zinc-950/60 p-3"><div><p className="text-xs font-black text-white">{paymentLabel[method] ?? method}</p><p className="mt-0.5 text-[9px] text-zinc-600">{value.count} carreras</p></div><p className="text-sm font-black text-emerald-300">${value.amount.toLocaleString('es-CL')}</p></div>)}{Object.keys(stats.payments).length === 0 && <p className="py-10 text-center text-xs text-zinc-500">Todavía no hay pagos registrados.</p>}</div></section>
-      </div>
-
-      <section className="rounded-2xl border border-blue-500/20 bg-blue-500/[0.04] p-4"><p className="text-[10px] leading-relaxed text-blue-200/80"><strong className="text-blue-300">Sin comparaciones inventadas:</strong> retiramos del entorno oficial las cifras históricas fijas de “radio tradicional vs Central GO”. Cuando exista suficiente operación real, podremos calcular tendencias y SLA con los datos de cada central.</p></section>
-    </div>
-  );
-};
-
-const Metric: React.FC<{ icon: any; label:string; value:string; detail:string }> = ({icon:Icon,label,value,detail}) => <div className="rounded-2xl border border-zinc-800 bg-[#0d0d0f] p-4"><div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-wider text-zinc-600"><Icon className="h-4 w-4 text-blue-400" />{label}</div><p className="mt-2 text-2xl font-black text-white">{value}</p><p className="mt-1 text-[9px] text-zinc-600">{detail}</p></div>;
+const inputClass='w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2.5 text-sm text-white outline-none focus:border-blue-500';
+const Metric=({icon:Icon,label,value,detail}:{icon:any;label:string;value:string;detail:string})=><div className="rounded-2xl border border-zinc-800 bg-[#0d0d0f] p-4"><div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-wider text-zinc-600"><Icon className="h-4 w-4 text-blue-400"/>{label}</div><p className="mt-2 text-2xl font-black text-white">{value}</p><p className="mt-1 text-[9px] text-zinc-600">{detail}</p></div>;
