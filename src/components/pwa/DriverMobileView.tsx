@@ -6,11 +6,12 @@ import {
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
-import type { Trip } from '../../types';
+import type { FareDestination, Trip } from '../../types';
 import { soundManager } from '../../lib/audio';
 import { primeRadioAudio, speakVHFDispatch } from '../../lib/audioService';
 import { isPWAStandalone, promptPWAInstall } from '../../lib/pwa';
 import { endDriverPresence, loadDriverAnalytics, pingDriverPresence, type DriverAnalytics } from '../../lib/driverOperations';
+import { loadFareDestinations } from '../../lib/operationalIntelligenceRepository';
 import centralGoLogo from '../../assets/images/central-go-logo.svg';
 
 const GPS_WANTED_KEY = 'centralgo-driver-gps-wanted';
@@ -51,6 +52,7 @@ export const DriverMobileView: React.FC = () => {
   const [analytics, setAnalytics] = useState<DriverAnalytics | null>(null);
   const [analyticsError, setAnalyticsError] = useState('');
   const [profileOpen, setProfileOpen] = useState(false);
+  const [tariffs, setTariffs] = useState<FareDestination[]>([]);
   const [incomingOffer, setIncomingOffer] = useState<Trip | null>(null);
   const [offerTimer, setOfferTimer] = useState(15);
   const [sosConfirmOpen, setSosConfirmOpen] = useState(false);
@@ -148,6 +150,11 @@ export const DriverMobileView: React.FC = () => {
   useEffect(() => {
     if (driver) void refreshAnalytics();
   }, [driver?.todayEarnings, driver?.totalTripsCompleted, activeTrip?.status]);
+
+  useEffect(() => {
+    if (!profileOpen || currentCompany.id === 'network') return;
+    void loadFareDestinations(currentCompany.id).then((items) => setTariffs(items.filter((item) => item.active))).catch(() => setTariffs([]));
+  }, [profileOpen, currentCompany.id]);
 
   const sendGpsPosition = (position: GeolocationPosition, force = false) => {
     if (!driver) return;
@@ -448,6 +455,10 @@ export const DriverMobileView: React.FC = () => {
               <div className="mb-3 flex items-center justify-between"><p className="flex items-center gap-2 text-xs font-black"><BarChart3 className="h-4 w-4 text-violet-400" />Mi jornada</p><button onClick={() => void refreshAnalytics()} className="rounded-lg border border-zinc-700 px-2 py-1 text-[8px]">Actualizar</button></div>
               <div className="grid grid-cols-2 gap-1.5"><Metric icon={<Activity className="h-3.5 w-3.5" />} label="Conectado" value={analytics ? formatDuration(analytics.connectedSeconds) : '—'} /><Metric icon={<Gauge className="h-3.5 w-3.5" />} label="Conduciendo" value={analytics ? formatDuration(analytics.drivingSeconds) : '—'} /><Metric icon={<Route className="h-3.5 w-3.5" />} label="Km servicio" value={analytics ? `${analytics.serviceKm.toFixed(1)} km` : '—'} /><Metric icon={<CheckCircle className="h-3.5 w-3.5" />} label="Viajes" value={String(analytics?.tripsCompleted ?? 0)} /></div>
               {analyticsError && <p className="mt-2 text-[8px] text-amber-300">{analyticsError}</p>}
+            </div>
+            <div className="mt-3 rounded-2xl border border-amber-500/20 bg-amber-500/[0.04] p-3">
+              <div className="flex items-center justify-between"><p className="text-xs font-black text-white">Tarifario de destinos</p><span className="text-[8px] font-black uppercase text-amber-300">Oficial</span></div>
+              <div className="mt-2 max-h-48 space-y-1.5 overflow-y-auto">{tariffs.map((item)=><div key={item.id} className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-950/70 px-3 py-2"><span className="text-[10px] font-semibold text-zinc-300">{item.name}</span><span className="text-[10px] font-black text-emerald-300">${Math.round(item.fareAmount).toLocaleString('es-CL')}</span></div>)}{!tariffs.length&&<p className="py-3 text-center text-[9px] text-zinc-600">La central aún no ha cargado tarifas fijas por destino.</p>}</div>
             </div>
             {!standalone && <button onClick={() => void installDriverApp()} className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-amber-500/25 bg-amber-500/10 py-3 text-xs font-black text-amber-200"><Download className="h-4 w-4" />Instalar app del conductor</button>}
             {installHint && <p className="mt-2 text-center text-[9px] text-zinc-500">{installHint}</p>}
