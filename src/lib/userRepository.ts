@@ -1,4 +1,5 @@
 import { requireSupabase } from './supabase';
+import { runtimeConfig } from '../config/runtime';
 
 export type CompanyUserRole = 'company_admin' | 'operator' | 'driver';
 
@@ -58,13 +59,19 @@ export async function inviteCompanyUser(input: {
   initialPassword?: string;
 }): Promise<CompanyInviteResult> {
   const db = requireSupabase();
+  // No confiar en URLs antiguas guardadas en componentes o cachés. Todos los
+  // accesos nuevos vuelven al origen canónico de producción.
+  const redirectTo = input.role === 'driver'
+    ? `${runtimeConfig.officialAppUrl}/driver`
+    : `${runtimeConfig.officialAppUrl}/`;
+
   const { data, error } = await db.functions.invoke('invite-company-user', {
     body: {
       companyId: input.companyId,
       email: input.email.trim().toLowerCase(),
       role: input.role,
       name: input.name?.trim() || undefined,
-      redirectTo: input.redirectTo,
+      redirectTo,
       password: input.initialPassword || undefined,
     },
   });
