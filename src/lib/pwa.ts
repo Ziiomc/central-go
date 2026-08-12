@@ -1,8 +1,15 @@
 // PWA Registration & Install helper
 
-let deferredPrompt: any = null;
+type BeforeInstallPromptEvent = Event & {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform?: string }>;
+};
+
+let deferredPrompt: BeforeInstallPromptEvent | null = null;
 let controllerReloaded = false;
-const FRESHNESS_KEY = 'centralgo-fresh-bundle-v4';
+let listenersRegistered = false;
+let serviceWorkerRegistrationStarted = false;
+const FRESHNESS_KEY = 'centralgo-fresh-bundle-v5';
 
 async function purgeLegacyFrontendCaches() {
   if (typeof window === 'undefined') return;
@@ -18,63 +25,90 @@ async function purgeLegacyFrontendCaches() {
   }
 }
 
-export function registerServiceWorker() {
-  if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-    void purgeLegacyFrontendCaches();
+function registerInstallListeners() {
+  if (typeof window === 'undefined' || listenersRegistered) return;
+  listenersRegistered = true;
 
-    window.addEventListener('load', () => {
-      navigator.serviceWorker
-        .register('/sw.js', { updateViaCache: 'none' })
-        .then(async (reg) => {
-          console.log('CentralGo ServiceWorker registered:', reg.scope);
-          try {
-            await reg.update();
-          } catch (error) {
-            console.warn('CentralGo ServiceWorker update check failed:', error);
-          }
-        })
-        .catch((err) => {
-          console.log('CentralGo ServiceWorker registration failed:', err);
-        });
-    });
+  window.addEventListener('beforeinstallprompt', (event) => {
+    event.preventDefault();
+    deferredPrompt = event as BeforeInstallPromptEvent;
+    window.dispatchEvent(new CustomEvent('pwa-installable'));
+  });
 
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (controllerReloaded) return;
-      if (sessionStorage.getItem('centralgo-sw-refresh') === '1') {
-        sessionStorage.removeItem('centralgo-sw-refresh');
-        return;
-      }
-      controllerReloaded = true;
-      sessionStorage.setItem('centralgo-sw-refresh', '1');
-      window.location.reload();
-    });
+  window.addEventListener('appinstalled', () => {
+    deferredPrompt = null;
+    window.dispatchEvent(new CustomEvent('pwa-installed'));
+  });
+}
 
-    window.addEventListener('beforeinstallprompt', (e) => {
-      e.preventDefault();
-      deferredPrompt = e;
-      window.dispatchEvent(new CustomEvent('pwa-installable'));
-    });
+async function doRegisterServiceWorker() {
+  if (serviceWorkerRegistrationStarted || !('serviceWorker' in navigator)) return;
+  serviceWorkerRegistrationStarted = true;
+
+  try {
+    await purgeLegacyFrontendCaches();
+    const registration = await navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' });
+    console.log('CentralGo ServiceWorker registered:', registration.scope);
+    try {
+      await registration.update();
+    } catch (error) {
+      console.warn('CentralGo ServiceWorker update check failed:', error);
+    }
+  } catch (error) {
+    serviceWorkerRegistrationStarted = false;
+    console.warn('CentralGo ServiceWorker registration failed:', error);
   }
 }
 
-export function promptPWAInstall(): Promise<boolean> {
-  return new Promise((resolve) => {
-    if (!deferredPrompt) {
-      resolve(false);
+export function registerServiceWorker() {
+  if (typeof window === 'undefined') return;
+
+  // El listener de instalación debe existir lo antes posible, incluso antes de que
+  // el service worker termine de registrarse.
+  registerInstallListeners();
+
+  if (!('serviceWorker' in navigator)) return;
+
+  // Antes se registraba solamente dentro de window.load. Si React llamaba esta
+  // función después de que load ya había ocurrido, el SW nunca se registraba y
+  // Chromium no consideraba la app instalable. Ahora registramos inmediatamente
+  // cuando el documento ya terminó de cargar.
+  if (document.readyState === 'complete') {
+    void doRegisterServiceWorker();
+  } else {
+    window.addEventListener('load', () => void doRegisterServiceWorker(), { once: true });
+  }
+
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (controllerReloaded) return;
+    if (sessionStorage.getItem('centralgo-sw-refresh') === '1') {
+      sessionStorage.removeItem('centralgo-sw-refresh');
       return;
     }
-    deferredPrompt.prompt();
-    deferredPrompt.userChoice.then((choiceResult: { outcome: string }) => {
-      deferredPrompt = null;
-      resolve(choiceResult.outcome === 'accepted');
-    });
-  });
+    controllerReloaded = true;
+    sessionStorage.setItem('centralgo-sw-refresh', '1');
+    window.location.reload();
+  }, { once: true });
+}
+
+export async function promptPWAInstall(): Promise<boolean> {
+  if (!deferredPrompt) return false;
+
+  const promptEvent = deferredPrompt;
+  await promptEvent.prompt();
+  const choiceResult = await promptEvent.userChoice;
+  deferredPrompt = null;
+  return choiceResult.outcome === 'accepted';
+}
+
+export function isPWAInstallPromptAvailable(): boolean {
+  return Boolean(deferredPrompt);
 }
 
 export function isPWAStandalone(): boolean {
   if (typeof window === 'undefined') return false;
   return (
     window.matchMedia('(display-mode: standalone)').matches ||
-    (window.navigator as any).standalone === true
+    (window.navigator as { standalone?: boolean }).standalone === true
   );
 }
