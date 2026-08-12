@@ -3,14 +3,11 @@
 html,body,#root{width:100%;min-height:100%;}
 html,body{margin:0;overflow-x:hidden;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-y:auto;}
 
-/* Central GO desktop is optimized to fit the complete operator console at normal
-   browser zoom. This is intentionally limited to desktop so driver/mobile UI keeps
-   native sizing and accessibility. */
+/* Desktop operator stations need high information density. 12.8px is the CSS
+   equivalent of the layout users were obtaining manually with browser zoom at 80%.
+   Mobile/driver screens deliberately keep the normal 16px root size. */
 @media (min-width: 1024px) {
-  html { font-size: 14.4px; }
-}
-@media (min-width: 1280px) {
-  html { font-size: 14px; }
+  html { font-size: 12.8px; }
 }
 
 @media (max-width:767px){
