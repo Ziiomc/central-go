@@ -10,16 +10,25 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Central GO" />
-    <link id="app-manifest" rel="manifest" href="/manifest.json" />
+    <script>
+      // Inyectar un solo manifest desde el inicio evita que Chromium alcance a
+      // leer primero el manifest general y luego ignore el manifest del conductor.
+      (function () {
+        var driverRoute = window.location.pathname === '/driver' || window.location.pathname.startsWith('/driver/');
+        var manifest = document.createElement('link');
+        manifest.rel = 'manifest';
+        manifest.href = driverRoute ? '/driver-manifest.json' : '/manifest.json';
+        document.head.appendChild(manifest);
+
+        if (driverRoute) {
+          document.title = 'Central GO Conductor';
+          document.querySelector('meta[name="apple-mobile-web-app-title"]').setAttribute('content', 'GO Conductor');
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#09090b');
+        }
+      })();
+    </script>
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/icon.svg" />
-    <script>
-      if (window.location.pathname === '/driver' || window.location.pathname.startsWith('/driver/')) {
-        document.getElementById('app-manifest').setAttribute('href', '/driver-manifest.json');
-        document.title = 'Central GO Conductor';
-        document.querySelector('meta[name="apple-mobile-web-app-title"]').setAttribute('content', 'GO Conductor');
-      }
-    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
