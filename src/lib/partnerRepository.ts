@@ -47,6 +47,14 @@ export interface PartnerDirectoryItem {
   paidCommission: number;
 }
 
+export interface PartnerInviteResult {
+  invited: boolean;
+  partnerId: string;
+  message: string;
+  delivery: 'email' | 'whatsapp';
+  activationUrl: string | null;
+}
+
 export async function loadPartnerDashboard(): Promise<PartnerDashboardData> {
   const db = requireSupabase();
   const { data, error } = await db.rpc('centralgo_partner_dashboard');
@@ -108,7 +116,8 @@ export async function inviteNetworkPartner(input: {
   region?: string;
   city?: string;
   redirectTo?: string;
-}): Promise<{ invited: boolean; partnerId: string; message: string }> {
+  delivery?: 'email' | 'whatsapp';
+}): Promise<PartnerInviteResult> {
   const db = requireSupabase();
   const { data, error } = await db.functions.invoke('invite-network-user', { body: input });
   if (error) throw error;
@@ -117,6 +126,8 @@ export async function inviteNetworkPartner(input: {
     invited: Boolean(data?.invited),
     partnerId: String(data?.partnerId ?? ''),
     message: data?.message ?? 'Partner configurado',
+    delivery: data?.delivery === 'whatsapp' ? 'whatsapp' : 'email',
+    activationUrl: typeof data?.activationUrl === 'string' && data.activationUrl ? data.activationUrl : null,
   };
 }
 
