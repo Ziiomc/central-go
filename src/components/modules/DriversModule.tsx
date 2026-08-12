@@ -145,7 +145,6 @@ export const DriversModule: React.FC = () => {
         name: name.trim(),
         email: normalizedEmail,
         role: 'driver',
-        redirectTo: 'https://central-go-one.vercel.app/driver',
       });
       accessUserId = access.userId;
 
@@ -198,45 +197,26 @@ export const DriversModule: React.FC = () => {
     if (!editingDriver) return;
     setEditError('');
     setNotice('');
-
-    const normalizedUnitNumber = editUnitNumber.trim();
-    const normalizedLicense = editLicenseNumber.trim();
-    if (!normalizedUnitNumber || /^m[oó]vil$/i.test(normalizedUnitNumber)) {
-      setEditError('Indica un número de móvil único, por ejemplo “Móvil 25”.');
-      return;
-    }
-    if (unitNumberIsOccupied(normalizedUnitNumber, editingDriver.id)) {
-      setEditError(`El ${normalizedUnitNumber} ya está asignado a otro conductor.`);
-      return;
-    }
-    if (licenseIsOccupied(normalizedLicense, editingDriver.id)) {
-      setEditError('Ese número de licencia ya está asignado a otro conductor.');
-      return;
-    }
-    if (editVehicleId && vehicleIsOccupied(editVehicleId, editingDriver.id)) {
-      setEditError('Ese vehículo ya está asignado a otro conductor.');
-      return;
-    }
-
     setEditSaving(true);
+
     try {
       await updateDriverProfile({
         driverId: editingDriver.id,
         companyId: currentCompany.id,
         vehicleId: editVehicleId || undefined,
-        unitNumber: normalizedUnitNumber,
+        unitNumber: editUnitNumber,
         name: editName,
         phone: editPhone,
-        licenseNumber: normalizedLicense,
+        licenseNumber: editLicenseNumber,
         licenseExpiry: editLicenseExpiry,
       });
 
       const patch: Partial<Driver> = {
         vehicleId: editVehicleId || undefined,
-        unitNumber: normalizedUnitNumber,
+        unitNumber: editUnitNumber.trim(),
         name: editName.trim(),
         phone: editPhone.trim(),
-        licenseNumber: normalizedLicense,
+        licenseNumber: editLicenseNumber.trim(),
         licenseExpiry: editLicenseExpiry,
       };
       setDriverOverrides((current) => ({ ...current, [editingDriver.id]: patch }));
@@ -251,7 +231,7 @@ export const DriversModule: React.FC = () => {
       setNotice(`${editName.trim()} fue actualizado correctamente. El vehículo y los datos quedaron sincronizados sin alterar su cuenta profesional.`);
       setEditingDriver(null);
     } catch (err) {
-      setEditError(describeDriverError(err));
+      setEditError(err instanceof Error ? err.message : 'No fue posible actualizar al conductor.');
     } finally {
       setEditSaving(false);
     }
@@ -365,7 +345,7 @@ export const DriversModule: React.FC = () => {
               <div className="mt-3 grid grid-cols-2 gap-2"><MiniStat label="Viajes completados" value={String(driver.totalTripsCompleted)} /><MiniStat label="Recaudado hoy" value={`$${driver.todayEarnings.toLocaleString('es-CL')}`} /></div>
 
               <div className={`mt-3 rounded-xl border p-3 text-[10px] ${driver.userId ? 'border-emerald-500/20 bg-emerald-500/5 text-emerald-200' : 'border-zinc-800 bg-zinc-950/50 text-zinc-500'}`}>
-                <div className="flex items-start gap-2"><Smartphone className="h-4 w-4 shrink-0" /><span>{driver.userId ? 'Cuenta profesional vinculada: GPS, carreras, estados, ganancias, comisiones y SOS.' : 'Sin cuenta profesional vinculada.'}</span></div>
+                <div className="flex items-start gap-2"><Smartphone className="h-4 w-4 shrink-0" /><span>{driver.userId ? 'Cuenta profesional vinculada: GPS, carreras, estados, ganancias, radio y SOS.' : 'Sin cuenta profesional vinculada.'}</span></div>
                 {driver.userId && (
                   <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
                     <button disabled={accessBusyId === driver.id} onClick={() => void handleDriverAccess(driver)} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-blue-500/25 bg-blue-500/10 px-2.5 py-2 text-[9px] font-black text-blue-200 transition hover:bg-blue-500/20 disabled:opacity-50">
@@ -394,17 +374,17 @@ export const DriversModule: React.FC = () => {
       {isAddModalOpen && (
         <div className="fixed inset-0 bg-zinc-950/85 backdrop-blur-md z-50 flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-[#0d0d0f] border border-zinc-800 rounded-3xl max-w-lg w-full p-6 shadow-2xl my-auto">
-            <div><h3 className="font-black text-lg text-white">Registrar conductor y enviar acceso</h3><p className="mt-1 text-xs leading-relaxed text-zinc-500">Central GO validará primero que móvil, licencia, vehículo y correo estén disponibles. Luego creará la cuenta profesional y enviará el acceso.</p></div>
+            <div><h3 className="font-black text-lg text-white">Registrar conductor y enviar acceso</h3><p className="mt-1 text-xs leading-relaxed text-zinc-500">Central GO creará la cuenta profesional, enviará el enlace para definir su contraseña y vinculará su móvil y vehículo en un solo proceso.</p></div>
             <form onSubmit={handleAddSubmit} className="mt-5 grid gap-3 sm:grid-cols-2">
-              <div><Field label="Número de móvil" value={unitNumber} onChange={setUnitNumber} placeholder="Ej: Móvil 25" /><p className="mt-1 text-[9px] leading-relaxed text-zinc-600">Debe ser único dentro de la central.</p></div>
+              <Field label="Número de móvil" value={unitNumber} onChange={setUnitNumber} placeholder="Móvil 25" />
               <Field label="Nombre completo" value={name} onChange={setName} placeholder="Nombre y apellido" />
               <Field label="Teléfono" value={phone} onChange={setPhone} placeholder="+56 9 ..." />
               <Field label="Licencia" value={licenseNumber} onChange={setLicenseNumber} placeholder="N° licencia" />
               <label className="block"><span className="text-[10px] font-black uppercase tracking-wider text-zinc-500">Vencimiento licencia</span><div className="mt-1 flex w-full min-w-0 rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2.5"><input required type="date" value={licenseExpiry} onChange={(e) => setLicenseExpiry(e.target.value)} className="block w-full min-w-0 border-0 bg-transparent p-0 text-sm text-zinc-200" /></div></label>
               <label className="block"><span className="text-[10px] font-black uppercase tracking-wider text-zinc-500">Vehículo asignado</span><select value={selectedVehicleId} onChange={(e) => setSelectedVehicleId(e.target.value)} className="mt-1 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-200"><option value="">Sin vehículo</option>{vehicles.map((vehicle) => <option key={vehicle.id} value={vehicle.id} disabled={vehicleIsOccupied(vehicle.id)}>{vehicle.unitNumber} · {vehicle.licensePlate}{vehicleIsOccupied(vehicle.id) ? ' · ya asignado' : ''}</option>)}</select></label>
-              <div className="sm:col-span-2"><label className="text-[10px] font-black uppercase tracking-wider text-zinc-500">Correo personal del conductor</label><input required type="email" value={accountEmail} onChange={(e) => setAccountEmail(e.target.value)} placeholder="conductor@correo.cl" className="mt-1 w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2.5 text-sm text-zinc-200 focus:outline-none focus:border-blue-500" /><p className="mt-1.5 text-[10px] leading-relaxed text-zinc-600">Debe ser el correo personal de esa cuenta de conductor. Si ya pertenece a Partner, Superadmin u otro conductor, Central GO lo bloqueará sin modificar esa cuenta.</p></div>
+              <div className="sm:col-span-2"><label className="text-[10px] font-black uppercase tracking-wider text-zinc-500">Correo personal del conductor</label><input required type="email" value={accountEmail} onChange={(e) => setAccountEmail(e.target.value)} placeholder="conductor@correo.cl" className="mt-1 w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2.5 text-sm text-zinc-200 focus:outline-none focus:border-blue-500" /><p className="mt-1.5 text-[10px] leading-relaxed text-zinc-600">A este correo llegará el acceso. Si el proveedor de correo está limitado, la tarjeta permitirá generar un enlace seguro de un solo uso.</p></div>
               {formError && <div className="sm:col-span-2 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs leading-relaxed text-rose-200">{formError}</div>}
-              <div className="sm:col-span-2 flex gap-2 pt-2"><button type="button" onClick={() => { resetForm(); setIsAddModalOpen(false); }} className="w-1/2 py-3 bg-zinc-800 text-zinc-300 font-bold text-xs rounded-xl">Cancelar</button><button type="submit" disabled={saving} className="w-1/2 py-3 bg-blue-600 hover:bg-blue-500 text-white font-black text-xs rounded-xl disabled:opacity-50">{saving ? 'Validando y creando…' : 'Registrar y enviar acceso'}</button></div>
+              <div className="sm:col-span-2 flex gap-2 pt-2"><button type="button" onClick={() => { resetForm(); setIsAddModalOpen(false); }} className="w-1/2 py-3 bg-zinc-800 text-zinc-300 font-bold text-xs rounded-xl">Cancelar</button><button type="submit" disabled={saving} className="w-1/2 py-3 bg-blue-600 hover:bg-blue-500 text-white font-black text-xs rounded-xl disabled:opacity-50">{saving ? 'Creando acceso…' : 'Registrar y enviar acceso'}</button></div>
             </form>
           </div>
         </div>
