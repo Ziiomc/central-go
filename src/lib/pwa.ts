@@ -6,10 +6,10 @@ type BeforeInstallPromptEvent = Event & {
 };
 
 let deferredPrompt: BeforeInstallPromptEvent | null = null;
-let controllerReloaded = false;
 let listenersRegistered = false;
 let serviceWorkerRegistrationStarted = false;
-const FRESHNESS_KEY = 'centralgo-fresh-bundle-v5';
+let controllerListenerRegistered = false;
+const FRESHNESS_KEY = 'centralgo-fresh-bundle-v6';
 
 async function purgeLegacyFrontendCaches() {
   if (typeof window === 'undefined') return;
@@ -41,6 +41,20 @@ function registerInstallListeners() {
   });
 }
 
+function registerControllerListener() {
+  if (typeof window === 'undefined' || !('serviceWorker' in navigator) || controllerListenerRegistered) return;
+  controllerListenerRegistered = true;
+
+  // Nunca recargar automáticamente una consola o PWA operativa. En versiones
+  // anteriores controllerchange hacía window.location.reload(), lo que podía
+  // desmontar la carrera activa al volver desde otra app o cuando el navegador
+  // activaba una nueva versión del service worker. La versión nueva se aplica
+  // de forma silenciosa y el estado vivo permanece en Supabase/React.
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    window.dispatchEvent(new CustomEvent('centralgo-sw-updated'));
+  });
+}
+
 async function doRegisterServiceWorker() {
   if (serviceWorkerRegistrationStarted || !('serviceWorker' in navigator)) return;
   serviceWorkerRegistrationStarted = true;
@@ -63,32 +77,16 @@ async function doRegisterServiceWorker() {
 export function registerServiceWorker() {
   if (typeof window === 'undefined') return;
 
-  // El listener de instalación debe existir lo antes posible, incluso antes de que
-  // el service worker termine de registrarse.
   registerInstallListeners();
+  registerControllerListener();
 
   if (!('serviceWorker' in navigator)) return;
 
-  // Antes se registraba solamente dentro de window.load. Si React llamaba esta
-  // función después de que load ya había ocurrido, el SW nunca se registraba y
-  // Chromium no consideraba la app instalable. Ahora registramos inmediatamente
-  // cuando el documento ya terminó de cargar.
   if (document.readyState === 'complete') {
     void doRegisterServiceWorker();
   } else {
     window.addEventListener('load', () => void doRegisterServiceWorker(), { once: true });
   }
-
-  navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (controllerReloaded) return;
-    if (sessionStorage.getItem('centralgo-sw-refresh') === '1') {
-      sessionStorage.removeItem('centralgo-sw-refresh');
-      return;
-    }
-    controllerReloaded = true;
-    sessionStorage.setItem('centralgo-sw-refresh', '1');
-    window.location.reload();
-  }, { once: true });
 }
 
 export async function promptPWAInstall(): Promise<boolean> {
