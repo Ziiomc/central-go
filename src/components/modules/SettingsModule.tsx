@@ -1,116 +1,22 @@
-import React, { useState } from 'react';
-import { useApp } from '../../context/AppContext';
-import { Settings, DollarSign, Radio, RadioTower, CheckCircle } from 'lucide-react';
+import React,{useEffect,useState}from'react';
+import{CheckCircle,DollarSign,MapPinned,Plus,RadioTower,Settings,Trash2}from'lucide-react';
+import{useApp}from'../../context/AppContext';
+import{deleteFareDestination,loadFareDestinations,saveFareDestination}from'../../lib/operationalIntelligenceRepository';
+import type{FareDestination}from'../../types';
 
-export const SettingsModule: React.FC = () => {
-  const { fareConfig, updateFareConfig, currentCompany } = useApp();
-
-  const [baseFare, setBaseFare] = useState(fareConfig.baseFare);
-  const [pricePerKm, setPricePerKm] = useState(fareConfig.pricePerKm);
-  const [pricePerMinuteWait, setPricePerMinuteWait] = useState(fareConfig.pricePerMinuteWait);
-  const [nightSurchargePercent, setNightSurchargePercent] = useState(fareConfig.nightSurchargePercent);
-  const [savedSuccess, setSavedSuccess] = useState(false);
-
-  const handleSave = (e: React.FormEvent) => {
-    e.preventDefault();
-    updateFareConfig({
-      ...fareConfig,
-      baseFare,
-      pricePerKm,
-      pricePerMinuteWait,
-      nightSurchargePercent,
-    });
-    setSavedSuccess(true);
-    setTimeout(() => setSavedSuccess(false), 3000);
-  };
-
-  return (
-    <div className="space-y-6 max-w-3xl">
-      <div>
-        <h1 className="font-extrabold text-2xl text-white tracking-tight flex items-center gap-2 uppercase font-sans">
-          <Settings className="w-6 h-6 text-blue-500" />
-          Configuración Central de Tarifas y Parámetros
-        </h1>
-        <p className="text-xs text-zinc-400 mt-1 font-sans">
-          Ajuste de bajada de bandera, ficha por kilómetro y frecuencia VHF de respaldo
-        </p>
-      </div>
-
-      <form onSubmit={handleSave} className="bg-[#0d0d0f] border border-zinc-800 rounded-xl p-6 space-y-5 shadow-2xl">
-        <h3 className="font-extrabold text-base text-white flex items-center gap-2 border-b border-zinc-800 pb-3 uppercase tracking-tight">
-          <DollarSign className="w-5 h-5 text-emerald-400" />
-          Tarifario Digital ({currentCompany.name})
-        </h3>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="text-xs text-zinc-300 font-mono uppercase tracking-wider block">Bajada de Bandera ($)</label>
-            <input
-              type="number"
-              value={baseFare}
-              onChange={(e) => setBaseFare(Number(e.target.value))}
-              required
-              className="w-full bg-[#121215] border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-blue-500 transition"
-            />
-          </div>
-
-          <div>
-            <label className="text-xs text-zinc-300 font-mono uppercase tracking-wider block">Precio por Kilómetro ($)</label>
-            <input
-              type="number"
-              value={pricePerKm}
-              onChange={(e) => setPricePerKm(Number(e.target.value))}
-              required
-              className="w-full bg-[#121215] border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-blue-500 transition"
-            />
-          </div>
-
-          <div>
-            <label className="text-xs text-zinc-300 font-mono uppercase tracking-wider block">Minuto de Espera ($)</label>
-            <input
-              type="number"
-              value={pricePerMinuteWait}
-              onChange={(e) => setPricePerMinuteWait(Number(e.target.value))}
-              required
-              className="w-full bg-[#121215] border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-blue-500 transition"
-            />
-          </div>
-
-          <div>
-            <label className="text-xs text-zinc-300 font-mono uppercase tracking-wider block">Recargo Nocturno (%)</label>
-            <input
-              type="number"
-              value={nightSurchargePercent}
-              onChange={(e) => setNightSurchargePercent(Number(e.target.value))}
-              required
-              className="w-full bg-[#121215] border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 mt-1 focus:outline-none focus:border-blue-500 transition"
-            />
-          </div>
-        </div>
-
-        <div className="bg-[#121215] p-4 rounded-lg border border-zinc-800 space-y-1 text-xs">
-          <div className="font-bold text-blue-400 flex items-center gap-2 uppercase tracking-wider">
-            <RadioTower className="w-4 h-4" /> Frecuencia de Emergencia VHF
-          </div>
-          <div className="text-zinc-300 font-mono">{currentCompany.vhfFrequency}</div>
-          <p className="text-[11px] text-zinc-500">
-            Mantenida en reserva exclusivamente para eventos donde la cobertura celular falle.
-          </p>
-        </div>
-
-        {savedSuccess && (
-          <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 rounded-lg text-xs font-bold flex items-center gap-2">
-            <CheckCircle className="w-4 h-4" /> Configuración guardada correctamente
-          </div>
-        )}
-
-        <button
-          type="submit"
-          className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-extrabold text-xs rounded-lg shadow-lg transition uppercase tracking-wider"
-        >
-          Guardar Cambios de Tarifa
-        </button>
-      </form>
-    </div>
-  );
+export const SettingsModule:React.FC=()=>{
+ const{fareConfig,updateFareConfig,currentCompany}=useApp();
+ const[baseFare,setBaseFare]=useState(fareConfig.baseFare),[pricePerKm,setPricePerKm]=useState(fareConfig.pricePerKm),[pricePerMinuteWait,setPricePerMinuteWait]=useState(fareConfig.pricePerMinuteWait),[nightSurchargePercent,setNightSurchargePercent]=useState(fareConfig.nightSurchargePercent),[savedSuccess,setSavedSuccess]=useState(false);
+ const[destinations,setDestinations]=useState<FareDestination[]>([]),[destName,setDestName]=useState(''),[matchText,setMatchText]=useState(''),[destFare,setDestFare]=useState(''),[fareError,setFareError]=useState('');
+ const reload=async()=>{if(currentCompany.id==='network')return;try{setDestinations(await loadFareDestinations(currentCompany.id));setFareError('');}catch(e){setFareError(e instanceof Error?e.message:'No fue posible cargar tarifas por destino.');}};
+ useEffect(()=>{void reload();},[currentCompany.id]);
+ const handleSave=async(e:React.FormEvent)=>{e.preventDefault();await updateFareConfig({...fareConfig,baseFare,pricePerKm,pricePerMinuteWait,nightSurchargePercent});setSavedSuccess(true);setTimeout(()=>setSavedSuccess(false),3000);};
+ const addDestination=async(e:React.FormEvent)=>{e.preventDefault();const amount=Number(destFare);if(!destName.trim()||!matchText.trim()||!Number.isFinite(amount)||amount<0){setFareError('Completa nombre, texto de coincidencia y tarifa válida.');return;}try{await saveFareDestination(currentCompany.id,{name:destName,matchText, fareAmount:amount});setDestName('');setMatchText('');setDestFare('');await reload();}catch(err){setFareError(err instanceof Error?err.message:'No fue posible guardar la tarifa.');}};
+ return <div className="max-w-4xl space-y-6">
+  <div><h1 className="flex items-center gap-2 text-2xl font-extrabold text-white"><Settings className="h-6 w-6 text-blue-500"/>Tarifas y parámetros</h1><p className="mt-1 text-xs text-zinc-400">Tarifa por distancia y tarifario fijo automático por destino.</p></div>
+  <form onSubmit={handleSave} className="space-y-5 rounded-2xl border border-zinc-800 bg-[#0d0d0f] p-6 shadow-xl"><h3 className="flex items-center gap-2 border-b border-zinc-800 pb-3 font-extrabold text-white"><DollarSign className="h-5 w-5 text-emerald-400"/>Tarifario digital ({currentCompany.name})</h3><div className="grid gap-4 sm:grid-cols-2"><NumberField label="Bajada de bandera ($)" value={baseFare} onChange={setBaseFare}/><NumberField label="Precio por kilómetro ($)" value={pricePerKm} onChange={setPricePerKm}/><NumberField label="Minuto de espera ($)" value={pricePerMinuteWait} onChange={setPricePerMinuteWait}/><NumberField label="Recargo nocturno (%)" value={nightSurchargePercent} onChange={setNightSurchargePercent}/></div><div className="rounded-xl border border-zinc-800 bg-zinc-950/50 p-4 text-xs"><p className="flex items-center gap-2 font-bold text-blue-400"><RadioTower className="h-4 w-4"/>Frecuencia VHF de respaldo</p><p className="mt-1 font-mono text-zinc-300">{currentCompany.vhfFrequency||'No configurada'}</p></div>{savedSuccess&&<div className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs font-bold text-emerald-300"><CheckCircle className="h-4 w-4"/>Configuración guardada</div>}<button className="rounded-xl bg-blue-600 px-6 py-3 text-xs font-black text-white">Guardar tarifa general</button></form>
+  <section className="rounded-2xl border border-amber-500/20 bg-[#0d0d0f] p-6 shadow-xl"><div className="flex items-start gap-3"><div className="rounded-xl border border-amber-500/25 bg-amber-500/10 p-2 text-amber-300"><MapPinned className="h-5 w-5"/></div><div><h2 className="font-black text-white">Tarifas fijas por destino</h2><p className="mt-1 text-xs leading-relaxed text-zinc-500">Ejemplo: <strong className="text-zinc-300">San Javier → $8.000</strong>. Cuando el destino escrito contenga el texto configurado, la carrera tomará esa tarifa automáticamente.</p></div></div><form onSubmit={addDestination} className="mt-5 grid gap-2 md:grid-cols-[1fr_1.2fr_.7fr_auto]"><input value={destName} onChange={e=>setDestName(e.target.value)} placeholder="Nombre: San Javier" className={inputClass}/><input value={matchText} onChange={e=>setMatchText(e.target.value)} placeholder="Detectar texto: san javier" className={inputClass}/><input type="number" min="0" step="500" value={destFare} onChange={e=>setDestFare(e.target.value)} placeholder="$ 8.000" className={inputClass}/><button className="flex items-center justify-center gap-1.5 rounded-xl bg-amber-400 px-4 py-2.5 text-xs font-black text-zinc-950"><Plus className="h-4 w-4"/>Agregar</button></form>{fareError&&<p className="mt-3 text-xs text-rose-300">{fareError}</p>}<div className="mt-4 space-y-2">{destinations.map(item=><div key={item.id} className="flex items-center justify-between gap-3 rounded-xl border border-zinc-800 bg-zinc-950/60 p-3"><div><p className="text-xs font-black text-white">{item.name} · <span className="text-emerald-300">${Math.round(item.fareAmount).toLocaleString('es-CL')}</span></p><p className="mt-0.5 text-[9px] text-zinc-600">Se activa cuando el destino contiene “{item.matchText}”</p></div><button onClick={()=>void deleteFareDestination(currentCompany.id,item.id).then(reload)} className="rounded-lg border border-rose-500/20 bg-rose-500/10 p-2 text-rose-300"><Trash2 className="h-4 w-4"/></button></div>)}{!destinations.length&&<p className="rounded-xl border border-zinc-800 p-4 text-center text-xs text-zinc-600">Aún no hay tarifas fijas por destino.</p>}</div></section>
+ </div>;
 };
+const inputClass='w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2.5 text-xs text-white outline-none focus:border-amber-400';
+const NumberField=({label,value,onChange}:{label:string;value:number;onChange:(v:number)=>void})=><label><span className="block text-[10px] font-black uppercase tracking-wider text-zinc-500">{label}</span><input required type="number" value={value} onChange={e=>onChange(Number(e.target.value))} className={`${inputClass} mt-1`}/></label>;
