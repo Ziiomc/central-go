@@ -53,7 +53,7 @@ export const CentralRadioReceiver: React.FC = () => {
         }
       }
       processingRef.current = false;
-      hideTimerRef.current = window.setTimeout(() => setVisible(false), 9000);
+      hideTimerRef.current = window.setTimeout(() => setVisible(false), 3000);
     };
 
     const channel = db.channel(`centralgo-radio-central:${currentCompany.id}`)
