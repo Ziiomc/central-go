@@ -5,11 +5,28 @@ type BeforeInstallPromptEvent = Event & {
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform?: string }>;
 };
 
+type WakeLockSentinelLike = {
+  released?: boolean;
+  release: () => Promise<void>;
+  addEventListener?: (type: 'release', listener: () => void) => void;
+};
+
+type NavigatorWithWakeLock = Navigator & {
+  wakeLock?: { request: (type: 'screen') => Promise<WakeLockSentinelLike> };
+};
+
 let deferredPrompt: BeforeInstallPromptEvent | null = null;
 let listenersRegistered = false;
 let serviceWorkerRegistrationStarted = false;
 let controllerListenerRegistered = false;
+let driverReliabilityRegistered = false;
+let driverWakeLock: WakeLockSentinelLike | null = null;
+let driverWakeLockBusy = false;
+let driverHiddenAt: number | null = null;
 const FRESHNESS_KEY = 'centralgo-fresh-bundle-v7';
+const DRIVER_RESUME_RELOAD_KEY = 'centralgo-driver-last-auto-resume-reload';
+const DRIVER_RESUME_THRESHOLD_MS = 8000;
+const DRIVER_RELOAD_GUARD_MS = 12000;
 
 async function purgeLegacyFrontendCaches() {
   if (typeof window === 'undefined') return;
@@ -52,6 +69,83 @@ function registerControllerListener() {
   });
 }
 
+async function releaseDriverWakeLock() {
+  const current = driverWakeLock;
+  driverWakeLock = null;
+  if (!current || current.released) return;
+  try { await current.release(); } catch {}
+}
+
+async function requestDriverWakeLock() {
+  if (!location.pathname.startsWith('/driver')) return;
+  if (!/Android/i.test(navigator.userAgent || '')) return;
+  if (document.visibilityState !== 'visible') return;
+  if (localStorage.getItem('centralgo-driver-gps-wanted') === '0') return;
+  const nav = navigator as NavigatorWithWakeLock;
+  if (!nav.wakeLock?.request || driverWakeLock || driverWakeLockBusy) return;
+
+  driverWakeLockBusy = true;
+  try {
+    const sentinel = await nav.wakeLock.request('screen');
+    driverWakeLock = sentinel;
+    sentinel.addEventListener?.('release', () => {
+      if (driverWakeLock === sentinel) driverWakeLock = null;
+    });
+  } catch {
+    // Algunos fabricantes o modos de ahorro de energía no permiten Wake Lock.
+  } finally {
+    driverWakeLockBusy = false;
+  }
+}
+
+function recoverDriverAfterAndroidSuspend(force = false) {
+  if (!location.pathname.startsWith('/driver') || !/Android/i.test(navigator.userAgent || '')) return;
+  if (document.visibilityState !== 'visible') return;
+  void requestDriverWakeLock();
+
+  const hiddenAt = driverHiddenAt;
+  driverHiddenAt = null;
+  const suspendedMs = hiddenAt ? Date.now() - hiddenAt : 0;
+  if (!force && suspendedMs < DRIVER_RESUME_THRESHOLD_MS) return;
+
+  const lastReload = Number(sessionStorage.getItem(DRIVER_RESUME_RELOAD_KEY) || '0');
+  if (Date.now() - lastReload < DRIVER_RELOAD_GUARD_MS) return;
+
+  // Android puede congelar Supabase Realtime/WebSocket con la pantalla apagada.
+  // Las carreras están persistidas en Supabase; una recarga al desbloquear no
+  // cancela el viaje: vuelve a hidratar conductor, carrera y notificaciones.
+  sessionStorage.setItem(DRIVER_RESUME_RELOAD_KEY, String(Date.now()));
+  window.setTimeout(() => window.location.reload(), 100);
+}
+
+function registerDriverAndroidReliability() {
+  if (typeof window === 'undefined' || driverReliabilityRegistered) return;
+  if (!location.pathname.startsWith('/driver') || !/Android/i.test(navigator.userAgent || '')) return;
+  driverReliabilityRegistered = true;
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      driverHiddenAt = Date.now();
+      void releaseDriverWakeLock();
+      return;
+    }
+    recoverDriverAfterAndroidSuspend();
+  });
+
+  window.addEventListener('pageshow', (event) => {
+    if ((event as PageTransitionEvent).persisted) recoverDriverAfterAndroidSuspend(true);
+    else void requestDriverWakeLock();
+  });
+
+  window.addEventListener('online', () => recoverDriverAfterAndroidSuspend(true));
+  window.addEventListener('focus', () => {
+    if (driverHiddenAt) recoverDriverAfterAndroidSuspend();
+    else void requestDriverWakeLock();
+  });
+
+  void requestDriverWakeLock();
+}
+
 async function doRegisterServiceWorker() {
   if (serviceWorkerRegistrationStarted || !('serviceWorker' in navigator)) return;
   serviceWorkerRegistrationStarted = true;
@@ -78,6 +172,7 @@ export function registerServiceWorker() {
 
   registerInstallListeners();
   registerControllerListener();
+  registerDriverAndroidReliability();
 
   if (!('serviceWorker' in navigator)) return;
 
