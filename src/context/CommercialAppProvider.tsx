@@ -18,6 +18,7 @@ import type {
 import { DEFAULT_FARE_CONFIG, ZONES } from '../data/mockData';
 import { soundManager } from '../lib/audio';
 import { playSOSSiren, speakVHFDispatch } from '../lib/audioService';
+import { autoDispatchTripAtomic } from '../lib/smartDispatch';
 import {
   assignCompanyUserByEmail,
   assignTripAtomic,
@@ -86,7 +87,6 @@ export const CommercialAppProvider: React.FC<React.PropsWithChildren> = ({ child
   const [operationError, setOperationError] = useState<string | null>(null);
 
   const currentRole = effectiveRole ?? 'operator';
-  const currentMembership = memberships.find((item) => item.companyId === currentCompany.id) ?? memberships[0];
 
   useEffect(() => {
     if (!authorizedCompanies.length) {
@@ -229,11 +229,12 @@ export const CommercialAppProvider: React.FC<React.PropsWithChildren> = ({ child
   const createTrip = async (data: Partial<Trip>) => {
     const trip = await insertTrip(currentCompany, currentUser, data);
     setTrips((items) => upsertById(items, trip));
-    if (trip.driverId) {
-      setDrivers((items) => items.map((driver) => driver.id === trip.driverId ? { ...driver, status: 'en_route' } : driver));
+    if (trip.driverId) setDrivers((items) => items.map((driver) => driver.id === trip.driverId ? { ...driver, status: 'en_route' } : driver));
+    const scheduleLabel = trip.scheduledFor ? ` agendada para ${new Date(trip.scheduledFor).toLocaleString('es-CL')}` : '';
+    addAuditLog('CREAR_VIAJE', `Creó despacho ${trip.code}${scheduleLabel} para ${trip.clientName}`);
+    if (!soundMuted && !trip.scheduledFor) {
+      speakVHFDispatch(trip.driverUnitNumber ? `Atención ${trip.driverUnitNumber}, nuevo despacho en ${trip.origin.address}` : `Atención central y unidades, nuevo despacho en ${trip.origin.address}`);
     }
-    addAuditLog('CREAR_VIAJE', `Creó despacho ${trip.code} para ${trip.clientName}`);
-    if (!soundMuted) speakVHFDispatch(trip.driverUnitNumber ? `Atención ${trip.driverUnitNumber}, nuevo despacho en ${trip.origin.address}` : `Atención central y unidades, nuevo despacho libre en ${trip.origin.address}`);
     return trip;
   };
 
@@ -327,16 +328,18 @@ export const CommercialAppProvider: React.FC<React.PropsWithChildren> = ({ child
   };
 
   const autoAssignClosestDriver = async (tripId: string): Promise<Driver | null> => {
-    const trip = trips.find((item) => item.id === tripId);
-    const available = drivers.filter((driver) => driver.status === 'available');
-    if (!trip || !available.length) return null;
-    const closest = available.reduce((best, driver) => {
-      const bestDistance = Math.hypot(best.currentLocation.lat - trip.origin.lat, best.currentLocation.lng - trip.origin.lng);
-      const distance = Math.hypot(driver.currentLocation.lat - trip.origin.lat, driver.currentLocation.lng - trip.origin.lng);
-      return distance < bestDistance ? driver : best;
-    });
-    await assignTrip(tripId, closest.id);
-    return closest;
+    const trip = await autoDispatchTripAtomic(tripId);
+    setTrips((items) => upsertById(items, trip));
+    const candidateId = trip.driverId ?? trip.reservedDriverId;
+    if (!candidateId) return null;
+    const candidate = drivers.find((driver) => driver.id === candidateId) ?? null;
+    if (trip.driverId && candidate) {
+      setDrivers((items) => items.map((driver) => driver.id === trip.driverId ? { ...driver, status: 'en_route' } : driver));
+      addAuditLog('AUTO_DESPACHO', `Asignación automática inteligente: ${trip.code} → ${candidate.unitNumber}`);
+    } else if (trip.reservedDriverId && candidate) {
+      addAuditLog('AUTO_RESERVA', `Reserva predictiva: ${trip.code} espera a ${candidate.unitNumber}, que termina cerca del retiro`);
+    }
+    return trip.driverId ? candidate : null;
   };
 
   const settleDriverCommission = async (driverId: string) => {
@@ -360,9 +363,7 @@ export const CommercialAppProvider: React.FC<React.PropsWithChildren> = ({ child
 
   const addDriver = async (data: Omit<Driver, 'id' | 'rating' | 'totalTripsCompleted' | 'todayEarnings'>) => {
     let linkedUserId = data.userId;
-    if (linkedUserId.includes('@')) {
-      linkedUserId = await assignCompanyUserByEmail(currentCompany.id, linkedUserId, 'driver');
-    }
+    if (linkedUserId.includes('@')) linkedUserId = await assignCompanyUserByEmail(currentCompany.id, linkedUserId, 'driver');
     const driver = await insertDriver({ ...data, userId: linkedUserId, companyId: currentCompany.id });
     setDrivers((items) => upsertById(items, driver));
     addAuditLog('NUEVO_CONDUCTOR', `Registró ${driver.unitNumber} (${driver.name})`);
