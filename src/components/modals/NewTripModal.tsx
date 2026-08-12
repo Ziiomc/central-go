@@ -1,10 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  CalendarClock,
   Car,
   ChevronDown,
   ChevronUp,
   CircleDollarSign,
+  Clock3,
   MapPin,
+  MessageSquareText,
   Navigation,
   Phone,
   Send,
@@ -34,6 +37,13 @@ const DESTINATION_PRESETS = [
   ['Alameda', 'Alameda de Linares'],
 ] as const;
 
+const nextHourLocal = () => {
+  const date = new Date(Date.now() + 60 * 60 * 1000);
+  date.setMinutes(0, 0, 0);
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+};
+
 export const NewTripModal: React.FC = () => {
   const {
     newTripModalOpen,
@@ -59,12 +69,14 @@ export const NewTripModal: React.FC = () => {
   const [estimatedKm, setEstimatedKm] = useState(3);
   const [isFixedFare, setIsFixedFare] = useState(false);
   const [fixedFareAmount, setFixedFareAmount] = useState(4500);
+  const [scheduleEnabled, setScheduleEnabled] = useState(false);
+  const [scheduledLocal, setScheduledLocal] = useState(nextHourLocal());
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   const availableDrivers = useMemo(
     () => drivers.filter((driver) => driver.status === 'available'),
-    [drivers]
+    [drivers],
   );
 
   const calculatedFare = isFixedFare
@@ -75,7 +87,6 @@ export const NewTripModal: React.FC = () => {
     if (!newTripModalOpen) return;
     setError('');
     window.setTimeout(() => originInputRef.current?.focus(), 50);
-
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setNewTripModalOpen(false);
     };
@@ -99,6 +110,8 @@ export const NewTripModal: React.FC = () => {
     setEstimatedKm(3);
     setIsFixedFare(false);
     setFixedFareAmount(4500);
+    setScheduleEnabled(false);
+    setScheduledLocal(nextHourLocal());
     setError('');
   };
 
@@ -132,7 +145,17 @@ export const NewTripModal: React.FC = () => {
       return;
     }
 
-    const selectedDriver = availableDrivers.find((driver) => driver.id === selectedDriverId);
+    let scheduledFor: string | undefined;
+    if (scheduleEnabled) {
+      const scheduledDate = new Date(scheduledLocal);
+      if (!scheduledLocal || Number.isNaN(scheduledDate.getTime()) || scheduledDate.getTime() < Date.now() + 2 * 60 * 1000) {
+        setError('La carrera agendada debe ser al menos 2 minutos después de la hora actual.');
+        return;
+      }
+      scheduledFor = scheduledDate.toISOString();
+    }
+
+    const selectedDriver = scheduleEnabled ? undefined : availableDrivers.find((driver) => driver.id === selectedDriverId);
     setSubmitting(true);
     try {
       const originPoint = runtimeConfig.isCommercial
@@ -145,30 +168,24 @@ export const NewTripModal: React.FC = () => {
         : { lat: -35.849 + (Math.random() - 0.5) * 0.018, lng: -71.603 + (Math.random() - 0.5) * 0.018 };
 
       await createTrip({
-      clientId: selectedClientId || undefined,
-      clientName: clientName.trim() || 'Cliente Particular',
-      clientPhone: clientPhone.trim() || 'Sin teléfono',
-      origin: {
-        lat: originPoint.lat,
-        lng: originPoint.lng,
-        address: cleanOrigin,
-      },
-      destination: {
-        lat: destinationPoint.lat,
-        lng: destinationPoint.lng,
-        address: cleanDestination,
-      },
-      driverId: selectedDriver?.id,
-      driverUnitNumber: selectedDriver?.unitNumber,
-      driverName: selectedDriver?.name,
-      vehicleTypeRequested: vehicleType,
-      paymentMethod,
-      notes: notes.trim() || undefined,
-      estimatedDistanceKm: Math.max(0.5, estimatedKm),
-      estimatedDurationMins: Math.max(5, Math.round(estimatedKm * 3)),
-      estimatedFare: calculatedFare,
-      isFixedFare,
-      fixedFareAmount: isFixedFare ? Math.max(1000, fixedFareAmount) : undefined,
+        clientId: selectedClientId || undefined,
+        clientName: clientName.trim() || 'Cliente Particular',
+        clientPhone: clientPhone.trim() || 'Sin teléfono',
+        origin: { lat: originPoint.lat, lng: originPoint.lng, address: cleanOrigin },
+        destination: { lat: destinationPoint.lat, lng: destinationPoint.lng, address: cleanDestination },
+        driverId: selectedDriver?.id,
+        driverUnitNumber: selectedDriver?.unitNumber,
+        driverName: selectedDriver?.name,
+        dispatchMode: selectedDriver ? 'manual' : 'automatic',
+        scheduledFor,
+        vehicleTypeRequested: vehicleType,
+        paymentMethod,
+        notes: notes.trim() || undefined,
+        estimatedDistanceKm: Math.max(0.5, estimatedKm),
+        estimatedDurationMins: Math.max(5, Math.round(estimatedKm * 3)),
+        estimatedFare: calculatedFare,
+        isFixedFare,
+        fixedFareAmount: isFixedFare ? Math.max(1000, fixedFareAmount) : undefined,
       });
 
       setNewTripModalOpen(false);
@@ -186,9 +203,7 @@ export const NewTripModal: React.FC = () => {
       role="dialog"
       aria-modal="true"
       aria-labelledby="new-trip-title"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) closeModal();
-      }}
+      onMouseDown={(event) => { if (event.target === event.currentTarget) closeModal(); }}
     >
       <div className="my-3 w-full max-w-3xl overflow-hidden rounded-3xl border border-zinc-700 bg-[#0d0d0f] shadow-2xl shadow-black/60">
         <header className="flex items-center justify-between border-b border-zinc-800 px-4 py-4 sm:px-6">
@@ -198,7 +213,7 @@ export const NewTripModal: React.FC = () => {
             </div>
             <div>
               <h2 id="new-trip-title" className="text-xl font-black text-white">Nueva carrera</h2>
-              <p className="text-xs text-zinc-500">Origen, destino y móvil. Lo demás es opcional.</p>
+              <p className="text-xs text-zinc-500">Despacho express o carrera agendada desde la misma pantalla.</p>
             </div>
           </div>
           <button onClick={closeModal} aria-label="Cerrar" className="rounded-xl p-2 text-zinc-400 hover:bg-zinc-800 hover:text-white">
@@ -206,7 +221,36 @@ export const NewTripModal: React.FC = () => {
           </button>
         </header>
 
-        <form onSubmit={submitTrip} className="space-y-5 p-4 sm:p-6">
+        <form onSubmit={submitTrip} className="space-y-4 p-4 sm:p-6">
+          <section className="grid grid-cols-2 gap-2 rounded-2xl border border-zinc-800 bg-zinc-950/60 p-1.5">
+            <button
+              type="button"
+              onClick={() => { setScheduleEnabled(false); setSelectedDriverId(''); }}
+              className={`flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-black ${!scheduleEnabled ? 'bg-amber-400 text-zinc-950' : 'text-zinc-400 hover:text-white'}`}
+            >
+              <Zap className="h-4 w-4" /> Ahora
+            </button>
+            <button
+              type="button"
+              onClick={() => { setScheduleEnabled(true); setSelectedDriverId(''); }}
+              className={`flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-black ${scheduleEnabled ? 'bg-blue-600 text-white' : 'text-zinc-400 hover:text-white'}`}
+            >
+              <CalendarClock className="h-4 w-4" /> Agendar
+            </button>
+          </section>
+
+          {scheduleEnabled && (
+            <section className="rounded-2xl border border-blue-500/25 bg-blue-500/[0.06] p-4">
+              <label className="mb-2 flex items-center gap-2 text-sm font-extrabold text-white">
+                <Clock3 className="h-4 w-4 text-blue-300" /> Fecha y hora de retiro
+              </label>
+              <input type="datetime-local" value={scheduledLocal} onChange={(event) => setScheduledLocal(event.target.value)} className={`${inputClass} [color-scheme:dark]`} />
+              <p className="mt-2 text-xs leading-relaxed text-blue-200/70">
+                Central GO la mantendrá en agenda y la ofrecerá automáticamente al móvil más conveniente cerca de la hora programada.
+              </p>
+            </section>
+          )}
+
           <section className="grid gap-4 md:grid-cols-2">
             <AddressField
               ref={originInputRef}
@@ -227,51 +271,48 @@ export const NewTripModal: React.FC = () => {
             />
           </section>
 
-          {error && (
-            <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm font-semibold text-rose-200">
-              {error}
-            </div>
-          )}
+          <section className="grid gap-3 md:grid-cols-2">
+            <Field label="Pasajero" icon={UserRound}>
+              <input value={clientName} onChange={(event) => setClientName(event.target.value)} placeholder="Nombre del pasajero" className={inputClass} />
+            </Field>
+            <Field label="Observación express" icon={MessageSquareText}>
+              <input value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Ej.: esperar afuera, equipaje, mascota..." className={inputClass} />
+            </Field>
+          </section>
+
+          {error && <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm font-semibold text-rose-200">{error}</div>}
 
           <section>
             <div className="mb-2 flex items-center justify-between gap-3">
               <div>
-                <h3 className="text-sm font-extrabold text-white">3. Asignar móvil</h3>
-                <p className="text-xs text-zinc-500">Automático elige el móvil libre más cercano.</p>
+                <h3 className="text-sm font-extrabold text-white">3. Asignación</h3>
+                <p className="text-xs text-zinc-500">
+                  {scheduleEnabled
+                    ? 'Agenda inteligente: se asignará al móvil disponible o próximo a terminar más conveniente.'
+                    : 'Automático considera móviles libres y taxis que están por finalizar cerca del retiro.'}
+                </p>
               </div>
-              <span className="rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-bold text-emerald-300">
-                {availableDrivers.length} libres
-              </span>
+              <span className="rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-bold text-emerald-300">{availableDrivers.length} libres</span>
             </div>
             <div className="flex max-h-40 flex-wrap gap-2 overflow-y-auto rounded-2xl border border-zinc-800 bg-zinc-950/70 p-3">
               <button
                 type="button"
                 onClick={() => setSelectedDriverId('')}
-                className={`flex items-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-black transition ${
-                  selectedDriverId === ''
-                    ? 'border-amber-200 bg-amber-400 text-zinc-950'
-                    : 'border-zinc-700 bg-zinc-900 text-zinc-200 hover:border-amber-400/50'
-                }`}
+                className={`flex items-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-black transition ${selectedDriverId === '' ? 'border-amber-200 bg-amber-400 text-zinc-950' : 'border-zinc-700 bg-zinc-900 text-zinc-200'}`}
               >
-                <Zap className="h-4 w-4" /> Automático
+                <Zap className="h-4 w-4" /> Automático inteligente
               </button>
-              {availableDrivers.map((driver) => (
+              {!scheduleEnabled && availableDrivers.map((driver) => (
                 <button
                   key={driver.id}
                   type="button"
                   onClick={() => setSelectedDriverId(driver.id)}
-                  className={`rounded-xl border px-3 py-2.5 text-sm font-bold transition ${
-                    selectedDriverId === driver.id
-                      ? 'border-amber-200 bg-amber-400 text-zinc-950'
-                      : 'border-zinc-700 bg-zinc-900 text-zinc-200 hover:border-amber-400/50'
-                  }`}
+                  className={`rounded-xl border px-3 py-2.5 text-sm font-bold transition ${selectedDriverId === driver.id ? 'border-amber-200 bg-amber-400 text-zinc-950' : 'border-zinc-700 bg-zinc-900 text-zinc-200 hover:border-amber-400/50'}`}
                 >
                   {driver.unitNumber} <span className="font-normal opacity-70">· {driver.name.split(' ')[0]}</span>
                 </button>
               ))}
-              {!availableDrivers.length && (
-                <span className="px-2 py-2 text-sm text-amber-300">Sin móviles libres: la carrera quedará pendiente.</span>
-              )}
+              {!availableDrivers.length && !scheduleEnabled && <span className="px-2 py-2 text-sm text-amber-300">Sin móviles libres: el sistema esperará al próximo móvil conveniente.</span>}
             </div>
           </section>
 
@@ -281,8 +322,8 @@ export const NewTripModal: React.FC = () => {
             className="flex w-full items-center justify-between rounded-2xl border border-zinc-800 bg-zinc-950/60 px-4 py-3 text-left hover:border-zinc-700"
           >
             <span>
-              <span className="block text-sm font-bold text-white">Datos opcionales</span>
-              <span className="block text-xs text-zinc-500">Pasajero, teléfono, pago, tarifa y observaciones</span>
+              <span className="block text-sm font-bold text-white">Más datos</span>
+              <span className="block text-xs text-zinc-500">Cliente frecuente, teléfono, pago, vehículo y tarifa</span>
             </span>
             {showMore ? <ChevronUp className="h-5 w-5 text-zinc-400" /> : <ChevronDown className="h-5 w-5 text-zinc-400" />}
           </button>
@@ -294,9 +335,6 @@ export const NewTripModal: React.FC = () => {
                   <option value="">Cliente ocasional</option>
                   {clients.map((client) => <option key={client.id} value={client.id}>{client.name} · {client.phone}</option>)}
                 </select>
-              </Field>
-              <Field label="Nombre del pasajero" icon={UserRound}>
-                <input value={clientName} onChange={(event) => setClientName(event.target.value)} className={inputClass} />
               </Field>
               <Field label="Teléfono" icon={Phone}>
                 <input value={clientPhone} onChange={(event) => setClientPhone(event.target.value)} placeholder="+56 9..." className={inputClass} />
@@ -323,31 +361,26 @@ export const NewTripModal: React.FC = () => {
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-zinc-500">km</span>
                 </div>
               </Field>
-              <div className="space-y-2 md:col-span-2">
-                <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-zinc-400">
-                  <CircleDollarSign className="h-4 w-4" /> Modalidad de cobro
-                </label>
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-zinc-400"><CircleDollarSign className="h-4 w-4" /> Modalidad de cobro</label>
                 <div className="flex flex-wrap gap-2">
-                  <button type="button" onClick={() => setIsFixedFare(false)} className={`rounded-xl border px-3 py-2 text-sm font-bold ${!isFixedFare ? 'border-blue-300 bg-blue-600 text-white' : 'border-zinc-700 bg-zinc-900 text-zinc-300'}`}>Taxímetro / estimado</button>
+                  <button type="button" onClick={() => setIsFixedFare(false)} className={`rounded-xl border px-3 py-2 text-sm font-bold ${!isFixedFare ? 'border-blue-300 bg-blue-600 text-white' : 'border-zinc-700 bg-zinc-900 text-zinc-300'}`}>Estimado</button>
                   <button type="button" onClick={() => setIsFixedFare(true)} className={`rounded-xl border px-3 py-2 text-sm font-bold ${isFixedFare ? 'border-amber-200 bg-amber-400 text-zinc-950' : 'border-zinc-700 bg-zinc-900 text-zinc-300'}`}>Tarifa fija</button>
-                  {isFixedFare && <input type="number" min="1000" step="500" value={fixedFareAmount} onChange={(event) => setFixedFareAmount(Number(event.target.value))} className="w-32 rounded-xl border border-amber-400/40 bg-zinc-950 px-3 py-2 text-sm font-bold text-amber-300 outline-none focus:border-amber-300" />}
                 </div>
-              </div>
-              <div className="space-y-2 md:col-span-2">
-                <label className="text-xs font-bold uppercase tracking-wider text-zinc-400">Observaciones para el conductor</label>
-                <textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Ej.: esperar afuera, lleva mascota, tocar bocina..." rows={2} className={`${inputClass} resize-none`} />
+                {isFixedFare && <input type="number" min="1000" step="500" value={fixedFareAmount} onChange={(event) => setFixedFareAmount(Number(event.target.value))} className={`${inputClass} mt-2`} />}
               </div>
             </section>
           )}
 
-          <footer className="flex flex-col-reverse gap-3 border-t border-zinc-800 pt-5 sm:flex-row sm:items-center sm:justify-between">
+          <footer className="flex flex-col-reverse gap-3 border-t border-zinc-800 pt-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="text-sm text-zinc-500">
-              Tarifa estimada: <strong className="text-amber-300">${calculatedFare.toLocaleString('es-CL')}</strong>
+              {scheduleEnabled && scheduledLocal ? <span className="mr-3 text-blue-300">Agendada: {new Date(scheduledLocal).toLocaleString('es-CL', { dateStyle: 'short', timeStyle: 'short' })}</span> : null}
+              Tarifa: <strong className="text-amber-300">${calculatedFare.toLocaleString('es-CL')}</strong>
             </div>
             <div className="flex gap-2">
               <button type="button" onClick={closeModal} className="rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm font-bold text-zinc-300 hover:text-white">Cancelar</button>
-              <button type="submit" disabled={submitting} className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-amber-200 bg-amber-400 px-6 py-3 text-sm font-black text-zinc-950 shadow-lg shadow-amber-500/20 hover:bg-amber-300 sm:flex-none">
-                <Send className="h-4 w-4" /> DESPACHAR
+              <button type="submit" disabled={submitting} className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-amber-200 bg-amber-400 px-6 py-3 text-sm font-black text-zinc-950 shadow-lg shadow-amber-500/20 hover:bg-amber-300 disabled:opacity-50 sm:flex-none">
+                <Send className="h-4 w-4" /> {submitting ? 'GUARDANDO...' : scheduleEnabled ? 'AGENDAR CARRERA' : 'DESPACHAR'}
               </button>
             </div>
           </footer>
