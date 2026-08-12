@@ -37,6 +37,18 @@ export async function loadCompanyUsers(companyId: string): Promise<CompanyUserDi
   }));
 }
 
+async function readFunctionErrorMessage(error: unknown): Promise<string | null> {
+  const candidate = error as { context?: Response; message?: string } | null;
+  const response = candidate?.context;
+  if (!response) return null;
+  try {
+    const payload = await response.clone().json() as { error?: string; message?: string };
+    return payload?.error || payload?.message || null;
+  } catch {
+    return null;
+  }
+}
+
 export async function inviteCompanyUser(input: {
   companyId: string;
   email: string;
@@ -58,9 +70,11 @@ export async function inviteCompanyUser(input: {
   });
 
   if (error) {
+    const serverMessage = await readFunctionErrorMessage(error);
+    if (serverMessage) throw new Error(serverMessage);
     const message = error.message || 'No fue posible administrar el acceso.';
     if (/non-2xx|edge function/i.test(message)) {
-      throw new Error('No fue posible completar la invitación. Actualiza e inténtalo nuevamente; si el correo está temporalmente limitado, Central GO conservará la cuenta como pendiente.');
+      throw new Error('No fue posible completar la invitación. Actualiza e inténtalo nuevamente.');
     }
     throw error;
   }
@@ -74,4 +88,13 @@ export async function inviteCompanyUser(input: {
     message: data?.message ?? 'Usuario vinculado',
     userId: String(data?.userId ?? ''),
   };
+}
+
+export async function cleanupOrphanDriverMembership(companyId: string, userId: string): Promise<void> {
+  if (!companyId || !userId) return;
+  const { error } = await requireSupabase().rpc('centralgo_cleanup_orphan_driver_membership', {
+    p_company_id: companyId,
+    p_user_id: userId,
+  });
+  if (error) console.warn('Central GO could not clean orphan driver membership:', error);
 }
