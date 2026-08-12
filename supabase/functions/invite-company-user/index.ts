@@ -1,7 +1,7 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
-const OFFICIAL_APP_URL = 'https://go-one.vercel.app/';
-const OFFICIAL_DRIVER_URL = 'https://go-one.vercel.app/driver';
+const OFFICIAL_APP_URL = 'https://central-go-one.vercel.app/';
+const OFFICIAL_DRIVER_URL = 'https://central-go-one.vercel.app/driver';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -21,7 +21,6 @@ const safeRedirect = (value?: string) => {
     if (value) {
       const url = new URL(value);
       const allowed = url.protocol === 'https:' && (
-        url.hostname === 'go-one.vercel.app' ||
         url.hostname === 'central-go-one.vercel.app' ||
         url.hostname === 'centralgo.app' ||
         url.hostname.endsWith('.centralgo.app')
@@ -92,14 +91,7 @@ Deno.serve(async (req) => {
     let authorized = isSuper;
 
     if (!authorized && role !== 'company_admin') {
-      const { data: membership } = await service
-        .from('company_memberships')
-        .select('id')
-        .eq('company_id', companyId)
-        .eq('user_id', callerId)
-        .eq('role', 'company_admin')
-        .eq('active', true)
-        .maybeSingle();
+      const { data: membership } = await service.from('company_memberships').select('id').eq('company_id', companyId).eq('user_id', callerId).eq('role', 'company_admin').eq('active', true).maybeSingle();
       authorized = Boolean(membership);
     }
 
@@ -116,9 +108,7 @@ Deno.serve(async (req) => {
     }
 
     if (!authorized) return json({ error: 'No tienes permiso para administrar este acceso' }, 403);
-    if (password && (!isSuper || role !== 'company_admin')) {
-      return json({ error: 'Solo Superadmin puede definir la contraseña inicial del administrador' }, 403);
-    }
+    if (password && (!isSuper || role !== 'company_admin')) return json({ error: 'Solo Superadmin puede definir la contraseña inicial del administrador' }, 403);
 
     const findUser = async () => {
       for (let page = 1; page <= 10; page += 1) {
@@ -131,8 +121,6 @@ Deno.serve(async (req) => {
       return null;
     };
 
-    // Para conductores el destino es inmutable: incluso una pestaña vieja o una
-    // PWA cacheada no puede volver a generar invitaciones al dominio anterior.
     const redirectTo = role === 'driver' ? OFFICIAL_DRIVER_URL : safeRedirect(body?.redirectTo);
     const requestedMetadata = { ...(name ? { name } : {}), needs_password_setup: !password };
     let targetUser: any = await findUser();
@@ -142,81 +130,41 @@ Deno.serve(async (req) => {
     let passwordUpdated = false;
 
     if (targetUser && role !== 'company_admin') {
-      const { data: targetProfile, error: targetProfileError } = await service
-        .from('profiles')
-        .select('name,global_role')
-        .eq('id', targetUser.id)
-        .maybeSingle();
+      const { data: targetProfile, error: targetProfileError } = await service.from('profiles').select('name,global_role').eq('id', targetUser.id).maybeSingle();
       if (targetProfileError) throw targetProfileError;
-
-      if (targetProfile?.global_role) {
-        return json({
-          error: `El correo ${email} ya pertenece a ${roleLabel(targetProfile.global_role)}${targetProfile.name ? ` (${targetProfile.name})` : ''}. Usa un correo personal distinto para el conductor para no alterar esa cuenta.`,
-          code: 'EMAIL_RESERVED_GLOBAL_ROLE',
-        }, 409);
-      }
-
+      if (targetProfile?.global_role) return json({ error: `El correo ${email} ya pertenece a ${roleLabel(targetProfile.global_role)}${targetProfile.name ? ` (${targetProfile.name})` : ''}. Usa un correo personal distinto para el conductor para no alterar esa cuenta.`, code: 'EMAIL_RESERVED_GLOBAL_ROLE' }, 409);
       if (role === 'driver') {
-        const { data: existingDriver, error: existingDriverError } = await service
-          .from('drivers')
-          .select('id,company_id,display_name,unit_number')
-          .eq('user_id', targetUser.id)
-          .limit(1)
-          .maybeSingle();
+        const { data: existingDriver, error: existingDriverError } = await service.from('drivers').select('id,company_id,display_name,unit_number').eq('user_id', targetUser.id).limit(1).maybeSingle();
         if (existingDriverError) throw existingDriverError;
-        if (existingDriver) {
-          return json({
-            error: `Ese correo ya está vinculado al conductor ${existingDriver.display_name} (${existingDriver.unit_number}). Edita ese conductor o usa otro correo.`,
-            code: 'EMAIL_ALREADY_DRIVER',
-          }, 409);
-        }
+        if (existingDriver) return json({ error: `Ese correo ya está vinculado al conductor ${existingDriver.display_name} (${existingDriver.unit_number}). Edita ese conductor o usa otro correo.`, code: 'EMAIL_ALREADY_DRIVER' }, 409);
       }
     }
 
     if (!targetUser) {
       if (password) {
-        const { data, error } = await service.auth.admin.createUser({
-          email,
-          password,
-          email_confirm: true,
-          user_metadata: requestedMetadata,
-        });
+        const { data, error } = await service.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: requestedMetadata });
         if (error) throw error;
         targetUser = data.user;
         passwordReady = true;
       } else {
-        const { data, error } = await service.auth.admin.inviteUserByEmail(email, {
-          data: requestedMetadata,
-          redirectTo,
-        });
-
+        const { data, error } = await service.auth.admin.inviteUserByEmail(email, { data: requestedMetadata, redirectTo });
         if (!error) {
           targetUser = data.user;
           invited = true;
         } else if (isEmailRateLimit(error)) {
           targetUser = await findUser();
           if (!targetUser) {
-            const { data: generated, error: generateError } = await service.auth.admin.generateLink({
-              type: 'invite',
-              email,
-              options: { data: requestedMetadata, redirectTo },
-            });
+            const { data: generated, error: generateError } = await service.auth.admin.generateLink({ type: 'invite', email, options: { data: requestedMetadata, redirectTo } });
             if (generateError) throw generateError;
             targetUser = generated.user;
           }
           emailPending = true;
-        } else {
-          throw error;
-        }
+        } else throw error;
       }
     } else if (password && isSuper && role === 'company_admin') {
       const metadata = targetUser.user_metadata ?? {};
       if (metadata.needs_password_setup === true) {
-        const { data, error } = await service.auth.admin.updateUserById(targetUser.id, {
-          password,
-          email_confirm: true,
-          user_metadata: { ...metadata, ...(name ? { name } : {}), needs_password_setup: false },
-        });
+        const { data, error } = await service.auth.admin.updateUserById(targetUser.id, { password, email_confirm: true, user_metadata: { ...metadata, ...(name ? { name } : {}), needs_password_setup: false } });
         if (error) throw error;
         targetUser = data.user;
         passwordReady = true;
@@ -224,12 +172,9 @@ Deno.serve(async (req) => {
       }
     } else if (!password && targetUser.user_metadata?.needs_password_setup === true) {
       const metadata = targetUser.user_metadata ?? {};
-      const { data: updated, error: updateError } = await service.auth.admin.updateUserById(targetUser.id, {
-        user_metadata: { ...metadata, ...(name ? { name } : {}), needs_password_setup: true },
-      });
+      const { data: updated, error: updateError } = await service.auth.admin.updateUserById(targetUser.id, { user_metadata: { ...metadata, ...(name ? { name } : {}), needs_password_setup: true } });
       if (updateError) throw updateError;
       targetUser = updated.user;
-
       const { error: recoveryError } = await service.auth.resetPasswordForEmail(email, { redirectTo });
       if (!recoveryError) invited = true;
       else if (isEmailRateLimit(recoveryError)) emailPending = true;
@@ -238,12 +183,7 @@ Deno.serve(async (req) => {
 
     if (!targetUser) return json({ error: 'No fue posible crear o localizar el usuario' }, 500);
 
-    const { error: membershipError } = await service.from('company_memberships').upsert({
-      company_id: companyId,
-      user_id: targetUser.id,
-      role,
-      active: true,
-    }, { onConflict: 'company_id,user_id,role' });
+    const { error: membershipError } = await service.from('company_memberships').upsert({ company_id: companyId, user_id: targetUser.id, role, active: true }, { onConflict: 'company_id,user_id,role' });
     if (membershipError) throw membershipError;
 
     const roleName = role === 'driver' ? 'conductor' : role === 'operator' ? 'operadora' : 'administrador';
@@ -255,18 +195,7 @@ Deno.serve(async (req) => {
           ? `Invitación de ${roleName} enviada por correo`
           : `Usuario existente vinculado como ${roleName}`;
 
-    return json({
-      ok: true,
-      userId: targetUser.id,
-      email,
-      role,
-      invited,
-      emailPending,
-      passwordReady,
-      passwordUpdated,
-      needsPasswordSetup: targetUser.user_metadata?.needs_password_setup === true,
-      message,
-    });
+    return json({ ok: true, userId: targetUser.id, email, role, invited, emailPending, passwordReady, passwordUpdated, needsPasswordSetup: targetUser.user_metadata?.needs_password_setup === true, message });
   } catch (error) {
     console.error('invite-company-user', error);
     return json({ error: error instanceof Error ? error.message : 'No fue posible administrar el usuario' }, 500);
