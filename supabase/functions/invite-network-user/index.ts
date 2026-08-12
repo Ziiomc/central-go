@@ -33,11 +33,13 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => null) as {
       email?: string; name?: string; kind?: 'regional' | 'sales'; code?: string; commissionPercent?: number;
       parentPartnerId?: string | null; countryCode?: string; region?: string; city?: string; redirectTo?: string;
+      delivery?: 'email' | 'whatsapp';
     } | null;
     const email = body?.email?.trim().toLowerCase();
     const name = body?.name?.trim() ?? '';
     const kind = body?.kind;
     const code = body?.code?.trim().toUpperCase();
+    const delivery = body?.delivery === 'whatsapp' ? 'whatsapp' : 'email';
     const commission = Number(body?.commissionPercent ?? (kind === 'regional' ? 5 : 20));
     if (!email || !email.includes('@') || !name || !kind || !['regional','sales'].includes(kind) || !code || code.length < 2) return json({ error: 'Nombre, correo, tipo y código son obligatorios' }, 400);
     if (!Number.isFinite(commission) || commission < 0 || commission > 50) return json({ error: 'Porcentaje de comisión inválido' }, 400);
@@ -66,10 +68,37 @@ Deno.serve(async (req) => {
     }
 
     let invited = false;
-    if (!targetUser) {
+    let activationUrl: string | null = null;
+    const redirectTo = safeRedirect(body?.redirectTo);
+
+    if (delivery === 'whatsapp') {
+      if (!targetUser) {
+        const { data, error } = await service.auth.admin.createUser({
+          email,
+          email_confirm: true,
+          user_metadata: { name, needs_password_setup: true, activation_delivery: 'whatsapp' },
+        });
+        if (error) throw error;
+        targetUser = data.user;
+        invited = true;
+      } else {
+        const { data, error } = await service.auth.admin.updateUserById(targetUser.id, {
+          user_metadata: { ...(targetUser.user_metadata ?? {}), name, needs_password_setup: true, activation_delivery: 'whatsapp' },
+        });
+        if (error) throw error;
+        targetUser = data.user;
+      }
+      const { data: linkData, error: linkError } = await service.auth.admin.generateLink({ type: 'recovery', email });
+      if (linkError) throw linkError;
+      const rawActionLink = linkData?.properties?.action_link;
+      if (!rawActionLink) throw new Error('No fue posible generar el enlace de activación');
+      const actionLink = new URL(rawActionLink);
+      actionLink.searchParams.set('redirect_to', redirectTo);
+      activationUrl = actionLink.toString();
+    } else if (!targetUser) {
       const { data, error } = await service.auth.admin.inviteUserByEmail(email, {
         data: { name, needs_password_setup: true },
-        redirectTo: safeRedirect(body?.redirectTo),
+        redirectTo,
       });
       if (error) throw error;
       targetUser = data.user;
@@ -99,13 +128,19 @@ Deno.serve(async (req) => {
         city: body.city?.trim() || null,
         exclusive: kind === 'regional',
       };
-      const { error: territoryError } = await service.from('partner_territories').insert(territory);
-      if (territoryError) throw territoryError;
+      const { data: existingTerritory } = await service.from('partner_territories').select('id').eq('partner_id', partner.id).eq('country_code', territory.country_code).eq('region', territory.region).eq('city', territory.city).maybeSingle();
+      if (!existingTerritory) {
+        const { error: territoryError } = await service.from('partner_territories').insert(territory);
+        if (territoryError) throw territoryError;
+      }
     }
 
-    return json({ ok: true, partnerId: partner.id, userId: targetUser.id, invited, message: invited ? 'Partner creado e invitación enviada' : 'Partner configurado sobre una cuenta existente' });
+    const message = delivery === 'whatsapp'
+      ? 'Partner configurado. Enlace privado de WhatsApp generado.'
+      : (invited ? 'Partner creado e invitación enviada' : 'Partner configurado sobre una cuenta existente');
+    return json({ ok: true, partnerId: partner.id, userId: targetUser.id, invited, delivery, activationUrl, redirectTo, message });
   } catch (error) {
-    console.error('invite-network-user', error);
+    console.error('invite-network-user', error instanceof Error ? error.message : 'unknown');
     return json({ error: error instanceof Error ? error.message : 'No fue posible crear el partner' }, 500);
   }
 });
