@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Car, CheckCircle2, Clipboard, KeyRound, MailCheck, Pencil, Plus, Search, Send, Smartphone, Users } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { inviteCompanyUser } from '../../lib/userRepository';
+import { cleanupOrphanDriverMembership, inviteCompanyUser } from '../../lib/userRepository';
 import { updateDriverProfile } from '../../lib/driverManagementRepository';
 import { requestDriverAccess } from '../../lib/driverAccessRepository';
 import type { Driver } from '../../types';
@@ -11,7 +11,7 @@ export const DriversModule: React.FC = () => {
   const { drivers, vehicles, addDriver, currentCompany } = useApp();
   const [searchTerm, setSearchTerm] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [unitNumber, setUnitNumber] = useState('Móvil ');
+  const [unitNumber, setUnitNumber] = useState('');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [accountEmail, setAccountEmail] = useState('');
@@ -45,7 +45,7 @@ export const DriversModule: React.FC = () => {
   );
 
   const resetForm = () => {
-    setUnitNumber('Móvil ');
+    setUnitNumber('');
     setName('');
     setPhone('');
     setAccountEmail('');
@@ -57,6 +57,32 @@ export const DriversModule: React.FC = () => {
 
   const vehicleIsOccupied = (vehicleId: string, exceptDriverId?: string) =>
     visibleDrivers.some((driver) => driver.id !== exceptDriverId && driver.vehicleId === vehicleId);
+
+  const unitNumberIsOccupied = (value: string, exceptDriverId?: string) => {
+    const normalized = value.trim().toLocaleLowerCase('es');
+    return visibleDrivers.some((driver) => driver.id !== exceptDriverId && driver.unitNumber.trim().toLocaleLowerCase('es') === normalized);
+  };
+
+  const licenseIsOccupied = (value: string, exceptDriverId?: string) => {
+    const normalized = value.trim().toLocaleLowerCase('es');
+    return visibleDrivers.some((driver) => driver.id !== exceptDriverId && driver.licenseNumber.trim().toLocaleLowerCase('es') === normalized);
+  };
+
+  const describeDriverError = (err: unknown) => {
+    const value = err as { message?: string; details?: string; code?: string; constraint?: string } | null;
+    const message = err instanceof Error ? err.message : value?.message || '';
+    const raw = `${message} ${value?.details ?? ''} ${value?.code ?? ''} ${value?.constraint ?? ''}`;
+    if (/drivers_company_id_unit_number_key|unit_number.*already exists|duplicate.*unit_number/i.test(raw)) {
+      return 'Ese número de móvil ya existe en esta central. Usa otro identificador, por ejemplo “Móvil 2” o “Móvil 25”.';
+    }
+    if (/drivers_company_id_license_number_key|license_number.*already exists|duplicate.*license_number/i.test(raw)) {
+      return 'Ese número de licencia ya está asociado a otro conductor de esta central.';
+    }
+    if (/vehicle_id/i.test(raw) && /duplicate|already|assigned/i.test(raw)) {
+      return 'Ese vehículo ya está asignado a otro conductor.';
+    }
+    return message || 'No fue posible registrar al conductor.';
+  };
 
   const openEdit = (driver: Driver) => {
     setNotice('');
@@ -83,6 +109,25 @@ export const DriversModule: React.FC = () => {
     setNotice('');
 
     const normalizedEmail = accountEmail.trim().toLowerCase();
+    const normalizedUnitNumber = unitNumber.trim();
+    const normalizedLicense = licenseNumber.trim();
+
+    if (!normalizedUnitNumber || /^m[oó]vil$/i.test(normalizedUnitNumber)) {
+      setFormError('Indica un número de móvil único. No uses solo “Móvil”; por ejemplo: Móvil 2, Móvil 18 o el código que use la central.');
+      return;
+    }
+    if (unitNumberIsOccupied(normalizedUnitNumber)) {
+      setFormError(`El ${normalizedUnitNumber} ya está registrado. Cada conductor debe tener un número de móvil único.`);
+      return;
+    }
+    if (!normalizedLicense) {
+      setFormError('Ingresa el número de licencia del conductor.');
+      return;
+    }
+    if (licenseIsOccupied(normalizedLicense)) {
+      setFormError('Ese número de licencia ya pertenece a otro conductor de esta central.');
+      return;
+    }
     if (!normalizedEmail.includes('@')) {
       setFormError('Ingresa el correo del conductor. Ese correo será su acceso personal a Central GO Conductor.');
       return;
@@ -93,6 +138,7 @@ export const DriversModule: React.FC = () => {
     }
 
     setSaving(true);
+    let accessUserId = '';
     try {
       const access = await inviteCompanyUser({
         companyId: currentCompany.id,
@@ -101,15 +147,16 @@ export const DriversModule: React.FC = () => {
         role: 'driver',
         redirectTo: 'https://central-go-one.vercel.app/driver',
       });
+      accessUserId = access.userId;
 
       const driver = await addDriver({
         userId: access.userId,
         companyId: currentCompany.id,
         vehicleId: selectedVehicleId || undefined,
-        unitNumber: unitNumber.trim(),
+        unitNumber: normalizedUnitNumber,
         name: name.trim(),
         phone: phone.trim(),
-        licenseNumber: licenseNumber.trim(),
+        licenseNumber: normalizedLicense,
         licenseExpiry,
         photoUrl: '',
         status: 'offline',
@@ -139,7 +186,8 @@ export const DriversModule: React.FC = () => {
       resetForm();
       setIsAddModalOpen(false);
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'No fue posible registrar al conductor.');
+      if (accessUserId) await cleanupOrphanDriverMembership(currentCompany.id, accessUserId);
+      setFormError(describeDriverError(err));
     } finally {
       setSaving(false);
     }
@@ -150,26 +198,45 @@ export const DriversModule: React.FC = () => {
     if (!editingDriver) return;
     setEditError('');
     setNotice('');
-    setEditSaving(true);
 
+    const normalizedUnitNumber = editUnitNumber.trim();
+    const normalizedLicense = editLicenseNumber.trim();
+    if (!normalizedUnitNumber || /^m[oó]vil$/i.test(normalizedUnitNumber)) {
+      setEditError('Indica un número de móvil único, por ejemplo “Móvil 25”.');
+      return;
+    }
+    if (unitNumberIsOccupied(normalizedUnitNumber, editingDriver.id)) {
+      setEditError(`El ${normalizedUnitNumber} ya está asignado a otro conductor.`);
+      return;
+    }
+    if (licenseIsOccupied(normalizedLicense, editingDriver.id)) {
+      setEditError('Ese número de licencia ya está asignado a otro conductor.');
+      return;
+    }
+    if (editVehicleId && vehicleIsOccupied(editVehicleId, editingDriver.id)) {
+      setEditError('Ese vehículo ya está asignado a otro conductor.');
+      return;
+    }
+
+    setEditSaving(true);
     try {
       await updateDriverProfile({
         driverId: editingDriver.id,
         companyId: currentCompany.id,
         vehicleId: editVehicleId || undefined,
-        unitNumber: editUnitNumber,
+        unitNumber: normalizedUnitNumber,
         name: editName,
         phone: editPhone,
-        licenseNumber: editLicenseNumber,
+        licenseNumber: normalizedLicense,
         licenseExpiry: editLicenseExpiry,
       });
 
       const patch: Partial<Driver> = {
         vehicleId: editVehicleId || undefined,
-        unitNumber: editUnitNumber.trim(),
+        unitNumber: normalizedUnitNumber,
         name: editName.trim(),
         phone: editPhone.trim(),
-        licenseNumber: editLicenseNumber.trim(),
+        licenseNumber: normalizedLicense,
         licenseExpiry: editLicenseExpiry,
       };
       setDriverOverrides((current) => ({ ...current, [editingDriver.id]: patch }));
@@ -184,7 +251,7 @@ export const DriversModule: React.FC = () => {
       setNotice(`${editName.trim()} fue actualizado correctamente. El vehículo y los datos quedaron sincronizados sin alterar su cuenta profesional.`);
       setEditingDriver(null);
     } catch (err) {
-      setEditError(err instanceof Error ? err.message : 'No fue posible actualizar al conductor.');
+      setEditError(describeDriverError(err));
     } finally {
       setEditSaving(false);
     }
@@ -327,17 +394,17 @@ export const DriversModule: React.FC = () => {
       {isAddModalOpen && (
         <div className="fixed inset-0 bg-zinc-950/85 backdrop-blur-md z-50 flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-[#0d0d0f] border border-zinc-800 rounded-3xl max-w-lg w-full p-6 shadow-2xl my-auto">
-            <div><h3 className="font-black text-lg text-white">Registrar conductor y enviar acceso</h3><p className="mt-1 text-xs leading-relaxed text-zinc-500">Central GO creará la cuenta profesional, enviará el enlace para definir su contraseña y vinculará su móvil y vehículo en un solo proceso.</p></div>
+            <div><h3 className="font-black text-lg text-white">Registrar conductor y enviar acceso</h3><p className="mt-1 text-xs leading-relaxed text-zinc-500">Central GO validará primero que móvil, licencia, vehículo y correo estén disponibles. Luego creará la cuenta profesional y enviará el acceso.</p></div>
             <form onSubmit={handleAddSubmit} className="mt-5 grid gap-3 sm:grid-cols-2">
-              <Field label="Número de móvil" value={unitNumber} onChange={setUnitNumber} placeholder="Móvil 25" />
+              <div><Field label="Número de móvil" value={unitNumber} onChange={setUnitNumber} placeholder="Ej: Móvil 25" /><p className="mt-1 text-[9px] leading-relaxed text-zinc-600">Debe ser único dentro de la central.</p></div>
               <Field label="Nombre completo" value={name} onChange={setName} placeholder="Nombre y apellido" />
               <Field label="Teléfono" value={phone} onChange={setPhone} placeholder="+56 9 ..." />
               <Field label="Licencia" value={licenseNumber} onChange={setLicenseNumber} placeholder="N° licencia" />
               <label className="block"><span className="text-[10px] font-black uppercase tracking-wider text-zinc-500">Vencimiento licencia</span><div className="mt-1 flex w-full min-w-0 rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2.5"><input required type="date" value={licenseExpiry} onChange={(e) => setLicenseExpiry(e.target.value)} className="block w-full min-w-0 border-0 bg-transparent p-0 text-sm text-zinc-200" /></div></label>
               <label className="block"><span className="text-[10px] font-black uppercase tracking-wider text-zinc-500">Vehículo asignado</span><select value={selectedVehicleId} onChange={(e) => setSelectedVehicleId(e.target.value)} className="mt-1 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-200"><option value="">Sin vehículo</option>{vehicles.map((vehicle) => <option key={vehicle.id} value={vehicle.id} disabled={vehicleIsOccupied(vehicle.id)}>{vehicle.unitNumber} · {vehicle.licensePlate}{vehicleIsOccupied(vehicle.id) ? ' · ya asignado' : ''}</option>)}</select></label>
-              <div className="sm:col-span-2"><label className="text-[10px] font-black uppercase tracking-wider text-zinc-500">Correo personal del conductor</label><input required type="email" value={accountEmail} onChange={(e) => setAccountEmail(e.target.value)} placeholder="conductor@correo.cl" className="mt-1 w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2.5 text-sm text-zinc-200 focus:outline-none focus:border-blue-500" /><p className="mt-1.5 text-[10px] leading-relaxed text-zinc-600">A este correo llegará el acceso. Si el proveedor de correo está limitado, la tarjeta permitirá generar un enlace seguro de un solo uso.</p></div>
+              <div className="sm:col-span-2"><label className="text-[10px] font-black uppercase tracking-wider text-zinc-500">Correo personal del conductor</label><input required type="email" value={accountEmail} onChange={(e) => setAccountEmail(e.target.value)} placeholder="conductor@correo.cl" className="mt-1 w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2.5 text-sm text-zinc-200 focus:outline-none focus:border-blue-500" /><p className="mt-1.5 text-[10px] leading-relaxed text-zinc-600">Debe ser el correo personal de esa cuenta de conductor. Si ya pertenece a Partner, Superadmin u otro conductor, Central GO lo bloqueará sin modificar esa cuenta.</p></div>
               {formError && <div className="sm:col-span-2 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs leading-relaxed text-rose-200">{formError}</div>}
-              <div className="sm:col-span-2 flex gap-2 pt-2"><button type="button" onClick={() => { resetForm(); setIsAddModalOpen(false); }} className="w-1/2 py-3 bg-zinc-800 text-zinc-300 font-bold text-xs rounded-xl">Cancelar</button><button type="submit" disabled={saving} className="w-1/2 py-3 bg-blue-600 hover:bg-blue-500 text-white font-black text-xs rounded-xl disabled:opacity-50">{saving ? 'Creando acceso…' : 'Registrar y enviar acceso'}</button></div>
+              <div className="sm:col-span-2 flex gap-2 pt-2"><button type="button" onClick={() => { resetForm(); setIsAddModalOpen(false); }} className="w-1/2 py-3 bg-zinc-800 text-zinc-300 font-bold text-xs rounded-xl">Cancelar</button><button type="submit" disabled={saving} className="w-1/2 py-3 bg-blue-600 hover:bg-blue-500 text-white font-black text-xs rounded-xl disabled:opacity-50">{saving ? 'Validando y creando…' : 'Registrar y enviar acceso'}</button></div>
             </form>
           </div>
         </div>
