@@ -1,98 +1,29 @@
 @import "tailwindcss";
 
-/* Mobile viewport safety: use the browser page as the only vertical scroller for forms. */
-html,
-body,
-#root {
-  width: 100%;
-  min-height: 100%;
+html,body,#root{width:100%;min-height:100%;}
+html,body{margin:0;overflow-x:hidden;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-y:auto;}
+
+/* Central GO desktop is optimized to fit the complete operator console at normal
+   browser zoom. This is intentionally limited to desktop so driver/mobile UI keeps
+   native sizing and accessibility. */
+@media (min-width: 1024px) {
+  html { font-size: 14.4px; }
+}
+@media (min-width: 1280px) {
+  html { font-size: 14px; }
 }
 
-html,
-body {
-  margin: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior-y: auto;
+@media (max-width:767px){
+ html,body,#root{height:auto!important;max-height:none!important;min-height:100%!important;overflow:visible!important;position:static!important;}
+ body{overflow-x:hidden!important;overflow-y:auto!important;touch-action:pan-y;}
+ main:has(form),main.mobile-safe-page{height:auto!important;max-height:none!important;min-height:100svh!important;overflow:visible!important;position:relative!important;padding-bottom:calc(9rem + env(safe-area-inset-bottom,0px))!important;}
+ main:has(form)>*,main.mobile-safe-page>*{max-height:none!important;overflow:visible!important;}
+ main:has(form) form,main.mobile-safe-page form{height:auto!important;max-height:none!important;overflow:visible!important;padding-bottom:calc(5rem + env(safe-area-inset-bottom,0px));}
 }
-
-@media (max-width: 767px) {
-  html,
-  body,
-  #root {
-    height: auto !important;
-    max-height: none !important;
-    min-height: 100% !important;
-    overflow: visible !important;
-    position: static !important;
-  }
-
-  body {
-    overflow-x: hidden !important;
-    overflow-y: auto !important;
-    touch-action: pan-y;
-  }
-
-  /* Auth/onboarding pages must never become an inner viewport on phones. */
-  main:has(form),
-  main.mobile-safe-page {
-    height: auto !important;
-    max-height: none !important;
-    min-height: 100svh !important;
-    overflow: visible !important;
-    position: relative !important;
-    padding-bottom: calc(9rem + env(safe-area-inset-bottom, 0px)) !important;
-  }
-
-  main:has(form) > *,
-  main.mobile-safe-page > * {
-    max-height: none !important;
-    overflow: visible !important;
-  }
-
-  main:has(form) form,
-  main.mobile-safe-page form {
-    height: auto !important;
-    max-height: none !important;
-    overflow: visible !important;
-    padding-bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
-  }
-}
-
-.mobile-safe-page {
-  min-height: 100dvh;
-  padding-bottom: calc(7rem + env(safe-area-inset-bottom, 0px));
-}
-
-.mobile-sticky-action {
-  position: sticky;
-  bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
-  z-index: 20;
-}
-
-/* Leaflet map marker smooth movement animation */
-.leaflet-marker-icon.custom-taxi-pin {
-  transition: transform 1.2s cubic-bezier(0.25, 1, 0.5, 1) !important;
-  will-change: transform;
-}
-
-/* Headlight beam pulse animation */
-@keyframes headlightPulse {
-  0%, 100% { opacity: 0.6; transform: scale(1); }
-  50% { opacity: 0.85; transform: scale(1.08); }
-}
-
-.animate-headlights {
-  animation: headlightPulse 2s ease-in-out infinite;
-}
-
-/* Taxi Roof Sign Glow */
-@keyframes taxiSignGlow {
-  0%, 100% { box-shadow: 0 0 4px #facc15; }
-  50% { box-shadow: 0 0 10px #facc15, 0 0 15px #eab308; }
-}
-
-.animate-taxi-sign {
-  animation: taxiSignGlow 1.5s ease-in-out infinite;
-}
+.mobile-safe-page{min-height:100dvh;padding-bottom:calc(7rem + env(safe-area-inset-bottom,0px));}
+.mobile-sticky-action{position:sticky;bottom:calc(.75rem + env(safe-area-inset-bottom,0px));z-index:20;}
+.leaflet-marker-icon.custom-taxi-pin{transition:transform 1.2s cubic-bezier(.25,1,.5,1)!important;will-change:transform;}
+@keyframes headlightPulse{0%,100%{opacity:.6;transform:scale(1)}50%{opacity:.85;transform:scale(1.08)}}
+.animate-headlights{animation:headlightPulse 2s ease-in-out infinite;}
+@keyframes taxiSignGlow{0%,100%{box-shadow:0 0 4px #facc15}50%{box-shadow:0 0 10px #facc15,0 0 15px #eab308}}
+.animate-taxi-sign{animation:taxiSignGlow 1.5s ease-in-out infinite;}
