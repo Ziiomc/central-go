@@ -24,6 +24,14 @@ const safeRedirect = (value?: string) => {
   return OFFICIAL_APP_URL;
 };
 
+const buildDirectActivationUrl = (redirectTo: string, tokenHash: string, type: 'recovery' | 'invite' = 'recovery') => {
+  const activation = new URL(redirectTo);
+  activation.searchParams.set('token_hash', tokenHash);
+  activation.searchParams.set('type', type);
+  activation.searchParams.set('source', 'partner_activation');
+  return activation.toString();
+};
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return json({ error: 'Método no permitido' }, 405);
@@ -48,7 +56,7 @@ Deno.serve(async (req) => {
     const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const userClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: authorization } }, auth: { persistSession: false } });
-    const service = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
+    const service = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false, detectSessionInUrl: false } });
     const { data: callerData, error: callerError } = await userClient.auth.getUser();
     if (callerError || !callerData.user) return json({ error: 'Sesión inválida' }, 401);
     const { data: callerProfile } = await service.from('profiles').select('global_role,active').eq('id', callerData.user.id).maybeSingle();
@@ -88,13 +96,20 @@ Deno.serve(async (req) => {
         if (error) throw error;
         targetUser = data.user;
       }
-      const { data: linkData, error: linkError } = await service.auth.admin.generateLink({ type: 'recovery', email });
+
+      // Generate the one-time recovery token, but DO NOT send partners through the
+      // hosted Supabase /auth/v1/verify URL. Central GO consumes token_hash itself.
+      // This removes the failure mode where a malformed/rewritten Supabase path
+      // ends in {"error":"requested path is invalid"} before the app opens.
+      const { data: linkData, error: linkError } = await service.auth.admin.generateLink({
+        type: 'recovery',
+        email,
+        options: { redirectTo },
+      });
       if (linkError) throw linkError;
-      const rawActionLink = linkData?.properties?.action_link;
-      if (!rawActionLink) throw new Error('No fue posible generar el enlace de activación');
-      const actionLink = new URL(rawActionLink);
-      actionLink.searchParams.set('redirect_to', redirectTo);
-      activationUrl = actionLink.toString();
+      const tokenHash = linkData?.properties?.hashed_token;
+      if (!tokenHash) throw new Error('No fue posible generar el token de activación');
+      activationUrl = buildDirectActivationUrl(redirectTo, tokenHash, 'recovery');
     } else if (!targetUser) {
       const { data, error } = await service.auth.admin.inviteUserByEmail(email, {
         data: { name, needs_password_setup: true },
@@ -136,7 +151,7 @@ Deno.serve(async (req) => {
     }
 
     const message = delivery === 'whatsapp'
-      ? 'Partner configurado. Enlace privado de WhatsApp generado.'
+      ? 'Partner configurado. Enlace privado de activación generado directamente en Central GO.'
       : (invited ? 'Partner creado e invitación enviada' : 'Partner configurado sobre una cuenta existente');
     return json({ ok: true, partnerId: partner.id, userId: targetUser.id, invited, delivery, activationUrl, redirectTo, message });
   } catch (error) {
