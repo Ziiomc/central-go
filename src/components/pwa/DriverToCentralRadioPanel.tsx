@@ -47,11 +47,12 @@ export const DriverToCentralRadioPanel: React.FC = () => {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="fixed bottom-24 right-4 z-[75] flex h-14 items-center gap-2 rounded-2xl border border-amber-300/50 bg-amber-400 px-4 text-xs font-black text-zinc-950 shadow-2xl shadow-black/50 active:scale-95"
+        className="fixed bottom-[calc(env(safe-area-inset-bottom)+5.25rem)] right-3 z-[75] flex h-12 w-12 items-center justify-center rounded-full border border-amber-300/60 bg-amber-400 text-zinc-950 shadow-xl shadow-black/45 active:scale-95"
         aria-label="Radio a la central"
+        title="Radio a la central"
       >
         <Radio className="h-5 w-5" />
-        <span>Radio central</span>
+        <span className="sr-only">Radio central</span>
       </button>
 
       {open && (
