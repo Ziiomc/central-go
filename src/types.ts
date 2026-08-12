@@ -28,10 +28,10 @@ export interface User {
 export interface Company {
   id: string;
   name: string;
-  code: string; // e.g. "ROYAL", "VIP"
+  code: string;
   phone: string;
   address: string;
-  vhfFrequency?: string; // Radio frequency channel for emergency fallback e.g. "148.525 MHz"
+  vhfFrequency?: string;
   totalVehicles: number;
   totalDrivers: number;
   active: boolean;
@@ -41,8 +41,8 @@ export interface Company {
 export interface Vehicle {
   id: string;
   companyId: string;
-  unitNumber: string; // "Móvil 12"
-  licensePlate: string; // "AA 123 CD"
+  unitNumber: string;
+  licensePlate: string;
   brand: string;
   model: string;
   year: number;
@@ -51,7 +51,7 @@ export interface Vehicle {
   petFriendly: boolean;
   wheelchairAccessible: boolean;
   airConditioning: boolean;
-  technicalInspectionExpiry: string; // VTO Date
+  technicalInspectionExpiry: string;
   status: 'active' | 'maintenance' | 'inactive';
 }
 
@@ -60,7 +60,7 @@ export interface Driver {
   userId: string;
   companyId: string;
   vehicleId?: string;
-  unitNumber: string; // "Móvil 12"
+  unitNumber: string;
   name: string;
   phone: string;
   licenseNumber: string;
@@ -71,14 +71,14 @@ export interface Driver {
     lat: number;
     lng: number;
     address?: string;
-    speed?: number; // km/h
-    heading?: number; // degrees
+    speed?: number;
+    heading?: number;
     lastUpdated: string;
   };
-  rating: number; // 4.9
+  rating: number;
   totalTripsCompleted: number;
   todayEarnings: number;
-  commissionBalance: number; // positive = driver owes central, negative = central owes driver
+  commissionBalance: number;
   sosActive: boolean;
   sosTimestamp?: string;
 }
@@ -90,7 +90,7 @@ export interface Client {
   phone: string;
   email?: string;
   frequentAddresses: {
-    label: string; // "Casa", "Trabajo"
+    label: string;
     address: string;
     lat: number;
     lng: number;
@@ -98,14 +98,14 @@ export interface Client {
   totalTrips: number;
   rating: number;
   isVIP: boolean;
-  notes?: string; // e.g. "Cliente preferencial, esperar afuera"
-  hasCurrentAccount?: boolean; // Cuenta Corriente
+  notes?: string;
+  hasCurrentAccount?: boolean;
 }
 
 export interface Trip {
   id: string;
   companyId: string;
-  code: string; // #TRP-8492
+  code: string;
   clientId?: string;
   clientName: string;
   clientPhone: string;
@@ -117,8 +117,6 @@ export interface Trip {
   driverName?: string;
   operatorId: string;
   operatorName: string;
-  
-  // Trip details
   vehicleTypeRequested?: 'standard' | 'pet' | 'wheelchair' | 'vip';
   estimatedDistanceKm: number;
   estimatedDurationMins: number;
@@ -128,9 +126,7 @@ export interface Trip {
   fixedFareAmount?: number;
   paymentMethod: PaymentMethod;
   notes?: string;
-  
-  // Timestamps
-  createdAt: string; // Requested time
+  createdAt: string;
   assignedAt?: string;
   enRouteAt?: string;
   arrivedAt?: string;
@@ -138,8 +134,6 @@ export interface Trip {
   completedAt?: string;
   cancelledAt?: string;
   cancelReason?: string;
-  
-  // Rating
   rating?: number;
   feedback?: string;
 }
@@ -151,19 +145,20 @@ export interface Operator {
   name: string;
   shift: 'Mañana' | 'Tarde' | 'Noche';
   dispatchesToday: number;
-  avgDispatchTimeSeconds: number; // e.g. 18 seconds
+  avgDispatchTimeSeconds: number;
   status: 'active' | 'on_break' | 'offline';
 }
 
 export interface AppNotification {
   id: string;
   companyId: string;
+  recipientUserId?: string;
   title: string;
   message: string;
   type: 'info' | 'warning' | 'sos' | 'success' | 'trip';
   read: boolean;
   timestamp: string;
-  relatedId?: string; // Trip ID, Driver ID, etc.
+  relatedId?: string;
 }
 
 export interface AuditLog {
@@ -178,13 +173,13 @@ export interface AuditLog {
 }
 
 export interface FareConfig {
-  baseFare: number; // Bajada de bandera
-  pricePerKm: number; // Ficha / km
-  pricePerMinuteWait: number; // Minuto de espera
-  nightSurchargePercent: number; // Recargo nocturno (e.g. 20%)
-  sundaySurchargePercent: number; // Recargo domingos/feriados
+  baseFare: number;
+  pricePerKm: number;
+  pricePerMinuteWait: number;
+  nightSurchargePercent: number;
+  sundaySurchargePercent: number;
   cancellationFee: number;
-  currencySymbol: string; // "$"
+  currencySymbol: string;
 }
 
 export interface Zone {
