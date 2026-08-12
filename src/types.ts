@@ -5,6 +5,7 @@ export type DriverStatus = 'available' | 'en_route' | 'in_trip' | 'paused' | 'of
 export type TripStatus = 'pending' | 'assigned' | 'en_route' | 'arrived' | 'in_progress' | 'completed' | 'cancelled';
 
 export type PaymentMethod = 'efectivo' | 'transferencia' | 'posnet_tarjeta' | 'cuenta_corriente';
+export type DispatchMode = 'automatic' | 'manual';
 
 export interface Location {
   lat: number;
@@ -115,6 +116,10 @@ export interface Trip {
   driverId?: string;
   driverUnitNumber?: string;
   driverName?: string;
+  reservedDriverId?: string;
+  reservedDriverUnitNumber?: string;
+  reservedDriverName?: string;
+  reservationReason?: string;
   operatorId: string;
   operatorName: string;
   vehicleTypeRequested?: 'standard' | 'pet' | 'wheelchair' | 'vip';
@@ -126,6 +131,10 @@ export interface Trip {
   fixedFareAmount?: number;
   paymentMethod: PaymentMethod;
   notes?: string;
+  dispatchMode?: DispatchMode;
+  scheduledFor?: string;
+  offerExpiresAt?: string;
+  offerAttempt?: number;
   createdAt: string;
   assignedAt?: string;
   enRouteAt?: string;
