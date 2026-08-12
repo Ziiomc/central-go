@@ -96,6 +96,10 @@ export const mapTripRow = (row: any): Trip => ({
   driverId: row.driver_id ?? undefined,
   driverUnitNumber: row.driver_unit_number ?? undefined,
   driverName: row.driver_name ?? undefined,
+  reservedDriverId: row.reserved_driver_id ?? undefined,
+  reservedDriverUnitNumber: row.reserved_driver_unit_number ?? undefined,
+  reservedDriverName: row.reserved_driver_name ?? undefined,
+  reservationReason: row.reservation_reason ?? undefined,
   operatorId: row.operator_user_id ?? '',
   operatorName: row.operator_name,
   vehicleTypeRequested: row.vehicle_type_requested ?? undefined,
@@ -107,6 +111,10 @@ export const mapTripRow = (row: any): Trip => ({
   fixedFareAmount: row.fixed_fare_amount == null ? undefined : n(row.fixed_fare_amount),
   paymentMethod: row.payment_method,
   notes: row.notes ?? undefined,
+  dispatchMode: row.dispatch_mode ?? 'automatic',
+  scheduledFor: row.scheduled_for ?? undefined,
+  offerExpiresAt: row.offer_expires_at ?? undefined,
+  offerAttempt: row.offer_attempt ?? 0,
   createdAt: row.created_at,
   assignedAt: row.assigned_at ?? undefined,
   enRouteAt: row.en_route_at ?? undefined,
@@ -141,6 +149,7 @@ export const mapClientRow = (row: any, addresses: any[] = []): Client => ({
 export const mapNotificationRow = (row: any): AppNotification => ({
   id: row.id,
   companyId: row.company_id,
+  recipientUserId: row.recipient_user_id ?? undefined,
   title: row.title,
   message: row.message,
   type: row.type,
@@ -253,6 +262,8 @@ export async function insertTrip(company: Company, user: User, data: Partial<Tri
     fixed_fare_amount: data.fixedFareAmount ?? null,
     payment_method: data.paymentMethod ?? 'efectivo',
     notes: data.notes ?? null,
+    scheduled_for: data.scheduledFor ?? null,
+    dispatch_mode: data.driverId ? 'manual' : (data.dispatchMode ?? 'automatic'),
   };
   const { data: row, error } = await db.from('trips').insert(payload).select('*').single();
   if (error) throw error;
@@ -287,8 +298,7 @@ export async function cancelTripAtomic(tripId: string, reason: string): Promise<
 
 export async function setTripStatusAtomic(tripId: string, status: TripStatus, asDriver: boolean): Promise<Trip> {
   const rpc = asDriver ? 'centralgo_driver_transition_trip' : 'centralgo_operator_set_trip_status';
-  const args = asDriver ? { p_trip_id: tripId, p_new_status: status } : { p_trip_id: tripId, p_new_status: status };
-  const { data, error } = await requireSupabase().rpc(rpc, args);
+  const { data, error } = await requireSupabase().rpc(rpc, { p_trip_id: tripId, p_new_status: status });
   if (error) throw error;
   return mapTripRow(data);
 }
