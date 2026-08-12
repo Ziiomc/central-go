@@ -36,6 +36,13 @@ const isEmailRateLimit = (error: unknown) => {
   return value?.status === 429 || /email rate limit|over_email_send_rate_limit|too many requests/i.test(text);
 };
 
+const roleLabel = (role?: string | null) => {
+  if (role === 'regional_partner') return 'Partner Regional';
+  if (role === 'sales_partner') return 'Partner Comercial';
+  if (role === 'super_admin') return 'Superadmin';
+  return role || 'cuenta global';
+};
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return json({ error: 'Método no permitido' }, 405);
@@ -129,6 +136,41 @@ Deno.serve(async (req) => {
     let emailPending = false;
     let passwordReady = false;
     let passwordUpdated = false;
+
+    // A commercial/global identity must never be silently repurposed as a driver
+    // or operator. This avoids corrupting Partner/Superadmin access when a test uses
+    // an email that already belongs to another Central GO persona.
+    if (targetUser && role !== 'company_admin') {
+      const { data: targetProfile, error: targetProfileError } = await service
+        .from('profiles')
+        .select('name,global_role')
+        .eq('id', targetUser.id)
+        .maybeSingle();
+      if (targetProfileError) throw targetProfileError;
+
+      if (targetProfile?.global_role) {
+        return json({
+          error: `El correo ${email} ya pertenece a ${roleLabel(targetProfile.global_role)}${targetProfile.name ? ` (${targetProfile.name})` : ''}. Usa un correo personal distinto para el conductor para no alterar esa cuenta.`,
+          code: 'EMAIL_RESERVED_GLOBAL_ROLE',
+        }, 409);
+      }
+
+      if (role === 'driver') {
+        const { data: existingDriver, error: existingDriverError } = await service
+          .from('drivers')
+          .select('id,company_id,display_name,unit_number')
+          .eq('user_id', targetUser.id)
+          .limit(1)
+          .maybeSingle();
+        if (existingDriverError) throw existingDriverError;
+        if (existingDriver) {
+          return json({
+            error: `Ese correo ya está vinculado al conductor ${existingDriver.display_name} (${existingDriver.unit_number}). Edita ese conductor o usa otro correo.`,
+            code: 'EMAIL_ALREADY_DRIVER',
+          }, 409);
+        }
+      }
+    }
 
     if (!targetUser) {
       if (password) {
