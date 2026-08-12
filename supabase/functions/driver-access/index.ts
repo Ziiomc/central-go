@@ -1,7 +1,7 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
-const OFFICIAL_DRIVER_URL = 'https://central-go-one.vercel.app/driver';
-const OFFICIAL_APP_URL = 'https://central-go-one.vercel.app/';
+const OFFICIAL_DRIVER_URL = 'https://go-one.vercel.app/driver';
+const OFFICIAL_APP_URL = 'https://go-one.vercel.app/';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
