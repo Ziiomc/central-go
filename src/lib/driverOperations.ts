@@ -24,6 +24,18 @@ export async function sendDriverRadioMessage(companyId: string, driver: Driver, 
   if (error) throw error;
 }
 
+export async function sendDriverRadioToCentral(companyId: string, presetCode: string, message: string): Promise<string> {
+  const clean = message.trim();
+  if (!clean) throw new Error('Selecciona un mensaje para la central.');
+  const { data, error } = await requireSupabase().rpc('centralgo_driver_send_radio', {
+    target_company: companyId,
+    p_message: clean,
+    p_preset_code: presetCode,
+  });
+  if (error) throw error;
+  return String(data);
+}
+
 export async function pingDriverPresence(companyId: string): Promise<void> {
   const { error } = await requireSupabase().rpc('centralgo_driver_presence_ping', { target_company: companyId });
   if (error) throw error;
