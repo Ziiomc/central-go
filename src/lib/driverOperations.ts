@@ -44,7 +44,7 @@ export async function loadDriverAnalytics(companyId: string, from: Date, to: Dat
   return {
     connectedSeconds: Number(data?.connected_seconds ?? 0),
     drivingSeconds: Number(data?.driving_seconds ?? 0),
-    serviceKm: Number(data?.service_km ?? 0),
+    serviceKm: Number(data?.gps_km ?? data?.service_km ?? 0),
     tripsCompleted: Number(data?.trips_completed ?? 0),
     earnings: Number(data?.earnings ?? 0),
     avgTripSeconds: Number(data?.avg_trip_seconds ?? 0),
