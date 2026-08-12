@@ -1,6 +1,6 @@
 const OFFICIAL_SUPABASE_URL = 'https://cuazdzsvgwrnpczbvrgx.supabase.co';
 const OFFICIAL_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_ICfwSIQkutbSwAcHQdjBhA_aRPvM0lG';
-const OFFICIAL_APP_URL = 'https://go-one.vercel.app';
+const OFFICIAL_APP_URL = 'https://central-go-one.vercel.app';
 
 const envSupabaseUrl = (import.meta.env.VITE_SUPABASE_URL ?? '').trim();
 const envSupabasePublishableKey = (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? '').trim();
@@ -15,8 +15,8 @@ const supabasePublishableKey = production
   ? OFFICIAL_SUPABASE_PUBLISHABLE_KEY
   : (envSupabasePublishableKey || OFFICIAL_SUPABASE_PUBLISHABLE_KEY);
 const backendFlag = production ? true : envBackendFlag;
-// go-one.vercel.app es el origen canónico actual. Los enlaces de Auth y PWA
-// deben volver siempre al mismo origen para no separar sesiones/localStorage.
+// central-go-one.vercel.app es el origen canónico desplegado actualmente.
+// Los enlaces de Auth y PWA deben volver siempre al mismo origen para no separar sesiones/localStorage.
 const officialAppUrl = (production ? OFFICIAL_APP_URL : (envPublicAppUrl || OFFICIAL_APP_URL)).replace(/\/$/, '');
 
 // Central GO 2.0 opera exclusivamente contra el backend autenticado.
