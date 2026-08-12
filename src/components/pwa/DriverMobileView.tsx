@@ -20,7 +20,6 @@ import {
   Smartphone,
   User,
   Wifi,
-  X,
   XCircle,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
@@ -37,6 +36,8 @@ import {
 } from '../../lib/driverOperations';
 import centralGoLogo from '../../assets/images/central-go-logo.svg';
 
+const GPS_WANTED_KEY = 'centralgo-driver-gps-wanted';
+
 const formatDuration = (seconds: number) => {
   const totalMinutes = Math.max(0, Math.round(seconds / 60));
   const hours = Math.floor(totalMinutes / 60);
@@ -49,12 +50,6 @@ const todayRange = () => {
   const from = new Date();
   from.setHours(0, 0, 0, 0);
   return { from, to: new Date() };
-};
-
-type NavigationTarget = {
-  address: string;
-  lat: number;
-  lng: number;
 };
 
 export const DriverMobileView: React.FC = () => {
@@ -85,7 +80,6 @@ export const DriverMobileView: React.FC = () => {
   const [analytics, setAnalytics] = useState<DriverAnalytics | null>(null);
   const [analyticsError, setAnalyticsError] = useState('');
   const [analyticsOpen, setAnalyticsOpen] = useState(false);
-  const [navigationTarget, setNavigationTarget] = useState<NavigationTarget | null>(null);
   const [incomingOffer, setIncomingOffer] = useState<Trip | null>(null);
   const [offerTimer, setOfferTimer] = useState(15);
   const [sosConfirmOpen, setSosConfirmOpen] = useState(false);
@@ -191,14 +185,18 @@ export const DriverMobileView: React.FC = () => {
 
     void heartbeat();
     const interval = window.setInterval(() => void heartbeat(), 60000);
-    const visible = () => { if (document.visibilityState === 'visible') void heartbeat(); };
+    const visible = () => {
+      if (document.visibilityState === 'visible') void heartbeat();
+    };
     document.addEventListener('visibilitychange', visible);
 
     return () => {
       cancelled = true;
       window.clearInterval(interval);
       document.removeEventListener('visibilitychange', visible);
-      void endDriverPresence(currentCompany.id).catch(() => undefined);
+      // No cerramos presencia al desmontar React. Los navegadores móviles pueden
+      // suspender/recrear una pestaña al cambiar de app. El backend ya cierra una
+      // sesión sin heartbeat tras 4 minutos; cerrar aquí cortaba jornadas válidas.
     };
   }, [driver?.id, currentCompany.id]);
 
@@ -207,24 +205,19 @@ export const DriverMobileView: React.FC = () => {
     void refreshAnalytics();
   }, [driver?.todayEarnings, driver?.totalTripsCompleted, activeTrip?.status]);
 
-  const stopGpsTracking = () => {
+  const stopGpsTracking = (rememberOff = true) => {
     if (gpsWatchId.current !== null && navigator.geolocation) navigator.geolocation.clearWatch(gpsWatchId.current);
     gpsWatchId.current = null;
     setIsGpsActive(false);
     setGpsText('GPS detenido');
+    if (rememberOff) localStorage.setItem(GPS_WANTED_KEY, '0');
   };
 
-  const toggleGpsTracking = async () => {
+  const startGpsTracking = async () => {
+    if (!navigator.geolocation || !driver || gpsWatchId.current !== null) return;
     if (!radioReady) void enableRadioAlerts();
-    if (!navigator.geolocation || !driver) {
-      setGpsText('GPS no disponible en este dispositivo');
-      return;
-    }
-    if (isGpsActive) {
-      stopGpsTracking();
-      return;
-    }
 
+    localStorage.setItem(GPS_WANTED_KEY, '1');
     setIsGpsActive(true);
     setGpsText('Solicitando GPS de alta precisión…');
 
@@ -241,6 +234,7 @@ export const DriverMobileView: React.FC = () => {
           : Infinity;
         const shouldSend = !last || now - last.at >= 8000 || metersApprox >= 15;
 
+        setIsGpsActive(true);
         setGpsText(`GPS EN VIVO · ±${Math.round(accuracy)} m${speed != null ? ` · ${Math.round(speed * 3.6)} km/h` : ''}`);
 
         if (shouldSend) {
@@ -251,12 +245,39 @@ export const DriverMobileView: React.FC = () => {
         }
       },
       (error) => {
-        stopGpsTracking();
+        if (gpsWatchId.current !== null && navigator.geolocation) navigator.geolocation.clearWatch(gpsWatchId.current);
+        gpsWatchId.current = null;
+        setIsGpsActive(false);
         setGpsText(error.code === 1 ? 'Permiso de ubicación denegado' : 'No fue posible obtener ubicación');
+        if (error.code === 1) localStorage.setItem(GPS_WANTED_KEY, '0');
       },
       { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 },
     );
   };
+
+  const toggleGpsTracking = async () => {
+    if (!navigator.geolocation || !driver) {
+      setGpsText('GPS no disponible en este dispositivo');
+      return;
+    }
+    if (isGpsActive || gpsWatchId.current !== null) {
+      stopGpsTracking(true);
+      return;
+    }
+    await startGpsTracking();
+  };
+
+  useEffect(() => {
+    if (!driver) return;
+    if (localStorage.getItem(GPS_WANTED_KEY) === '1') void startGpsTracking();
+    const resumeGps = () => {
+      if (document.visibilityState === 'visible' && localStorage.getItem(GPS_WANTED_KEY) === '1' && gpsWatchId.current === null) {
+        void startGpsTracking();
+      }
+    };
+    document.addEventListener('visibilitychange', resumeGps);
+    return () => document.removeEventListener('visibilitychange', resumeGps);
+  }, [driver?.id]);
 
   useEffect(() => {
     const installed = () => {
@@ -272,6 +293,7 @@ export const DriverMobileView: React.FC = () => {
       window.removeEventListener('appinstalled', installed);
       window.removeEventListener('pwa-installable', installable);
       if (gpsWatchId.current !== null && navigator.geolocation) navigator.geolocation.clearWatch(gpsWatchId.current);
+      gpsWatchId.current = null;
       if (radioHistoryTimerRef.current !== null) window.clearTimeout(radioHistoryTimerRef.current);
       if (radioToastTimerRef.current !== null) window.clearTimeout(radioToastTimerRef.current);
     };
@@ -284,19 +306,19 @@ export const DriverMobileView: React.FC = () => {
       soundManager.playDispatchChime();
       if ('vibrate' in navigator) navigator.vibrate([300, 120, 300]);
     }
-  }, [activeTrip?.id, activeTrip?.status]);
+    if (activeTrip?.status && activeTrip.status !== 'assigned' && incomingOffer?.id === activeTrip.id) {
+      setIncomingOffer(null);
+    }
+  }, [activeTrip?.id, activeTrip?.status, incomingOffer?.id]);
 
   useEffect(() => {
-    if (!incomingOffer) return;
-    if (offerTimer <= 0) {
-      const expired = incomingOffer;
-      setIncomingOffer(null);
-      void Promise.resolve(rejectTripOffer(expired.id, 'Expiró tiempo de respuesta del conductor')).catch(() => undefined);
-      return;
-    }
-    const timer = window.setTimeout(() => setOfferTimer((value) => value - 1), 1000);
+    if (!incomingOffer || offerTimer <= 0) return;
+    // El contador es solo informativo. Nunca rechazamos/desasignamos una carrera
+    // por un timer del navegador: al cambiar de app los timers pueden ser pausados
+    // o reanudados de golpe. Solo una acción explícita puede liberar la carrera.
+    const timer = window.setTimeout(() => setOfferTimer((value) => Math.max(0, value - 1)), 1000);
     return () => window.clearTimeout(timer);
-  }, [incomingOffer, offerTimer, rejectTripOffer]);
+  }, [incomingOffer?.id, offerTimer]);
 
   const installDriverApp = async () => {
     if (isPWAStandalone()) {
@@ -320,6 +342,13 @@ export const DriverMobileView: React.FC = () => {
     );
   };
 
+  const handleSignOut = async () => {
+    if (currentCompany.id !== 'network') {
+      await endDriverPresence(currentCompany.id).catch(() => undefined);
+    }
+    await signOut();
+  };
+
   if (!driver) {
     return (
       <main className="min-h-screen bg-[#09090b] p-5 text-zinc-100">
@@ -329,7 +358,7 @@ export const DriverMobileView: React.FC = () => {
           <p className="mt-2 text-sm leading-relaxed text-zinc-400">
             Tu acceso de conductor existe, pero el administrador todavía debe asociarlo a un conductor y móvil.
           </p>
-          <button onClick={() => void signOut()} className="mt-5 rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-2.5 text-xs font-bold text-zinc-300">
+          <button onClick={() => void handleSignOut()} className="mt-5 rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-2.5 text-xs font-bold text-zinc-300">
             Cerrar sesión
           </button>
         </section>
@@ -352,7 +381,19 @@ export const DriverMobileView: React.FC = () => {
   };
 
   const openGpsNavigation = (address: string, lat: number, lng: number) => {
-    setNavigationTarget({ address, lat, lng });
+    const ua = navigator.userAgent || '';
+    const label = encodeURIComponent(address);
+    if (/Android/i.test(ua)) {
+      // geo: delega al sistema Android. Si el usuario definió una app de mapas
+      // predeterminada se abre directamente; si no, Android muestra su selector.
+      window.location.href = `geo:${lat},${lng}?q=${lat},${lng}(${label})`;
+      return;
+    }
+    if (/iPad|iPhone|iPod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) {
+      window.location.href = `https://maps.apple.com/?daddr=${lat},${lng}&q=${label}&dirflg=d`;
+      return;
+    }
+    window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving&dir_action=navigate`, '_blank', 'noopener,noreferrer');
   };
 
   const setStatus = (status: 'available' | 'paused' | 'offline') => {
@@ -386,7 +427,7 @@ export const DriverMobileView: React.FC = () => {
                 <p className="text-[8px] font-bold uppercase tracking-[0.16em] text-zinc-500">Operación en vivo</p>
               </div>
             </div>
-            <button onClick={() => void signOut()} className="shrink-0 rounded-lg border border-zinc-800 bg-zinc-950 px-2.5 py-2 text-[9px] font-black text-zinc-500">
+            <button onClick={() => void handleSignOut()} className="shrink-0 rounded-lg border border-zinc-800 bg-zinc-950 px-2.5 py-2 text-[9px] font-black text-zinc-500">
               Salir
             </button>
           </div>
@@ -411,12 +452,7 @@ export const DriverMobileView: React.FC = () => {
                   <p className="truncate text-[8px] text-zinc-600">{installHint || 'Acceso rápido desde inicio'}</p>
                 </div>
               </div>
-              <button
-                onClick={() => void installDriverApp()}
-                className="shrink-0 rounded-lg border border-amber-500/30 bg-amber-400/10 px-2.5 py-1.5 text-[9px] font-black text-amber-200"
-              >
-                Instalar
-              </button>
+              <button onClick={() => void installDriverApp()} className="shrink-0 rounded-lg border border-amber-500/30 bg-amber-400/10 px-2.5 py-1.5 text-[9px] font-black text-amber-200">Instalar</button>
             </div>
           </section>
         )}
@@ -426,75 +462,31 @@ export const DriverMobileView: React.FC = () => {
             <div className="flex items-center justify-between gap-3">
               <div className="flex min-w-0 items-center gap-2">
                 <Radio className="h-4 w-4 shrink-0 text-blue-300" />
-                <div className="min-w-0">
-                  <p className="text-[10px] font-black text-white">Activar Radio Central</p>
-                  <p className="truncate text-[8px] text-zinc-500">Voz alta, vibración y alertas</p>
-                </div>
+                <div className="min-w-0"><p className="text-[10px] font-black text-white">Activar Radio Central</p><p className="truncate text-[8px] text-zinc-500">Voz alta, vibración y alertas</p></div>
               </div>
-              <button onClick={() => void enableRadioAlerts()} className="shrink-0 rounded-lg bg-blue-600 px-2.5 py-1.5 text-[9px] font-black text-white">
-                <BellRing className="mr-1 inline h-3 w-3" />Activar
-              </button>
+              <button onClick={() => void enableRadioAlerts()} className="shrink-0 rounded-lg bg-blue-600 px-2.5 py-1.5 text-[9px] font-black text-white"><BellRing className="mr-1 inline h-3 w-3" />Activar</button>
             </div>
           </section>
         )}
 
         <section className="rounded-2xl border border-zinc-800 bg-[#121215] p-3">
-          <div className="flex items-center gap-2">
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <span className="text-base font-black text-white">{driver.unitNumber}</span>
-                <span className="rounded-full border border-blue-500/25 bg-blue-500/10 px-2 py-0.5 text-[9px] font-black text-blue-300">★ {driver.rating.toFixed(2)}</span>
-              </div>
-              <p className="truncate text-[11px] text-zinc-400">{driver.name}</p>
-            </div>
-          </div>
+          <div className="flex items-center gap-2"><div className="min-w-0 flex-1"><div className="flex items-center gap-2"><span className="text-base font-black text-white">{driver.unitNumber}</span><span className="rounded-full border border-blue-500/25 bg-blue-500/10 px-2 py-0.5 text-[9px] font-black text-blue-300">★ {driver.rating.toFixed(2)}</span></div><p className="truncate text-[11px] text-zinc-400">{driver.name}</p></div></div>
           <div className="mt-2.5 grid grid-cols-2 gap-2">
-            <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.05] p-2.5">
-              <p className="text-[8px] font-bold uppercase text-zinc-600">Ganancias hoy</p>
-              <p className="mt-1 text-lg font-black text-emerald-400">${(analytics?.earnings ?? driver.todayEarnings).toLocaleString('es-CL')}</p>
-            </div>
-            <div className="rounded-xl border border-blue-500/20 bg-blue-500/[0.05] p-2.5">
-              <p className="text-[8px] font-bold uppercase text-zinc-600">Viajes hoy</p>
-              <p className="mt-1 text-lg font-black text-blue-300">{analytics?.tripsCompleted ?? 0}</p>
-            </div>
+            <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.05] p-2.5"><p className="text-[8px] font-bold uppercase text-zinc-600">Ganancias hoy</p><p className="mt-1 text-lg font-black text-emerald-400">${(analytics?.earnings ?? driver.todayEarnings).toLocaleString('es-CL')}</p></div>
+            <div className="rounded-xl border border-blue-500/20 bg-blue-500/[0.05] p-2.5"><p className="text-[8px] font-bold uppercase text-zinc-600">Viajes hoy</p><p className="mt-1 text-lg font-black text-blue-300">{analytics?.tripsCompleted ?? 0}</p></div>
           </div>
         </section>
 
         <section className="overflow-hidden rounded-xl border border-zinc-800 bg-gradient-to-br from-[#13151a] to-[#0e0f12]">
-          <button
-            type="button"
-            onClick={() => setAnalyticsOpen((value) => !value)}
-            aria-expanded={analyticsOpen}
-            className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left"
-          >
-            <div className="min-w-0">
-              <p className="flex items-center gap-2 text-[11px] font-black text-white"><BarChart3 className="h-4 w-4 text-violet-400" />Mi jornada</p>
-              <p className="mt-0.5 truncate text-[8px] text-zinc-600">
-                {analytics ? `${formatDuration(analytics.connectedSeconds)} · ${analytics.serviceKm.toFixed(1)} km · ${analytics.tripsCompleted} viajes` : 'Tiempo, kilómetros y actividad'}
-              </p>
-            </div>
-            <span className="flex shrink-0 items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-[8px] font-black text-zinc-400">
-              {analyticsOpen ? 'Ocultar' : 'Analíticas'}
-              <ChevronDown className={`h-3.5 w-3.5 transition-transform ${analyticsOpen ? 'rotate-180' : ''}`} />
-            </span>
+          <button type="button" onClick={() => setAnalyticsOpen((value) => !value)} aria-expanded={analyticsOpen} className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left">
+            <div className="min-w-0"><p className="flex items-center gap-2 text-[11px] font-black text-white"><BarChart3 className="h-4 w-4 text-violet-400" />Mi jornada</p><p className="mt-0.5 truncate text-[8px] text-zinc-600">{analytics ? `${formatDuration(analytics.connectedSeconds)} · ${analytics.serviceKm.toFixed(1)} km · ${analytics.tripsCompleted} viajes` : 'Tiempo, kilómetros y actividad'}</p></div>
+            <span className="flex shrink-0 items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-[8px] font-black text-zinc-400">{analyticsOpen ? 'Ocultar' : 'Analíticas'}<ChevronDown className={`h-3.5 w-3.5 transition-transform ${analyticsOpen ? 'rotate-180' : ''}`} /></span>
           </button>
-
           {analyticsOpen && (
             <div className="border-t border-zinc-800 px-3 pb-3 pt-2.5">
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <p className="text-[8px] text-zinc-600">Sesiones, GPS y carreras reales</p>
-                <button onClick={() => void refreshAnalytics()} className="rounded-lg border border-zinc-700 px-2 py-1 text-[8px] font-bold text-zinc-400">Actualizar</button>
-              </div>
-              <div className="grid grid-cols-2 gap-1.5">
-                <Metric icon={<Activity className="h-3.5 w-3.5" />} label="Conectado" value={analytics ? formatDuration(analytics.connectedSeconds) : '—'} />
-                <Metric icon={<Gauge className="h-3.5 w-3.5" />} label="Conduciendo" value={analytics ? formatDuration(analytics.drivingSeconds) : '—'} />
-                <Metric icon={<Route className="h-3.5 w-3.5" />} label="Km servicio" value={analytics ? `${analytics.serviceKm.toFixed(1)} km` : '—'} />
-                <Metric icon={<CheckCircle className="h-3.5 w-3.5" />} label="Viajes hoy" value={String(analytics?.tripsCompleted ?? 0)} />
-              </div>
-              <div className="mt-1.5 flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-950/70 px-2.5 py-2 text-[9px]">
-                <span className="text-zinc-500">Promedio viaje</span>
-                <span className="font-black text-zinc-200">{analytics?.avgTripSeconds ? formatDuration(analytics.avgTripSeconds) : '—'}</span>
-              </div>
+              <div className="mb-2 flex items-center justify-between gap-2"><p className="text-[8px] text-zinc-600">Sesiones, GPS y carreras reales</p><button onClick={() => void refreshAnalytics()} className="rounded-lg border border-zinc-700 px-2 py-1 text-[8px] font-bold text-zinc-400">Actualizar</button></div>
+              <div className="grid grid-cols-2 gap-1.5"><Metric icon={<Activity className="h-3.5 w-3.5" />} label="Conectado" value={analytics ? formatDuration(analytics.connectedSeconds) : '—'} /><Metric icon={<Gauge className="h-3.5 w-3.5" />} label="Conduciendo" value={analytics ? formatDuration(analytics.drivingSeconds) : '—'} /><Metric icon={<Route className="h-3.5 w-3.5" />} label="Km servicio" value={analytics ? `${analytics.serviceKm.toFixed(1)} km` : '—'} /><Metric icon={<CheckCircle className="h-3.5 w-3.5" />} label="Viajes hoy" value={String(analytics?.tripsCompleted ?? 0)} /></div>
+              <div className="mt-1.5 flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-950/70 px-2.5 py-2 text-[9px]"><span className="text-zinc-500">Promedio viaje</span><span className="font-black text-zinc-200">{analytics?.avgTripSeconds ? formatDuration(analytics.avgTripSeconds) : '—'}</span></div>
               {analyticsError && <p className="mt-1.5 text-[8px] text-amber-300">{analyticsError}</p>}
             </div>
           )}
@@ -502,319 +494,57 @@ export const DriverMobileView: React.FC = () => {
 
         {newestRadioMessage && (
           <section className="overflow-hidden rounded-xl border border-zinc-800 bg-[#121215]">
-            <button
-              type="button"
-              onClick={() => {
-                if (radioHistoryTimerRef.current !== null) window.clearTimeout(radioHistoryTimerRef.current);
-                setRadioHistoryOpen((value) => !value);
-              }}
-              className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left"
-            >
-              <div className="flex min-w-0 items-center gap-2">
-                <Radio className="h-4 w-4 shrink-0 text-amber-300" />
-                <div className="min-w-0">
-                  <p className="text-[10px] font-black text-white">Último mensaje de central</p>
-                  {!radioHistoryOpen && <p className="truncate text-[8px] text-zinc-600">{new Date(newestRadioMessage.timestamp).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })} · Toca para ver</p>}
-                </div>
-              </div>
+            <button type="button" onClick={() => { if (radioHistoryTimerRef.current !== null) window.clearTimeout(radioHistoryTimerRef.current); setRadioHistoryOpen((value) => !value); }} className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left">
+              <div className="flex min-w-0 items-center gap-2"><Radio className="h-4 w-4 shrink-0 text-amber-300" /><div className="min-w-0"><p className="text-[10px] font-black text-white">Último mensaje de central</p>{!radioHistoryOpen && <p className="truncate text-[8px] text-zinc-600">{new Date(newestRadioMessage.timestamp).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })} · Toca para ver</p>}</div></div>
               <ChevronDown className={`h-4 w-4 shrink-0 text-zinc-500 transition-transform ${radioHistoryOpen ? 'rotate-180' : ''}`} />
             </button>
-
-            {radioHistoryOpen && (
-              <div className="border-t border-zinc-800 px-3 pb-3 pt-2">
-                <p className="text-[8px] text-zinc-600">{new Date(newestRadioMessage.timestamp).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}</p>
-                <p className="mt-1 text-[11px] font-semibold leading-relaxed text-zinc-200">{newestRadioMessage.message}</p>
-              </div>
-            )}
+            {radioHistoryOpen && <div className="border-t border-zinc-800 px-3 pb-3 pt-2"><p className="text-[8px] text-zinc-600">{new Date(newestRadioMessage.timestamp).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}</p><p className="mt-1 text-[11px] font-semibold leading-relaxed text-zinc-200">{newestRadioMessage.message}</p></div>}
           </section>
         )}
 
         <section className="rounded-xl border border-zinc-800 bg-[#121215] p-3">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex min-w-0 items-center gap-2">
-              <Navigation className={`h-4 w-4 shrink-0 ${isGpsActive ? 'text-blue-400' : 'text-zinc-600'}`} />
-              <div className="min-w-0">
-                <p className="truncate text-[11px] font-bold text-zinc-200">{gpsText}</p>
-                <p className="truncate text-[8px] text-zinc-600">{driver.currentLocation.address || 'Ubicación pendiente'}</p>
-              </div>
-            </div>
-            <button onClick={() => void toggleGpsTracking()} className={`shrink-0 rounded-lg border px-2.5 py-1.5 text-[9px] font-black ${isGpsActive ? 'border-blue-500/40 bg-blue-500/15 text-blue-300' : 'border-zinc-700 bg-zinc-900 text-zinc-300'}`}>
-              {isGpsActive ? 'GPS ON' : 'Activar GPS'}
-            </button>
-          </div>
+          <div className="flex items-center justify-between gap-2"><div className="flex min-w-0 items-center gap-2"><Navigation className={`h-4 w-4 shrink-0 ${isGpsActive ? 'text-blue-400' : 'text-zinc-600'}`} /><div className="min-w-0"><p className="truncate text-[11px] font-bold text-zinc-200">{gpsText}</p><p className="truncate text-[8px] text-zinc-600">{driver.currentLocation.address || 'Ubicación pendiente'}</p></div></div><button onClick={() => void toggleGpsTracking()} className={`shrink-0 rounded-lg border px-2.5 py-1.5 text-[9px] font-black ${isGpsActive ? 'border-blue-500/40 bg-blue-500/15 text-blue-300' : 'border-zinc-700 bg-zinc-900 text-zinc-300'}`}>{isGpsActive ? 'GPS ON' : 'Activar GPS'}</button></div>
         </section>
 
-        <section className="grid grid-cols-3 gap-1.5 rounded-xl border border-zinc-800 bg-[#121215] p-1.5">
-          <StatusButton active={driver.status === 'available'} label="Disponible" tone="emerald" onClick={() => setStatus('available')} />
-          <StatusButton active={driver.status === 'paused'} label="Pausa" tone="amber" icon={<Clock className="h-3.5 w-3.5" />} onClick={() => setStatus('paused')} />
-          <StatusButton active={driver.status === 'offline'} label="Fuera" tone="zinc" icon={<XCircle className="h-3.5 w-3.5" />} onClick={() => setStatus('offline')} />
-        </section>
+        <section className="grid grid-cols-3 gap-1.5 rounded-xl border border-zinc-800 bg-[#121215] p-1.5"><StatusButton active={driver.status === 'available'} label="Disponible" tone="emerald" onClick={() => setStatus('available')} /><StatusButton active={driver.status === 'paused'} label="Pausa" tone="amber" icon={<Clock className="h-3.5 w-3.5" />} onClick={() => setStatus('paused')} /><StatusButton active={driver.status === 'offline'} label="Fuera" tone="zinc" icon={<XCircle className="h-3.5 w-3.5" />} onClick={() => setStatus('offline')} /></section>
 
         {incomingOffer && (
           <section className="rounded-2xl border-2 border-blue-500 bg-blue-500/[0.06] p-4 shadow-2xl">
-            <div className="flex items-center justify-between">
-              <span className="rounded-lg bg-blue-600 px-3 py-1 text-[9px] font-black uppercase text-white">Nueva carrera</span>
-              <span className="text-lg font-black text-blue-300">{offerTimer}s</span>
-            </div>
-            <div className="mt-3">
-              <p className="text-[8px] font-black uppercase tracking-wider text-zinc-600">Retiro</p>
-              <p className="mt-1 flex items-start gap-2 text-xs font-bold text-white"><MapPin className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />{incomingOffer.origin.address}</p>
-            </div>
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              <MiniValue label="Tarifa estimada" value={`$${incomingOffer.estimatedFare.toLocaleString('es-CL')}`} accent />
-              <MiniValue label="Distancia" value={`${incomingOffer.estimatedDistanceKm} km`} />
-            </div>
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              <button onClick={rejectOffer} className="rounded-xl border border-zinc-700 bg-zinc-800 py-2.5 text-[10px] font-black text-rose-300">Rechazar</button>
-              <button onClick={acceptOffer} className="rounded-xl bg-emerald-400 py-2.5 text-[10px] font-black text-zinc-950">Aceptar carrera</button>
-            </div>
+            <div className="flex items-center justify-between"><span className="rounded-lg bg-blue-600 px-3 py-1 text-[9px] font-black uppercase text-white">Nueva carrera</span><span className="text-sm font-black text-blue-300">{offerTimer > 0 ? `${offerTimer}s` : 'Pendiente'}</span></div>
+            <div className="mt-3"><p className="text-[8px] font-black uppercase tracking-wider text-zinc-600">Retiro</p><p className="mt-1 flex items-start gap-2 text-xs font-bold text-white"><MapPin className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />{incomingOffer.origin.address}</p></div>
+            <div className="mt-3 grid grid-cols-2 gap-2"><MiniValue label="Tarifa estimada" value={`$${incomingOffer.estimatedFare.toLocaleString('es-CL')}`} accent /><MiniValue label="Distancia" value={`${incomingOffer.estimatedDistanceKm} km`} /></div>
+            <div className="mt-3 grid grid-cols-2 gap-2"><button onClick={rejectOffer} className="rounded-xl border border-zinc-700 bg-zinc-800 py-2.5 text-[10px] font-black text-rose-300">Rechazar</button><button onClick={acceptOffer} className="rounded-xl bg-emerald-400 py-2.5 text-[10px] font-black text-zinc-950">Aceptar carrera</button></div>
           </section>
         )}
 
         {activeTrip && !incomingOffer && (
           <section className="space-y-3 rounded-2xl border border-zinc-800 bg-[#121215] p-3 shadow-xl">
-            <div className="flex items-center justify-between border-b border-zinc-800 pb-2.5">
-              <div>
-                <p className="text-[8px] font-black uppercase tracking-widest text-blue-400">Carrera {activeTrip.code}</p>
-                <p className="mt-0.5 text-[11px] font-bold text-white">
-                  {activeTrip.status === 'in_progress' ? 'Pasajero a bordo' : activeTrip.status === 'arrived' ? 'En domicilio' : 'En camino al pasajero'}
-                </p>
-              </div>
-              <span className="rounded-full border border-blue-500/25 bg-blue-500/10 px-2 py-1 text-[8px] font-black uppercase text-blue-300">Activa</span>
-            </div>
-
-            <div className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-950 p-2.5">
-              <div className="flex items-center gap-2.5">
-                <User className="h-4 w-4 text-blue-400" />
-                <div>
-                  <p className="text-[11px] font-black text-white">{activeTrip.clientName}</p>
-                  <p className="text-[9px] text-zinc-500">{activeTrip.clientPhone}</p>
-                </div>
-              </div>
-              <a href={`tel:${activeTrip.clientPhone}`} className="rounded-lg bg-blue-600 p-2 text-white"><Phone className="h-4 w-4" /></a>
-            </div>
-
-            <div className="space-y-2.5">
-              <RoutePoint label="Retiro" text={activeTrip.origin.address} />
-              <RoutePoint label="Destino" text={activeTrip.destination.address} destination />
-            </div>
-
-            <div className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-950 p-2.5">
-              <div><p className="text-[8px] uppercase text-zinc-600">Tarifa</p><p className="text-sm font-black text-emerald-400">${activeTrip.estimatedFare.toLocaleString('es-CL')}</p></div>
-              <div className="text-right"><p className="text-[8px] uppercase text-zinc-600">Pago</p><p className="text-[9px] font-black uppercase text-zinc-300">{activeTrip.paymentMethod}</p></div>
-            </div>
-
-            <button
-              onClick={() => openGpsNavigation(
-                activeTrip.status === 'in_progress' ? activeTrip.destination.address : activeTrip.origin.address,
-                activeTrip.status === 'in_progress' ? activeTrip.destination.lat : activeTrip.origin.lat,
-                activeTrip.status === 'in_progress' ? activeTrip.destination.lng : activeTrip.origin.lng,
-              )}
-              className="flex w-full items-center justify-center gap-2 rounded-xl border border-blue-500/25 bg-blue-500/10 py-2.5 text-[10px] font-black text-blue-300"
-            >
-              <ExternalLink className="h-4 w-4" />Abrir GPS
-            </button>
-
-            <div className="space-y-1.5 border-t border-zinc-800 pt-2.5">
-              <button onClick={() => void Promise.resolve(updateTripStatus(activeTrip.id, 'arrived'))} disabled={activeTrip.status === 'in_progress'} className="flex w-full items-center justify-center gap-2 rounded-xl border border-blue-500/30 bg-blue-500/10 py-2.5 text-[10px] font-black text-blue-300 disabled:opacity-30">
-                <CheckCircle className="h-4 w-4" />Llegué al pasajero
-              </button>
-              <button onClick={() => void Promise.resolve(updateTripStatus(activeTrip.id, 'in_progress'))} className="flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 py-2.5 text-[10px] font-black text-emerald-300">
-                <Play className="h-4 w-4" />Pasajero a bordo
-              </button>
-              <button onClick={() => setFinishModalOpen(true)} className="flex w-full items-center justify-center gap-2 rounded-xl bg-rose-600 py-3 text-[10px] font-black text-white">
-                <DollarSign className="h-4 w-4" />Finalizar y cobrar
-              </button>
-            </div>
+            <div className="flex items-center justify-between border-b border-zinc-800 pb-2.5"><div><p className="text-[8px] font-black uppercase tracking-widest text-blue-400">Carrera {activeTrip.code}</p><p className="mt-0.5 text-[11px] font-bold text-white">{activeTrip.status === 'in_progress' ? 'Pasajero a bordo' : activeTrip.status === 'arrived' ? 'En domicilio' : 'En camino al pasajero'}</p></div><span className="rounded-full border border-blue-500/25 bg-blue-500/10 px-2 py-1 text-[8px] font-black uppercase text-blue-300">Activa</span></div>
+            <div className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-950 p-2.5"><div className="flex items-center gap-2.5"><User className="h-4 w-4 text-blue-400" /><div><p className="text-[11px] font-black text-white">{activeTrip.clientName}</p><p className="text-[9px] text-zinc-500">{activeTrip.clientPhone}</p></div></div><a href={`tel:${activeTrip.clientPhone}`} className="rounded-lg bg-blue-600 p-2 text-white"><Phone className="h-4 w-4" /></a></div>
+            <div className="space-y-2.5"><RoutePoint label="Retiro" text={activeTrip.origin.address} /><RoutePoint label="Destino" text={activeTrip.destination.address} destination /></div>
+            <div className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-950 p-2.5"><div><p className="text-[8px] uppercase text-zinc-600">Tarifa</p><p className="text-sm font-black text-emerald-400">${activeTrip.estimatedFare.toLocaleString('es-CL')}</p></div><div className="text-right"><p className="text-[8px] uppercase text-zinc-600">Pago</p><p className="text-[9px] font-black uppercase text-zinc-300">{activeTrip.paymentMethod}</p></div></div>
+            <button onClick={() => openGpsNavigation(activeTrip.status === 'in_progress' ? activeTrip.destination.address : activeTrip.origin.address, activeTrip.status === 'in_progress' ? activeTrip.destination.lat : activeTrip.origin.lat, activeTrip.status === 'in_progress' ? activeTrip.destination.lng : activeTrip.origin.lng)} className="flex w-full items-center justify-center gap-2 rounded-xl border border-blue-500/25 bg-blue-500/10 py-2.5 text-[10px] font-black text-blue-300"><ExternalLink className="h-4 w-4" />Abrir GPS</button>
+            <div className="space-y-1.5 border-t border-zinc-800 pt-2.5"><button onClick={() => void Promise.resolve(updateTripStatus(activeTrip.id, 'arrived'))} disabled={activeTrip.status === 'in_progress'} className="flex w-full items-center justify-center gap-2 rounded-xl border border-blue-500/30 bg-blue-500/10 py-2.5 text-[10px] font-black text-blue-300 disabled:opacity-30"><CheckCircle className="h-4 w-4" />Llegué al pasajero</button><button onClick={() => void Promise.resolve(updateTripStatus(activeTrip.id, 'in_progress'))} className="flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 py-2.5 text-[10px] font-black text-emerald-300"><Play className="h-4 w-4" />Pasajero a bordo</button><button onClick={() => setFinishModalOpen(true)} className="flex w-full items-center justify-center gap-2 rounded-xl bg-rose-600 py-3 text-[10px] font-black text-white"><DollarSign className="h-4 w-4" />Finalizar y cobrar</button></div>
           </section>
         )}
 
-        {!activeTrip && !incomingOffer && (
-          <section className="rounded-xl border border-zinc-800 bg-[#121215] px-4 py-4 text-center">
-            <Navigation className="mx-auto h-7 w-7 text-blue-400" />
-            <h3 className="mt-2 text-[12px] font-black text-white">Esperando asignación</h3>
-            <p className="mt-1 text-[10px] leading-relaxed text-zinc-500">
-              {isGpsActive ? 'Ubicación sincronizada con la central.' : 'Activa GPS para aparecer en el mapa en tiempo real.'}
-            </p>
-          </section>
-        )}
+        {!activeTrip && !incomingOffer && <section className="rounded-xl border border-zinc-800 bg-[#121215] px-4 py-4 text-center"><Navigation className="mx-auto h-7 w-7 text-blue-400" /><h3 className="mt-2 text-[12px] font-black text-white">Esperando asignación</h3><p className="mt-1 text-[10px] leading-relaxed text-zinc-500">{isGpsActive ? 'Ubicación sincronizada con la central.' : 'Activa GPS para aparecer en el mapa en tiempo real.'}</p></section>}
 
-        <section className="border-t border-zinc-800 pt-2">
-          {driver.sosActive ? (
-            <button onClick={() => void Promise.resolve(resolveDriverSOS(driver.id))} className="flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-500/40 bg-zinc-800 py-3 text-[10px] font-black text-emerald-300">
-              <ShieldAlert className="h-4 w-4" />SOS activo · cerrar emergencia
-            </button>
-          ) : (
-            <button onClick={() => setSosConfirmOpen(true)} className="flex w-full items-center justify-center gap-2 rounded-xl bg-red-600 py-3.5 text-[11px] font-black text-white shadow-lg shadow-red-950/40">
-              <ShieldAlert className="h-5 w-5" />SOS DE EMERGENCIA
-            </button>
-          )}
-        </section>
+        <section className="border-t border-zinc-800 pt-2">{driver.sosActive ? <button onClick={() => void Promise.resolve(resolveDriverSOS(driver.id))} className="flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-500/40 bg-zinc-800 py-3 text-[10px] font-black text-emerald-300"><ShieldAlert className="h-4 w-4" />SOS activo · cerrar emergencia</button> : <button onClick={() => setSosConfirmOpen(true)} className="flex w-full items-center justify-center gap-2 rounded-xl bg-red-600 py-3.5 text-[11px] font-black text-white shadow-lg shadow-red-950/40"><ShieldAlert className="h-5 w-5" />SOS DE EMERGENCIA</button>}</section>
       </div>
 
-      {navigationTarget && (
-        <NavigationChooser target={navigationTarget} onClose={() => setNavigationTarget(null)} />
-      )}
+      {sosConfirmOpen && <ModalShell><ShieldAlert className="mx-auto h-10 w-10 text-red-500" /><h3 className="mt-3 text-center text-base font-black text-white">¿Activar SOS?</h3><p className="mt-2 text-center text-xs leading-relaxed text-zinc-400">La central recibirá una alerta prioritaria asociada a tu móvil y última ubicación GPS.</p><div className="mt-5 grid grid-cols-2 gap-3"><button onClick={() => setSosConfirmOpen(false)} className="rounded-xl bg-zinc-800 py-3 text-xs font-bold text-zinc-300">Cancelar</button><button onClick={() => { void Promise.resolve(triggerDriverSOS(driver.id)); setSosConfirmOpen(false); }} className="rounded-xl bg-red-600 py-3 text-xs font-black text-white">Activar SOS</button></div></ModalShell>}
 
-      {sosConfirmOpen && (
-        <ModalShell>
-          <ShieldAlert className="mx-auto h-10 w-10 text-red-500" />
-          <h3 className="mt-3 text-center text-base font-black text-white">¿Activar SOS?</h3>
-          <p className="mt-2 text-center text-xs leading-relaxed text-zinc-400">
-            La central recibirá una alerta prioritaria asociada a tu móvil y última ubicación GPS.
-          </p>
-          <div className="mt-5 grid grid-cols-2 gap-3">
-            <button onClick={() => setSosConfirmOpen(false)} className="rounded-xl bg-zinc-800 py-3 text-xs font-bold text-zinc-300">Cancelar</button>
-            <button onClick={() => { void Promise.resolve(triggerDriverSOS(driver.id)); setSosConfirmOpen(false); }} className="rounded-xl bg-red-600 py-3 text-xs font-black text-white">Activar SOS</button>
-          </div>
-        </ModalShell>
-      )}
-
-      {finishModalOpen && activeTrip && (
-        <ModalShell>
-          <h3 className="text-center text-base font-black text-white">Finalizar {activeTrip.code}</h3>
-          <p className="mt-1 text-center text-xs text-zinc-500">Confirma el medio de pago recibido.</p>
-          <div className="mt-4 rounded-xl border border-zinc-800 bg-zinc-950 p-4 text-center">
-            <p className="text-[9px] uppercase text-zinc-600">Monto</p>
-            <p className="mt-1 text-3xl font-black text-emerald-400">${activeTrip.estimatedFare.toLocaleString('es-CL')}</p>
-          </div>
-          <div className="mt-4 grid grid-cols-2 gap-2">
-            {[['efectivo', 'Efectivo'], ['transferencia', 'Transferencia'], ['posnet_tarjeta', 'Tarjeta'], ['cuenta_corriente', 'Cta. corriente']].map(([id, label]) => (
-              <button key={id} onClick={() => setSelectedPayment(id)} className={`rounded-xl border px-3 py-3 text-xs font-bold ${selectedPayment === id ? 'border-blue-500 bg-blue-600 text-white' : 'border-zinc-800 bg-zinc-900 text-zinc-300'}`}>{label}</button>
-            ))}
-          </div>
-          <div className="mt-5 grid grid-cols-2 gap-3">
-            <button onClick={() => setFinishModalOpen(false)} className="rounded-xl bg-zinc-800 py-3 text-xs font-bold text-zinc-300">Volver</button>
-            <button
-              onClick={() => {
-                void Promise.resolve(updateTripStatus(activeTrip.id, 'completed', `Pago: ${selectedPayment}`)).then(() => void refreshAnalytics());
-                setFinishModalOpen(false);
-              }}
-              className="rounded-xl bg-emerald-400 py-3 text-xs font-black text-zinc-950"
-            >
-              Cobrado y completado
-            </button>
-          </div>
-        </ModalShell>
-      )}
+      {finishModalOpen && activeTrip && <ModalShell><h3 className="text-center text-base font-black text-white">Finalizar {activeTrip.code}</h3><p className="mt-1 text-center text-xs text-zinc-500">Confirma el medio de pago recibido.</p><div className="mt-4 rounded-xl border border-zinc-800 bg-zinc-950 p-4 text-center"><p className="text-[9px] uppercase text-zinc-600">Monto</p><p className="mt-1 text-3xl font-black text-emerald-400">${activeTrip.estimatedFare.toLocaleString('es-CL')}</p></div><div className="mt-4 grid grid-cols-2 gap-2">{[['efectivo', 'Efectivo'], ['transferencia', 'Transferencia'], ['posnet_tarjeta', 'Tarjeta'], ['cuenta_corriente', 'Cta. corriente']].map(([id, label]) => <button key={id} onClick={() => setSelectedPayment(id)} className={`rounded-xl border px-3 py-3 text-xs font-bold ${selectedPayment === id ? 'border-blue-500 bg-blue-600 text-white' : 'border-zinc-800 bg-zinc-900 text-zinc-300'}`}>{label}</button>)}</div><div className="mt-5 grid grid-cols-2 gap-3"><button onClick={() => setFinishModalOpen(false)} className="rounded-xl bg-zinc-800 py-3 text-xs font-bold text-zinc-300">Volver</button><button onClick={() => { void Promise.resolve(updateTripStatus(activeTrip.id, 'completed', `Pago: ${selectedPayment}`)).then(() => void refreshAnalytics()); setFinishModalOpen(false); }} className="rounded-xl bg-emerald-400 py-3 text-xs font-black text-zinc-950">Cobrado y completado</button></div></ModalShell>}
     </main>
   );
 };
 
-const NavigationChooser: React.FC<{ target: NavigationTarget; onClose: () => void }> = ({ target, onClose }) => {
-  const encodedDestination = encodeURIComponent(`${target.lat},${target.lng}`);
-  const encodedLabel = encodeURIComponent(target.address);
-  const isAndroid = /Android/i.test(navigator.userAgent || '');
-
-  const open = (url: string) => {
-    onClose();
-    window.location.href = url;
-  };
-
-  return (
-    <div className="fixed inset-0 z-[190] flex items-end bg-black/85 p-3 backdrop-blur-md sm:items-center sm:justify-center">
-      <section className="w-full max-w-sm rounded-3xl border border-zinc-700 bg-[#0d0d0f] p-5 shadow-2xl">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-[9px] font-black uppercase tracking-[0.18em] text-blue-300">Navegación</p>
-            <h3 className="mt-1 text-base font-black text-white">¿Qué GPS quieres usar?</h3>
-            <p className="mt-1 text-[10px] leading-relaxed text-zinc-500">{target.address}</p>
-          </div>
-          <button onClick={onClose} className="rounded-xl border border-zinc-800 bg-zinc-950 p-2 text-zinc-500" aria-label="Cerrar">
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
-        <div className="mt-4 space-y-2">
-          {isAndroid && (
-            <button
-              onClick={() => open(`geo:${target.lat},${target.lng}?q=${encodeURIComponent(`${target.lat},${target.lng}(${target.address})`)}`)}
-              className="flex w-full items-center justify-between rounded-xl border border-blue-500/30 bg-blue-500/10 px-4 py-3 text-left"
-            >
-              <span><strong className="block text-xs text-white">Elegir app del teléfono</strong><span className="text-[9px] text-zinc-500">Android mostrará las apps de mapas compatibles</span></span>
-              <Navigation className="h-5 w-5 text-blue-300" />
-            </button>
-          )}
-
-          <button
-            onClick={() => open(`https://www.google.com/maps/dir/?api=1&destination=${encodedDestination}&travelmode=driving&dir_action=navigate`)}
-            className="flex w-full items-center justify-between rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-left"
-          >
-            <span><strong className="block text-xs text-white">Google Maps</strong><span className="text-[9px] text-zinc-500">Navegación giro a giro</span></span>
-            <ExternalLink className="h-4 w-4 text-zinc-500" />
-          </button>
-
-          <button
-            onClick={() => open(`https://waze.com/ul?ll=${target.lat}%2C${target.lng}&navigate=yes&utm_source=centralgo`)}
-            className="flex w-full items-center justify-between rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-left"
-          >
-            <span><strong className="block text-xs text-white">Waze</strong><span className="text-[9px] text-zinc-500">Tráfico y navegación</span></span>
-            <ExternalLink className="h-4 w-4 text-zinc-500" />
-          </button>
-
-          <button
-            onClick={() => open(`https://maps.apple.com/?daddr=${encodedDestination}&q=${encodedLabel}&dirflg=d`)}
-            className="flex w-full items-center justify-between rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-left"
-          >
-            <span><strong className="block text-xs text-white">Apple Maps</strong><span className="text-[9px] text-zinc-500">Disponible en iPhone/iPad</span></span>
-            <ExternalLink className="h-4 w-4 text-zinc-500" />
-          </button>
-        </div>
-      </section>
-    </div>
-  );
+const Metric: React.FC<{ icon: React.ReactNode; label: string; value: string }> = ({ icon, label, value }) => <div className="rounded-lg border border-zinc-800 bg-zinc-950/70 p-2.5"><div className="flex items-center gap-1.5 text-violet-300">{icon}<span className="text-[8px] font-bold uppercase tracking-wider text-zinc-600">{label}</span></div><p className="mt-1.5 text-sm font-black text-white">{value}</p></div>;
+const MiniValue: React.FC<{ label: string; value: string; accent?: boolean }> = ({ label, value, accent }) => <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-2.5"><p className="text-[8px] text-zinc-600">{label}</p><p className={`mt-1 text-sm font-black ${accent ? 'text-emerald-400' : 'text-white'}`}>{value}</p></div>;
+const StatusButton: React.FC<{ active: boolean; label: string; tone: 'emerald' | 'amber' | 'zinc'; icon?: React.ReactNode; onClick: () => void }> = ({ active, label, tone, icon, onClick }) => {
+  const activeClass = tone === 'emerald' ? 'bg-emerald-400 text-zinc-950 border-emerald-300' : tone === 'amber' ? 'bg-amber-400 text-zinc-950 border-amber-300' : 'bg-zinc-700 text-white border-zinc-600';
+  return <button onClick={onClick} className={`flex min-h-12 flex-col items-center justify-center gap-1 rounded-lg border px-2 text-[9px] font-black uppercase ${active ? activeClass : 'border-zinc-800 bg-zinc-950 text-zinc-500'}`}>{icon ?? <span className={`h-2 w-2 rounded-full ${active ? 'bg-current' : 'bg-zinc-700'}`} />}{label}</button>;
 };
-
-const Metric: React.FC<{ icon: React.ReactNode; label: string; value: string }> = ({ icon, label, value }) => (
-  <div className="rounded-lg border border-zinc-800 bg-zinc-950/70 p-2.5">
-    <div className="flex items-center gap-1.5 text-violet-300">
-      {icon}
-      <span className="text-[8px] font-bold uppercase tracking-wider text-zinc-600">{label}</span>
-    </div>
-    <p className="mt-1.5 text-sm font-black text-white">{value}</p>
-  </div>
-);
-
-const MiniValue: React.FC<{ label: string; value: string; accent?: boolean }> = ({ label, value, accent }) => (
-  <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-2.5">
-    <p className="text-[8px] text-zinc-600">{label}</p>
-    <p className={`mt-1 text-sm font-black ${accent ? 'text-emerald-400' : 'text-white'}`}>{value}</p>
-  </div>
-);
-
-const StatusButton: React.FC<{
-  active: boolean;
-  label: string;
-  tone: 'emerald' | 'amber' | 'zinc';
-  icon?: React.ReactNode;
-  onClick: () => void;
-}> = ({ active, label, tone, icon, onClick }) => {
-  const activeClass = tone === 'emerald'
-    ? 'bg-emerald-400 text-zinc-950 border-emerald-300'
-    : tone === 'amber'
-      ? 'bg-amber-400 text-zinc-950 border-amber-300'
-      : 'bg-zinc-700 text-white border-zinc-600';
-
-  return (
-    <button onClick={onClick} className={`flex min-h-12 flex-col items-center justify-center gap-1 rounded-lg border px-2 text-[9px] font-black uppercase ${active ? activeClass : 'border-zinc-800 bg-zinc-950 text-zinc-500'}`}>
-      {icon ?? <span className={`h-2 w-2 rounded-full ${active ? 'bg-current' : 'bg-zinc-700'}`} />}
-      {label}
-    </button>
-  );
-};
-
-const RoutePoint: React.FC<{ label: string; text: string; destination?: boolean }> = ({ label, text, destination }) => (
-  <div className="flex items-start gap-2.5">
-    <span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${destination ? 'bg-rose-500' : 'bg-emerald-500'}`} />
-    <div>
-      <p className="text-[8px] font-black uppercase tracking-wider text-zinc-600">{label}</p>
-      <p className="mt-0.5 text-[11px] font-semibold text-zinc-200">{text}</p>
-    </div>
-  </div>
-);
-
-const ModalShell: React.FC<React.PropsWithChildren> = ({ children }) => (
-  <div className="fixed inset-0 z-[180] flex items-center justify-center bg-black/85 p-4 backdrop-blur-md">
-    <section className="w-full max-w-sm rounded-3xl border border-zinc-700 bg-[#0d0d0f] p-6 shadow-2xl">{children}</section>
-  </div>
-);
+const RoutePoint: React.FC<{ label: string; text: string; destination?: boolean }> = ({ label, text, destination }) => <div className="flex items-start gap-2.5"><span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${destination ? 'bg-rose-500' : 'bg-emerald-500'}`} /><div><p className="text-[8px] font-black uppercase tracking-wider text-zinc-600">{label}</p><p className="mt-0.5 text-[11px] font-semibold text-zinc-200">{text}</p></div></div>;
+const ModalShell: React.FC<React.PropsWithChildren> = ({ children }) => <div className="fixed inset-0 z-[180] flex items-center justify-center bg-black/85 p-4 backdrop-blur-md"><section className="w-full max-w-sm rounded-3xl border border-zinc-700 bg-[#0d0d0f] p-6 shadow-2xl">{children}</section></div>;
