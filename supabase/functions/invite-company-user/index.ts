@@ -1,6 +1,7 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
-const OFFICIAL_APP_URL = 'https://central-go-one.vercel.app/';
+const OFFICIAL_APP_URL = 'https://go-one.vercel.app/';
+const OFFICIAL_DRIVER_URL = 'https://go-one.vercel.app/driver';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -20,6 +21,7 @@ const safeRedirect = (value?: string) => {
     if (value) {
       const url = new URL(value);
       const allowed = url.protocol === 'https:' && (
+        url.hostname === 'go-one.vercel.app' ||
         url.hostname === 'central-go-one.vercel.app' ||
         url.hostname === 'centralgo.app' ||
         url.hostname.endsWith('.centralgo.app')
@@ -129,7 +131,9 @@ Deno.serve(async (req) => {
       return null;
     };
 
-    const redirectTo = safeRedirect(body?.redirectTo);
+    // Para conductores el destino es inmutable: incluso una pestaña vieja o una
+    // PWA cacheada no puede volver a generar invitaciones al dominio anterior.
+    const redirectTo = role === 'driver' ? OFFICIAL_DRIVER_URL : safeRedirect(body?.redirectTo);
     const requestedMetadata = { ...(name ? { name } : {}), needs_password_setup: !password };
     let targetUser: any = await findUser();
     let invited = false;
@@ -137,9 +141,6 @@ Deno.serve(async (req) => {
     let passwordReady = false;
     let passwordUpdated = false;
 
-    // A commercial/global identity must never be silently repurposed as a driver
-    // or operator. This avoids corrupting Partner/Superadmin access when a test uses
-    // an email that already belongs to another Central GO persona.
     if (targetUser && role !== 'company_admin') {
       const { data: targetProfile, error: targetProfileError } = await service
         .from('profiles')
