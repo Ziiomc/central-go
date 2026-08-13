@@ -1,9 +1,9 @@
 import React from 'react';
-import { readDriverInviteCodeFromUrl, readRememberedDriverInviteCode } from '../../lib/driverInvite';
-import { DriverInviteOnboardingScreen } from './DriverInviteOnboardingScreen';
+import { readDriverInviteTokenFromUrl, readRememberedDriverInviteToken } from '../../lib/driverInvite';
+import { DriverInviteAcceptGate } from './DriverInviteAcceptGate';
 import { OnboardingScreen as StandardOnboardingScreen } from './OnboardingScreenBase';
 
 export const OnboardingScreen: React.FC = () => {
-  const inviteCode = readDriverInviteCodeFromUrl() || readRememberedDriverInviteCode();
-  return inviteCode ? <DriverInviteOnboardingScreen inviteCode={inviteCode} /> : <StandardOnboardingScreen />;
+  const token = readDriverInviteTokenFromUrl() || readRememberedDriverInviteToken();
+  return token ? <DriverInviteAcceptGate token={token} /> : <StandardOnboardingScreen />;
 };
