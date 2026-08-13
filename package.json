@@ -36,6 +36,6 @@
   },
   "description": "Central GO 2.0 - despacho SaaS con onboarding para centrales, conductores y socios comerciales.",
   "engines": {
-    "node": ">=20"
+    "node": "22.x"
   }
 }
