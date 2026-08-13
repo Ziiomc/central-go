@@ -78,6 +78,7 @@ export const DriverApplicationsPanel: React.FC<{ companyId: string }> = ({ compa
       setError(`Asigna un número de móvil a ${application.applicantName}.`);
       return;
     }
+    const existingMember = application.documents.length === 0 && !application.nationalIdNumber;
     setBusyId(application.id);
     setError('');
     setNotice('');
@@ -87,7 +88,7 @@ export const DriverApplicationsPanel: React.FC<{ companyId: string }> = ({ compa
         approve,
         unitNumber,
         vehicleId: vehicleIds[application.id],
-        rejectionReason: approve ? undefined : 'La central rechazó los antecedentes presentados.',
+        rejectionReason: approve ? undefined : existingMember ? 'La central no pudo validar que el conductor pertenezca a sus registros.' : 'La central rechazó los antecedentes presentados.',
       });
       setNotice(approve ? `${application.applicantName} fue incorporado como conductor.` : `Solicitud de ${application.applicantName} rechazada.`);
       await load();
@@ -127,8 +128,8 @@ export const DriverApplicationsPanel: React.FC<{ companyId: string }> = ({ compa
     <section className="rounded-2xl border border-cyan-500/25 bg-cyan-500/[0.055] p-4 sm:p-5">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="flex items-center gap-2 text-xs font-black text-cyan-300"><UserRoundCheck className="h-4 w-4" /> Solicitudes documentadas</p>
-          <p className="mt-1 text-[10px] text-zinc-500">Revisa identidad y licencia antes de aprobar. Los enlaces privados vencen automáticamente.</p>
+          <p className="flex items-center gap-2 text-xs font-black text-cyan-300"><UserRoundCheck className="h-4 w-4" /> Solicitudes de conductores</p>
+          <p className="mt-1 text-[10px] text-zinc-500">Revisa documentos cuando existan. Si el conductor indica que ya pertenece a la central, valida tus registros internos antes de aprobar.</p>
         </div>
         <button type="button" onClick={() => void load()} className="rounded-lg border border-zinc-700 bg-zinc-900 p-2 text-zinc-400" title="Actualizar"><RefreshCw className="h-4 w-4" /></button>
       </div>
@@ -138,18 +139,21 @@ export const DriverApplicationsPanel: React.FC<{ companyId: string }> = ({ compa
 
       {applications.length > 0 && (
         <div className="mt-4 grid gap-3 xl:grid-cols-2">
-          {applications.map((application) => (
+          {applications.map((application) => {
+            const existingMember = application.documents.length === 0 && !application.nationalIdNumber;
+            return (
             <article key={application.id} className="rounded-xl border border-zinc-800 bg-[#0d0d0f] p-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-sm font-black text-white">{application.applicantName}</p>
-                  <p className="mt-1 text-[10px] text-zinc-500">{application.phone || 'Sin teléfono'} · Documento {application.nationalIdNumber}</p>
+                  <p className="mt-1 text-[10px] text-zinc-500">{application.phone || 'Sin teléfono'} · {existingMember ? 'Vinculación sin documentos' : `Documento ${application.nationalIdNumber}`}</p>
                   <p className="mt-0.5 text-[10px] text-zinc-500">Licencia {application.licenseNumber} · {application.licenseCountryCode}</p>
                 </div>
-                <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-1 text-[8px] font-black uppercase text-amber-300"><Clock3 className="h-3 w-3" /> Pendiente</span>
+                <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[8px] font-black uppercase ${existingMember ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300' : 'border-amber-500/20 bg-amber-500/10 text-amber-300'}`}>{existingMember ? <UserRoundCheck className="h-3 w-3" /> : <Clock3 className="h-3 w-3" />}{existingMember ? 'Ya pertenece' : 'Pendiente'}</span>
               </div>
+              {existingMember && <div className="mt-3 rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-3 text-[10px] leading-relaxed text-emerald-100"><ShieldCheck className="mr-1.5 inline h-4 w-4 text-emerald-300" />El conductor declara que ya pertenece a esta central. No se solicitaron archivos; confirma sus datos en tu registro interno antes de activarlo.</div>}
               {application.notes && <p className="mt-3 rounded-lg border border-zinc-800 bg-zinc-950/60 p-3 text-[10px] leading-relaxed text-zinc-400">{application.notes}</p>}
-              <DocumentButtons documents={application.documents.filter((document) => ['identity_document', 'driver_license', 'profile_photo'].includes(document.documentType))} onError={setError} />
+              {!existingMember && <DocumentButtons documents={application.documents.filter((document) => ['identity_document', 'driver_license', 'profile_photo'].includes(document.documentType))} onError={setError} />}
               {application.vehicleProposal && <div className="mt-3 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-[10px] text-zinc-400"><CarFront className="mr-1.5 inline h-4 w-4 text-amber-300" />Propone {application.vehicleProposal.brand} {application.vehicleProposal.model} · {application.vehicleProposal.licensePlate}</div>}
               <div className="mt-3 grid gap-2 sm:grid-cols-2">
                 <input value={units[application.id] ?? ''} onChange={(event) => setUnits((current) => ({ ...current, [application.id]: event.target.value }))} placeholder="N.º de móvil para conductor" className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-xs text-white outline-none focus:border-cyan-400" />
@@ -160,10 +164,10 @@ export const DriverApplicationsPanel: React.FC<{ companyId: string }> = ({ compa
               </div>
               <div className="mt-3 grid grid-cols-2 gap-2">
                 <button type="button" disabled={busyId === application.id} onClick={() => void reviewApplication(application, false)} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-rose-500/25 bg-rose-500/10 px-3 py-2 text-[10px] font-black text-rose-300 disabled:opacity-50"><X className="h-3.5 w-3.5" /> Rechazar</button>
-                <button type="button" disabled={busyId === application.id} onClick={() => void reviewApplication(application, true)} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-emerald-400/25 bg-emerald-500 px-3 py-2 text-[10px] font-black text-white disabled:opacity-50">{busyId === application.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />} Aprobar conductor</button>
+                <button type="button" disabled={busyId === application.id} onClick={() => void reviewApplication(application, true)} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-emerald-400/25 bg-emerald-500 px-3 py-2 text-[10px] font-black text-white disabled:opacity-50">{busyId === application.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />} {existingMember ? 'Confirmar y activar' : 'Aprobar conductor'}</button>
               </div>
             </article>
-          ))}
+          );})}
         </div>
       )}
 
