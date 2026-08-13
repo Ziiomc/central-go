@@ -41,8 +41,10 @@ export function installDriverTripButtonBehavior() {
   if (installed || typeof window === 'undefined' || typeof document === 'undefined') return;
   installed = true;
 
+  // Observe structural React renders only. Text changes made by this helper must
+  // not immediately undo the optimistic button transition before Supabase confirms it.
   const observer = new MutationObserver(scheduleSync);
-  observer.observe(document.documentElement, { childList: true, subtree: true, characterData: true });
+  observer.observe(document.documentElement, { childList: true, subtree: true });
 
   document.addEventListener('click', (event) => {
     const button = (event.target as HTMLElement | null)?.closest('button') as HTMLButtonElement | null;
