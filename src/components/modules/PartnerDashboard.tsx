@@ -19,6 +19,7 @@ import { loadPartnerDashboard, type PartnerDashboardData } from '../../lib/partn
 import { CentralRegistrationModal } from '../network/CentralRegistrationModal';
 import { PlanComparison } from '../network/PlanComparison';
 import { CountryFlag, money, NetworkKpi, StatusPill } from '../network/NetworkUi';
+import { RegionalPartnerRecruitmentLink } from './RegionalPartnerRecruitmentLink';
 
 export const PartnerDashboard: React.FC = () => {
   const { currentRole, setActiveModule } = useApp();
@@ -77,7 +78,7 @@ export const PartnerDashboard: React.FC = () => {
             <p className="text-sm text-zinc-400 mt-2">{canRegisterCentrals ? 'Tu cuenta comercial es gratuita y permanente. Registra centrales libremente; todas quedarán atribuidas a tu código y visibles para Superadmin.' : 'Gestiona tu territorio, equipo comercial y cartera atribuida desde este panel.'}</p>
             <div className="mt-4 flex flex-wrap gap-2">
               <span className="rounded-lg border border-zinc-700 bg-zinc-950/60 px-3 py-1.5 text-[10px] font-bold text-zinc-300">Código: {data?.code ?? '—'}</span>
-              <span className="rounded-lg border border-zinc-700 bg-zinc-950/60 px-3 py-1.5 text-[10px] font-bold text-zinc-300">Comisión: {data?.commissionPercent ?? 0}%</span>
+              <span className="rounded-lg border border-zinc-700 bg-zinc-950/60 px-3 py-1.5 text-[10px] font-bold text-zinc-300">{isRegional ? `Override regional: ${data?.commissionPercent ?? 0}% sobre la comisión comercial` : `Comisión: ${data?.commissionPercent ?? 0}% sobre la suscripción`}</span>
               <span className="rounded-lg border border-zinc-700 bg-zinc-950/60 px-3 py-1.5 text-[10px] font-bold text-zinc-300">{territory}</span>
             </div>
           </div>
@@ -99,11 +100,14 @@ export const PartnerDashboard: React.FC = () => {
       </div>
 
       {isRegional && (
-        <div className="grid sm:grid-cols-3 gap-4">
-          <div className="rounded-2xl border border-zinc-800 bg-[#0d0d0f] p-4"><div className="flex items-center gap-2 text-[10px] uppercase font-black tracking-widest text-zinc-500"><UsersRound className="h-4 w-4 text-purple-300" />Equipo comercial</div><p className="mt-3 text-2xl font-black text-white">{data?.teamCount ?? 0}</p><p className="mt-1 text-[10px] text-zinc-500">Partners comerciales activos bajo tu región</p></div>
-          <div className="rounded-2xl border border-zinc-800 bg-[#0d0d0f] p-4"><div className="flex items-center gap-2 text-[10px] uppercase font-black tracking-widest text-zinc-500"><BadgeDollarSign className="h-4 w-4 text-emerald-300" />Comisión pagada</div><p className="mt-3 text-2xl font-black text-white">{money(data?.paidCommission ?? 0)}</p><p className="mt-1 text-[10px] text-zinc-500">Histórico efectivamente liquidado</p></div>
-          <button onClick={() => setActiveModule('partners_network')} className="rounded-2xl border border-purple-500/20 bg-purple-500/[0.05] p-4 text-left hover:bg-purple-500/[0.08]"><div className="flex items-center gap-2 text-[10px] uppercase font-black tracking-widest text-purple-300"><ShieldCheck className="h-4 w-4" />Administrar región</div><p className="mt-3 text-sm font-black text-white">Partners y territorios</p><p className="mt-1 text-[10px] text-zinc-500">Revisa tu estructura comercial autorizada.</p></button>
-        </div>
+        <>
+          <div className="grid sm:grid-cols-3 gap-4">
+            <div className="rounded-2xl border border-zinc-800 bg-[#0d0d0f] p-4"><div className="flex items-center gap-2 text-[10px] uppercase font-black tracking-widest text-zinc-500"><UsersRound className="h-4 w-4 text-purple-300" />Equipo comercial</div><p className="mt-3 text-2xl font-black text-white">{data?.teamCount ?? 0}</p><p className="mt-1 text-[10px] text-zinc-500">Partners comerciales activos bajo tu región</p></div>
+            <div className="rounded-2xl border border-zinc-800 bg-[#0d0d0f] p-4"><div className="flex items-center gap-2 text-[10px] uppercase font-black tracking-widest text-zinc-500"><BadgeDollarSign className="h-4 w-4 text-emerald-300" />Comisión pagada</div><p className="mt-3 text-2xl font-black text-white">{money(data?.paidCommission ?? 0)}</p><p className="mt-1 text-[10px] text-zinc-500">Histórico efectivamente liquidado</p></div>
+            <button onClick={() => setActiveModule('partners_network')} className="rounded-2xl border border-purple-500/20 bg-purple-500/[0.05] p-4 text-left hover:bg-purple-500/[0.08]"><div className="flex items-center gap-2 text-[10px] uppercase font-black tracking-widest text-purple-300"><ShieldCheck className="h-4 w-4" />Administrar región</div><p className="mt-3 text-sm font-black text-white">Partners y territorios</p><p className="mt-1 text-[10px] text-zinc-500">Revisa tu estructura comercial autorizada.</p></button>
+          </div>
+          {data?.code && <RegionalPartnerRecruitmentLink code={data.code} />}
+        </>
       )}
 
       <section className="rounded-2xl border border-zinc-800 bg-[#0d0d0f] p-5 shadow-xl">
@@ -125,11 +129,7 @@ export const PartnerDashboard: React.FC = () => {
         </div>
       </section>
 
-      <PlanComparison
-        salesMode
-        title="Valores y diferencias para vender Central GO"
-        subtitle="Presenta los tres planes con total transparencia. Las X muestran lo que el cliente no tendrá en los planes menores y Enterprise queda destacado por sus capacidades adicionales."
-      />
+      <PlanComparison salesMode title="Valores y diferencias para vender Central GO" subtitle="Presenta los tres planes con total transparencia. Las X muestran lo que el cliente no tendrá en los planes menores y Enterprise queda destacado por sus capacidades adicionales." />
 
       {canRegisterCentrals && <CentralRegistrationModal open={registerOpen} onClose={() => setRegisterOpen(false)} onCreate={() => { void reload(); }} />}
     </div>
