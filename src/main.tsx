@@ -7,11 +7,12 @@ import './driverReadability.css';
 import './fontSize.css';
 import {registerServiceWorker} from './lib/pwa';
 import {registerRegionalPartnerReferralBootstrap} from './lib/regionalPartnerReferralBootstrap';
+import {registerGoogleOnboardingRoleBootstrap} from './lib/googleOnboardingRoleBootstrap';
 
-// Registrar PWA antes de montar React para no perder beforeinstallprompt ni el
-// evento load en navegadores móviles rápidos.
+// Registrar PWA y flujos de atribución antes de montar React.
 registerServiceWorker();
 registerRegionalPartnerReferralBootstrap();
+registerGoogleOnboardingRoleBootstrap();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
