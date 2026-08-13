@@ -1,5 +1,5 @@
 -- Existing driver linkage: schema foundation.
--- Runtime functions are versioned below in this migration.
+-- Runtime RPCs for this flow are deployed in Supabase and protected for authenticated users.
 
 alter table public.driver_applications
   add column if not exists application_mode text not null default 'documented';
