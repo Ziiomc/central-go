@@ -119,7 +119,7 @@ export async function loadCompanyShiftAnalytics(companyId:string,from:string,to:
  const[trips,events,driverResult,presenceResult]=await Promise.all([
   loadTripHistory(companyId,{from,to}),
   loadDispatchEvents(companyId,undefined,from,to),
-  db.from('drivers').select('id,name,unit_number').eq('company_id',companyId).order('unit_number'),
+  db.from('drivers').select('id,display_name,unit_number').eq('company_id',companyId).order('unit_number'),
   db.from('driver_presence_sessions').select('driver_id,started_at,last_seen_at,ended_at').eq('company_id',companyId).lt('started_at',to).limit(10000),
  ]);
  if(driverResult.error)throw driverResult.error;if(presenceResult.error)throw presenceResult.error;
@@ -131,7 +131,7 @@ export async function loadCompanyShiftAnalytics(companyId:string,from:string,to:
   const drivingSeconds=ownTrips.reduce((sum,t)=>{if(!t.startedAt)return sum;const start=Math.max(fromMs,new Date(t.startedAt).getTime());const end=Math.min(toMs,new Date(t.completedAt??t.cancelledAt??to).getTime());return sum+Math.max(0,(end-start)/1000);},0);
   const rejected=ownEvents.filter(e=>e.eventType==='rejected'||e.eventType==='expired').length,cancelled=ownTrips.filter(t=>t.status==='cancelled').length,offers=ownEvents.filter(e=>e.eventType==='offered').length;
   const opportunities=Math.max(offers,completed.length+rejected+cancelled);
-  return{driverId:row.id,name:row.name,unitNumber:row.unit_number,connectedSeconds:Math.round(connectedSeconds),drivingSeconds:Math.round(drivingSeconds),tripsCompleted:completed.length,offers,rejected,cancelled,earnings:completed.reduce((s,t)=>s+(t.finalFare??t.estimatedFare??0),0),serviceKm:completed.reduce((s,t)=>s+t.estimatedDistanceKm,0),effectiveness:opportunities?Math.round(completed.length/opportunities*100):0};
+  return{driverId:row.id,name:row.display_name??'Conductor',unitNumber:row.unit_number,connectedSeconds:Math.round(connectedSeconds),drivingSeconds:Math.round(drivingSeconds),tripsCompleted:completed.length,offers,rejected,cancelled,earnings:completed.reduce((s,t)=>s+(t.finalFare??t.estimatedFare??0),0),serviceKm:completed.reduce((s,t)=>s+t.estimatedDistanceKm,0),effectiveness:opportunities?Math.round(completed.length/opportunities*100):0};
  });
  return{trips,events,drivers:metrics};
 }
