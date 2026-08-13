@@ -13,6 +13,7 @@ const hmacSha256 = async (secret: string, value: string) => {
   const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
   return hex(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(value)));
 };
+const money = (value: number) => Math.max(0, Math.round((Number.isFinite(value) ? value : 0) * 100) / 100);
 
 Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ ok: true });
@@ -72,12 +73,26 @@ Deno.serve(async (req) => {
     }
 
     const mpStatus = String(payment?.status || "");
-    const localPaymentStatus = mpStatus === "approved" ? "paid" : ["rejected", "cancelled"].includes(mpStatus) ? "failed" : "pending";
+    const refundedAmount = money(Number(payment?.transaction_amount_refunded ?? 0));
+    const providerFee = money((Array.isArray(payment?.fee_details) ? payment.fee_details : []).reduce((sum: number, fee: any) => sum + Number(fee?.amount ?? 0), 0));
+    const providerNet = Number(payment?.transaction_details?.net_received_amount);
+    const releaseAt = payment?.money_release_date || payment?.date_approved || null;
+    const fullyRefunded = refundedAmount >= paidAmount && paidAmount > 0;
+    const partiallyRefunded = refundedAmount > 0 && !fullyRefunded;
+    const localPaymentStatus = fullyRefunded || mpStatus === "refunded"
+      ? "refunded"
+      : partiallyRefunded
+        ? "partially_refunded"
+        : mpStatus === "approved"
+          ? "paid"
+          : ["rejected", "cancelled"].includes(mpStatus)
+            ? "failed"
+            : "pending";
     const paymentId = String(payment?.id ?? dataId);
     const paidAt = payment?.date_approved || null;
     const subscriptionId = subscription?.id ?? null;
 
-    const { error: paymentError } = await db.from("payments").upsert({
+    const { data: savedPayment, error: paymentError } = await db.from("payments").upsert({
       company_id: companyId,
       subscription_id: subscriptionId,
       provider: "mercadopago",
@@ -86,11 +101,22 @@ Deno.serve(async (req) => {
       gross_amount: paidAmount,
       status: localPaymentStatus,
       paid_at: paidAt,
-      metadata: { mercado_pago_status: mpStatus, status_detail: payment?.status_detail ?? null, plan_id: planId, plan_code: plan.code, billing_cycle: billingCycle, payer_id: payment?.payer?.id ?? null },
-    }, { onConflict: "provider,external_payment_id" });
-    if (paymentError) throw paymentError;
+      provider_fee_amount: providerFee,
+      refunded_amount: refundedAmount,
+      provider_net_received: Number.isFinite(providerNet) ? providerNet : null,
+      provider_release_at: releaseAt,
+      metadata: {
+        mercado_pago_status: mpStatus,
+        status_detail: payment?.status_detail ?? null,
+        plan_id: planId,
+        plan_code: plan.code,
+        billing_cycle: billingCycle,
+        payer_id: payment?.payer?.id ?? null,
+      },
+    }, { onConflict: "provider,external_payment_id" }).select("id").single();
+    if (paymentError || !savedPayment) throw paymentError ?? new Error("No fue posible guardar el pago");
 
-    if (mpStatus === "approved") {
+    if (mpStatus === "approved" && !fullyRefunded) {
       const now = new Date();
       const periodEnd = new Date(now);
       if (billingCycle === "annual") periodEnd.setUTCFullYear(periodEnd.getUTCFullYear() + 1);
@@ -109,9 +135,77 @@ Deno.serve(async (req) => {
       }, { onConflict: "company_id" }).select("id").single();
       if (subscriptionError) throw subscriptionError;
 
-      await db.from("payments").update({ subscription_id: savedSubscription.id }).eq("provider", "mercadopago").eq("external_payment_id", paymentId);
+      await db.from("payments").update({ subscription_id: savedSubscription.id }).eq("id", savedPayment.id);
       const { error: saasError } = await db.from("saas_accounts").update({ status: "active", activated_at: now.toISOString(), current_period_end: periodEnd.toISOString(), updated_at: now.toISOString() }).eq("company_id", companyId);
       if (saasError) throw saasError;
+    }
+
+    if (["paid", "partially_refunded", "refunded"].includes(localPaymentStatus)) {
+      const eligibleGross = money(paidAmount - refundedAmount);
+      let salesCommission = 0;
+      let regionalCommission = 0;
+      const { data: referral } = await db.from("referrals").select("partner_id").eq("company_id", companyId).eq("active", true).order("referred_at", { ascending: false }).limit(1).maybeSingle();
+
+      if (referral?.partner_id) {
+        const { data: salesPartner } = await db.from("partners").select("id,kind,commission_percent,parent_partner_id,active").eq("id", referral.partner_id).eq("kind", "sales").eq("active", true).maybeSingle();
+        if (salesPartner) {
+          const salesRate = Number(salesPartner.commission_percent ?? 20);
+          salesCommission = money(eligibleGross * salesRate / 100);
+          const salesStatus = eligibleGross > 0 ? "confirmed" : "reversed";
+          const { error: salesLedgerError } = await db.from("commission_ledger").upsert({
+            partner_id: salesPartner.id,
+            company_id: companyId,
+            payment_id: savedPayment.id,
+            commission_type: "sales_direct",
+            gross_amount: eligibleGross,
+            rate_percent: salesRate,
+            amount: salesCommission,
+            status: salesStatus,
+            earned_at: paidAt || new Date().toISOString(),
+            available_at: releaseAt || paidAt || new Date().toISOString(),
+            reversed_at: salesStatus === "reversed" ? new Date().toISOString() : null,
+            notes: "20% comercial sobre la suscripción efectivamente pagada.",
+          }, { onConflict: "payment_id,partner_id,commission_type" });
+          if (salesLedgerError) throw salesLedgerError;
+
+          if (salesPartner.parent_partner_id) {
+            const { data: regionalPartner } = await db.from("partners").select("id,kind,commission_percent,active").eq("id", salesPartner.parent_partner_id).eq("kind", "regional").eq("active", true).maybeSingle();
+            if (regionalPartner) {
+              const regionalRate = Number(regionalPartner.commission_percent ?? 50);
+              regionalCommission = money(salesCommission * regionalRate / 100);
+              const regionalStatus = eligibleGross > 0 ? "confirmed" : "reversed";
+              const { error: regionalLedgerError } = await db.from("commission_ledger").upsert({
+                partner_id: regionalPartner.id,
+                company_id: companyId,
+                payment_id: savedPayment.id,
+                commission_type: "regional_override",
+                gross_amount: salesCommission,
+                rate_percent: regionalRate,
+                amount: regionalCommission,
+                status: regionalStatus,
+                earned_at: paidAt || new Date().toISOString(),
+                available_at: releaseAt || paidAt || new Date().toISOString(),
+                reversed_at: regionalStatus === "reversed" ? new Date().toISOString() : null,
+                notes: "50% regional calculado sobre la comisión del Partner Comercial.",
+              }, { onConflict: "payment_id,partner_id,commission_type" });
+              if (regionalLedgerError) throw regionalLedgerError;
+            }
+          }
+        }
+      }
+
+      const platformGross = money(eligibleGross - salesCommission - regionalCommission);
+      const platformNet = money(platformGross - providerFee);
+      const settlementStatus = eligibleGross <= 0 && paidAmount > 0 ? "reversed" : refundedAmount > 0 ? "partially_reversed" : "allocated";
+      const { error: settlementError } = await db.from("payments").update({
+        sales_commission_amount: salesCommission,
+        regional_commission_amount: regionalCommission,
+        platform_gross_amount: platformGross,
+        platform_net_amount: platformNet,
+        settlement_status: settlementStatus,
+        settlement_processed_at: new Date().toISOString(),
+      }).eq("id", savedPayment.id);
+      if (settlementError) throw settlementError;
     }
 
     return json({ ok: true, paymentId, status: mpStatus, localStatus: localPaymentStatus });
