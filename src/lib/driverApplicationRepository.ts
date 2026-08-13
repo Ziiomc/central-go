@@ -38,6 +38,8 @@ export interface DriverApplicationRecord {
   licenseNumber: string;
   licenseCountryCode: string;
   notes: string;
+  applicationMode: 'documented' | 'existing_member';
+  claimedUnitNumber: string;
   status: 'pending' | 'approved' | 'rejected' | 'withdrawn';
   rejectionReason: string | null;
   createdAt: string;
@@ -59,7 +61,7 @@ export const loadPendingDriverApplications = async (companyId: string): Promise<
     .from('driver_applications')
     .select(`
       id,user_id,company_id,applicant_name,phone,national_id_number,license_number,
-      license_country_code,notes,status,rejection_reason,created_at,
+      license_country_code,notes,application_mode,claimed_unit_number,status,rejection_reason,created_at,
       driver_application_documents(id,document_type,original_name,storage_path,mime_type,verified),
       driver_vehicle_submissions(id,application_id,license_plate,brand,model,year,color,capacity,registration_country_code,technical_inspection_expiry,status)
     `)
@@ -80,6 +82,8 @@ export const loadPendingDriverApplications = async (companyId: string): Promise<
       licenseNumber: row.license_number,
       licenseCountryCode: row.license_country_code ?? '',
       notes: row.notes ?? '',
+      applicationMode: row.application_mode === 'existing_member' ? 'existing_member' : 'documented',
+      claimedUnitNumber: row.claimed_unit_number ?? '',
       status: row.status,
       rejectionReason: row.rejection_reason,
       createdAt: row.created_at,
