@@ -16,6 +16,9 @@ export interface CentralDirectoryItem {
   code: string;
   city: string;
   countryCode: string;
+  centerLat: number | null;
+  centerLng: number | null;
+  distanceKm: number | null;
 }
 
 export interface MyDriverApplication {
@@ -50,15 +53,26 @@ export interface VehicleSubmissionInput {
   technicalInspectionExpiry?: string;
 }
 
+export interface CentralSearchFilters {
+  countryCode?: string;
+  city?: string;
+  query?: string;
+  lat?: number;
+  lng?: number;
+}
+
 const BUCKET = 'driver-documents';
 const ALLOWED_MIME_TYPES = new Set(['application/pdf', 'image/jpeg', 'image/png', 'image/webp']);
 const MAX_FILE_SIZE = 12 * 1024 * 1024;
 
-export const searchCentrals = async (filters: { countryCode?: string; city?: string; query?: string } = {}): Promise<CentralDirectoryItem[]> => {
-  const { data, error } = await requireSupabase().rpc('centralgo_search_centrals', {
+export const searchCentrals = async (filters: CentralSearchFilters = {}): Promise<CentralDirectoryItem[]> => {
+  const hasLocation = Number.isFinite(filters.lat) && Number.isFinite(filters.lng);
+  const { data, error } = await requireSupabase().rpc('centralgo_search_centrals_nearby', {
     p_country_code: filters.countryCode || null,
     p_city: filters.city || null,
     p_query: filters.query || null,
+    p_lat: hasLocation ? filters.lat : null,
+    p_lng: hasLocation ? filters.lng : null,
   });
   if (error) throw error;
   return (data ?? []).map((row: any) => ({
@@ -67,6 +81,9 @@ export const searchCentrals = async (filters: { countryCode?: string; city?: str
     code: row.code,
     city: row.city ?? '',
     countryCode: row.country_code ?? '',
+    centerLat: row.center_lat == null ? null : Number(row.center_lat),
+    centerLng: row.center_lng == null ? null : Number(row.center_lng),
+    distanceKm: row.distance_km == null ? null : Number(row.distance_km),
   }));
 };
 
