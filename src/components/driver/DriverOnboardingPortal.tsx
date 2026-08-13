@@ -1,1 +1,1 @@
-export { DriverOnboardingPortal } from './DriverOnboardingPortalEnhanced';
+export { DriverOnboardingPortal as DriverOnboardingPortal } from './DriverOnboardingPortalEnhanced';
