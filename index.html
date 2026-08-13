@@ -1,40 +1,20 @@
 <!doctype html>
-<html lang="es" class="dark">
+<html lang="es" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>Central GO - Sistema de Despacho y Gestión de Radiotaxis</title>
     <meta name="description" content="Central GO: plataforma oficial de gestión, despacho y seguimiento GPS para centrales de radiotaxis." />
-    <meta name="theme-color" content="#0B0F17" />
+    <meta name="theme-color" content="#07111f" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Central GO" />
-    <script>
-      // Inyectar un solo manifest desde el inicio evita que Chromium alcance a
-      // leer primero el manifest general y luego ignore el manifest del conductor.
-      (function () {
-        var driverRoute = window.location.pathname === '/driver' || window.location.pathname.startsWith('/driver/');
-        var manifest = document.createElement('link');
-        manifest.rel = 'manifest';
-        manifest.href = driverRoute ? '/driver-manifest.json' : '/manifest.json';
-        document.head.appendChild(manifest);
-
-        if (driverRoute) {
-          document.title = 'Central GO Conductor';
-          document.querySelector('meta[name="apple-mobile-web-app-title"]').setAttribute('content', 'GO Conductor');
-          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#09090b');
-        }
-      })();
-    </script>
+    <script src="/bootstrap.js"></script>
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/icon.svg" />
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
   </head>
-  <body class="bg-[#0B0F17] text-slate-100 font-sans antialiased selection:bg-amber-500/30 selection:text-amber-200 overflow-x-hidden">
+  <body class="antialiased selection:bg-cyan-500/25 selection:text-cyan-100 overflow-x-hidden">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

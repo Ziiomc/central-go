@@ -48,7 +48,7 @@ Deno.serve(async (req) => {
     const kind = body?.kind;
     const code = body?.code?.trim().toUpperCase();
     const delivery = body?.delivery === 'whatsapp' ? 'whatsapp' : 'email';
-    const commission = Number(body?.commissionPercent ?? (kind === 'regional' ? 5 : 20));
+    const commission = Number(body?.commissionPercent ?? (kind === 'regional' ? 5 : 25));
     if (!email || !email.includes('@') || !name || !kind || !['regional','sales'].includes(kind) || !code || code.length < 2) return json({ error: 'Nombre, correo, tipo y código son obligatorios' }, 400);
     if (!Number.isFinite(commission) || commission < 0 || commission > 50) return json({ error: 'Porcentaje de comisión inválido' }, 400);
 

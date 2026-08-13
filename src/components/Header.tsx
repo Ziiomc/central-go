@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import centralGoLogo from '../assets/images/central-go-logo.svg';
+import { ThemeToggle } from './auth/ThemeToggle';
 import {
   BadgeDollarSign,
   Bell,
@@ -88,6 +89,7 @@ export const Header: React.FC<HeaderProps> = ({ onToggleNotifications }) => {
           {activeSOSDriver && !isNetworkRole && <button onClick={() => setActiveSOSDriver(activeSOSDriver)} className="hidden items-center gap-2 rounded-xl border border-red-400 bg-red-600 px-3 py-2 text-xs font-black text-white shadow-lg shadow-red-950/40 lg:flex"><ShieldAlert className="h-4 w-4" />SOS {activeSOSDriver.unitNumber}</button>}
           {!isNetworkRole && <button onClick={toggleSound} className={`rounded-lg border p-2 ${soundMuted ? 'border-zinc-800 bg-zinc-900 text-zinc-500' : 'border-blue-500/20 bg-blue-500/10 text-blue-400'}`} title={soundMuted ? 'Activar sonidos' : 'Silenciar sonidos'}>{soundMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}</button>}
           {isNetworkRole && <button onClick={() => setActiveModule('plans_network')} className="hidden rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-2 text-emerald-300 sm:block" title="Planes y valores"><BadgeDollarSign className="h-4 w-4" /></button>}
+          <ThemeToggle compact />
           <button onClick={onToggleNotifications} className="relative rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-300 hover:bg-zinc-800"><Bell className="h-4 w-4" />{unreadCount > 0 && <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-500 px-1 text-[9px] font-black text-white">{unreadCount}</span>}</button>
           <div className="hidden items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900 px-2.5 py-1.5 md:flex"><div className={`h-2 w-2 rounded-full ${isNetworkRole ? 'bg-purple-400' : 'bg-emerald-400'}`} /><div className="max-w-[145px]"><p className="truncate text-[10px] font-black text-zinc-200">{profile?.name || roleLabel}</p><p className="truncate text-[8px] uppercase text-zinc-600">{roleLabel}</p></div>{currentRole === 'super_admin' && <ShieldCheck className="h-3.5 w-3.5 text-purple-300" />}</div>
           <button onClick={() => void signOut()} className="rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-400 transition hover:border-rose-500/30 hover:bg-rose-950/50 hover:text-rose-300" title="Cerrar sesión"><LogOut className="h-4 w-4" /></button>

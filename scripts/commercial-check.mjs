@@ -21,6 +21,8 @@ const runtime = mustRead('src/config/runtime.ts');
 const header = mustRead('src/components/Header.tsx');
 const driver = mustRead('src/components/pwa/DriverMobileView.tsx');
 const login = mustRead('src/components/auth/LoginScreen.tsx');
+const onboarding = mustRead('src/components/auth/OnboardingScreen.tsx');
+const authShell = mustRead('src/components/auth/AuthShell.tsx');
 const plans = mustRead('src/components/network/PlanComparison.tsx');
 const users = mustRead('src/components/modules/UsersModule.tsx');
 const partnerDashboard = mustRead('src/components/modules/PartnerDashboard.tsx');
@@ -31,7 +33,15 @@ const migrationOfficial = mustRead('supabase/migrations/016_official_partner_use
 const migrationPartners = mustRead('supabase/migrations/017_official_visible_partner_directory.sql');
 const migrationCommissions = mustRead('supabase/migrations/018_official_visible_commission_ledger.sql');
 const migrationEntitlements = mustRead('supabase/migrations/019_official_partner_audit_and_plan_entitlements.sql');
+const migrationRoleOnboarding = mustRead('supabase/migrations/036_role_based_self_service_onboarding.sql');
+const migrationParticipantMarketplace = mustRead('supabase/migrations/037_participant_marketplace_and_approvals.sql');
+const driverMarketplace = mustRead('src/components/driver/DriverOnboardingPortal.tsx');
+const worldLocationPicker = mustRead('src/components/auth/WorldLocationPicker.tsx');
+const partnerApprovalPanel = mustRead('src/components/modules/CommercialPartnerApplicationsPanel.tsx');
+const partnerRequirementsPdf = 'public/docs/requisitos-socio-comercial-central-go.pdf';
+const worldLocationsIndex = 'public/data/world-locations/countries.json';
 const driverManifest = mustRead('public/driver-manifest.json');
+const bootstrap = mustRead('public/bootstrap.js');
 const inviteCompanyUser = mustRead('supabase/functions/invite-company-user/index.ts');
 const inviteNetworkUser = mustRead('supabase/functions/invite-network-user/index.ts');
 
@@ -61,10 +71,59 @@ for (const required of ['promptPWAInstall', 'isPWAStandalone', 'watchPosition', 
   if (!driver.includes(required)) fail(`App de conductor oficial incompleta: ${required}`);
 }
 if (!driverManifest.includes('Central GO Conductor') || !driverManifest.includes('"start_url": "/driver"')) fail('Manifest independiente del conductor incompleto.');
+if (!bootstrap.includes("'/driver-manifest.json'") || !bootstrap.includes("centralgo:color-theme")) fail('Bootstrap CSP-safe de tema/PWA incompleto.');
 
 if (login.includes('Crear cuenta segura') || login.includes("setMode('signup')")) fail('El acceso oficial volvió a habilitar el registro legado por formulario.');
 if (!login.includes('Olvidé mi contraseña') || !auth.includes('resetPasswordForEmail')) fail('Falta recuperación de contraseña oficial.');
 if (login.includes('Modo Demo') || app.includes("get('demo') === '1'")) fail('La demo pública volvió a quedar expuesta.');
+for (const required of ['Central', 'Conductor', 'Socio comercial', 'Crear cuenta con Google']) {
+  if (!login.includes(required)) fail(`Registro unificado incompleto: ${required}`);
+}
+if (!authShell.includes('Contacto: ziiomc3@gmail.com')) fail('Falta el contacto oficial en el acceso público.');
+for (const required of ['centralgo_complete_onboarding', "role === 'central'", "role === 'driver'", '25%']) {
+  if (!onboarding.includes(required)) fail(`Onboarding por rol incompleto: ${required}`);
+}
+
+for (const required of [
+  'create table if not exists public.driver_applications',
+  'alter table public.driver_applications enable row level security',
+  "normalized_kind not in ('central','driver','sales_partner')",
+  "commission_percent=25",
+  "code='enterprise'",
+  "interval '5 days'",
+  'centralgo_review_driver_application',
+  'from public,anon,authenticated',
+]) {
+  if (!migrationRoleOnboarding.includes(required)) fail(`Migración de onboarding incompleta: ${required}`);
+}
+
+for (const required of [
+  "check (account_kind in ('central','driver','sales_partner'))",
+  'create table if not exists public.partner_applications',
+  'create table if not exists public.driver_vehicle_submissions',
+  'create table if not exists public.driver_application_documents',
+  "'driver-documents'",
+  'centralgo_search_centrals',
+  'centralgo_prepare_driver_application',
+  'centralgo_submit_driver_application',
+  'centralgo_superadmin_review_partner_application',
+  "interval '3 hours'",
+  "p_requirements_accepted",
+  "commission_percent,parent_partner_id,active)",
+]) {
+  if (!migrationParticipantMarketplace.includes(required)) fail(`Marketplace seguro incompleto: ${required}`);
+}
+for (const required of ['Buscar centrales', 'Documento de identidad', 'Licencia de conducir', 'proponer un vehículo', 'uploadDriverDocument', 'WorldCitySelect', 'Tomar foto', 'Adjuntar']) {
+  if (!driverMarketplace.includes(required)) fail(`Portal inmediato del conductor incompleto: ${required}`);
+}
+for (const required of ['WorldCitySelect', 'loadCountry(countryCode)', 'Cargando ciudades reales']) {
+  if (!worldLocationPicker.includes(required)) fail(`Selector mundial incompleto: ${required}`);
+}
+for (const required of ['Solo el superadministrador', 'Aprobar 25%', 'eligibleReviewAt']) {
+  if (!partnerApprovalPanel.includes(required)) fail(`Aprobación de socio incompleta: ${required}`);
+}
+if (!fs.existsSync(partnerRequirementsPdf)) fail('Falta el PDF descargable de requisitos del socio comercial.');
+if (!fs.existsSync(worldLocationsIndex)) fail('Falta el índice real de países y ciudades.');
 
 for (const required of ['loadPlanCatalog', '<X ', 'App independiente para conductores', 'Múltiples sedes y ciudades', 'API e integraciones']) {
   if (!plans.includes(required)) fail(`Comparador de planes incompleto: ${required}`);
