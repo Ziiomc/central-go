@@ -4,6 +4,7 @@ import App from './App.tsx';
 import 'leaflet/dist/leaflet.css';
 import './index.css';
 import './driverReadability.css';
+import './fontSize.css';
 import {registerServiceWorker} from './lib/pwa';
 import {registerRegionalPartnerReferralBootstrap} from './lib/regionalPartnerReferralBootstrap';
 
