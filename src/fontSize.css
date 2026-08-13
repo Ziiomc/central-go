@@ -1,0 +1,25 @@
+/* Central GO accessibility: increase text without scaling cards, maps or controls. */
+html[data-cg-font-size='large'] [class~='text-[8px]'] { font-size: 10px !important; }
+html[data-cg-font-size='large'] [class~='text-[9px]'] { font-size: 11px !important; }
+html[data-cg-font-size='large'] [class~='text-[10px]'] { font-size: 12px !important; }
+html[data-cg-font-size='large'] [class~='text-[11px]'] { font-size: 13px !important; }
+html[data-cg-font-size='large'] .text-xs { font-size: 14px !important; line-height: 1.35rem !important; }
+html[data-cg-font-size='large'] .text-sm { font-size: 16px !important; line-height: 1.5rem !important; }
+html[data-cg-font-size='large'] .field-label { font-size: 12px !important; }
+html[data-cg-font-size='large'] .field-input { font-size: 14px !important; }
+
+html[data-cg-font-size='xlarge'] [class~='text-[8px]'] { font-size: 12px !important; }
+html[data-cg-font-size='xlarge'] [class~='text-[9px]'] { font-size: 13px !important; }
+html[data-cg-font-size='xlarge'] [class~='text-[10px]'] { font-size: 14px !important; }
+html[data-cg-font-size='xlarge'] [class~='text-[11px]'] { font-size: 15px !important; }
+html[data-cg-font-size='xlarge'] .text-xs { font-size: 16px !important; line-height: 1.5rem !important; }
+html[data-cg-font-size='xlarge'] .text-sm { font-size: 18px !important; line-height: 1.65rem !important; }
+html[data-cg-font-size='xlarge'] .text-base { font-size: 19px !important; line-height: 1.75rem !important; }
+html[data-cg-font-size='xlarge'] .field-label { font-size: 14px !important; }
+html[data-cg-font-size='xlarge'] .field-input { font-size: 16px !important; }
+
+/* Keep compact controls usable when labels grow. */
+html[data-cg-font-size='large'] button,
+html[data-cg-font-size='large'] select,
+html[data-cg-font-size='xlarge'] button,
+html[data-cg-font-size='xlarge'] select { min-width: 0; }
