@@ -3,6 +3,7 @@ import { AlertTriangle } from 'lucide-react';
 import { readDriverInviteTokenFromUrl, readRememberedDriverInviteToken } from '../../lib/driverInvite';
 import { DriverInviteAcceptGate } from '../auth/DriverInviteAcceptGate';
 import { DriverOnboardingPortal as MarketplacePortal } from './DriverOnboardingPortalEnhanced';
+import { ExistingCentralMembershipFlow } from './ExistingCentralMembershipFlow';
 
 const MarketplacePortalWithValidationFeedback: React.FC = () => {
   const [visibleError, setVisibleError] = useState('');
@@ -49,6 +50,7 @@ const MarketplacePortalWithValidationFeedback: React.FC = () => {
           <button type="button" onClick={() => setVisibleError('')} className="rounded-lg px-2 py-0.5 text-rose-200/70" aria-label="Cerrar aviso">×</button>
         </div>
       )}
+      <ExistingCentralMembershipFlow />
       <MarketplacePortal />
     </div>
   );
