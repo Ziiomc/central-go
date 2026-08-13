@@ -81,7 +81,7 @@ export const CommercialAppProvider: React.FC<React.PropsWithChildren> = ({ child
   const [notifications, setNotifications] = useState<AppNotification[]>(()=>initialCache?.notifications??[]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>(()=>initialCache?.auditLogs??[]);
   const [fareConfig, setFareConfig] = useState<FareConfig>(()=>initialCache?.fareConfig??DEFAULT_FARE_CONFIG);
-  const [soundMuted, setSoundMuted] = useState(false);
+  const [soundMuted, setSoundMuted] = useState(() => soundManager.isMuted());
   const [activeModule, setActiveModule] = useState('dashboard');
   const [selectedTripForDetail, setSelectedTripForDetail] = useState<Trip | null>(null);
   const [newTripModalOpen, setNewTripModalOpen] = useState(false);

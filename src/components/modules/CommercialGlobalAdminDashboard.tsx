@@ -48,18 +48,18 @@ export const CommercialGlobalAdminDashboard: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-3xl border border-purple-500/20 bg-gradient-to-br from-purple-950/35 via-[#0d0d0f] to-blue-950/25 p-6 md:p-8 shadow-2xl">
+      <section className="rounded-3xl border border-blue-500/20 bg-gradient-to-br from-blue-950/35 via-[#0d0d0f] to-cyan-950/25 p-6 md:p-8 shadow-2xl">
         <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-6">
           <div className="max-w-3xl">
-            <div className="inline-flex items-center gap-2 rounded-full border border-purple-500/25 bg-purple-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-purple-300">
+            <div className="inline-flex items-center gap-2 rounded-full border border-blue-500/25 bg-blue-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-blue-300">
               <ShieldCheck className="h-3.5 w-3.5" /> Superadmin · Producción
             </div>
-            <h1 className="mt-4 text-3xl md:text-4xl font-black tracking-tight text-white">Central<span className="text-amber-400">GO</span> Network</h1>
+            <h1 className="mt-4 text-3xl md:text-4xl font-black tracking-tight text-white">Central<span className="text-blue-300">GO</span> Network</h1>
             <p className="mt-3 text-sm leading-relaxed text-zinc-400">Superadmin controla la red. Las nuevas centrales se registran exclusivamente desde cuentas Partner Comercial y aparecen automáticamente aquí para revisión, activación o suspensión.</p>
           </div>
           <div className="flex flex-col sm:flex-row gap-2">
             <button onClick={() => void reload()} disabled={loading} className="px-4 py-3 rounded-xl bg-zinc-950/70 hover:bg-zinc-900 border border-zinc-700 text-xs font-extrabold text-white flex items-center justify-center gap-2 disabled:opacity-50"><RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />Actualizar</button>
-            <button onClick={() => setActiveModule('partners_network')} className="px-4 py-3 rounded-xl border border-amber-500/20 bg-amber-500/10 text-xs font-black text-amber-300">Ver Partners</button>
+            <button onClick={() => setActiveModule('partners_network')} className="px-4 py-3 rounded-xl border border-blue-500/25 bg-blue-500/10 text-xs font-black text-blue-300">Ver Partners</button>
           </div>
         </div>
       </section>

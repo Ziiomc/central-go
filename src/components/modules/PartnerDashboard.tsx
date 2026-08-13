@@ -69,7 +69,7 @@ export const PartnerDashboard: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <section className="relative overflow-hidden rounded-3xl border border-blue-500/20 bg-gradient-to-br from-blue-950/35 via-[#0d0d0f] to-purple-950/25 p-6 md:p-8 shadow-2xl">
+      <section className="relative overflow-hidden rounded-3xl border border-blue-500/20 bg-gradient-to-br from-blue-950/35 via-[#0d0d0f] to-cyan-950/25 p-6 md:p-8 shadow-2xl">
         <div className="relative flex flex-col xl:flex-row xl:items-end justify-between gap-6">
           <div className="max-w-2xl">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-[10px] font-black uppercase tracking-widest text-blue-300"><MapPinned className="w-3.5 h-3.5" />{isRegional ? 'Partner regional' : 'Partner comercial'} · Producción</div>
@@ -83,7 +83,7 @@ export const PartnerDashboard: React.FC = () => {
           </div>
           <div className="flex flex-col sm:flex-row gap-2">
             <button onClick={() => void reload()} disabled={loading} className="px-4 py-3 rounded-xl bg-zinc-950/70 hover:bg-zinc-900 border border-zinc-700 text-xs font-extrabold text-white flex items-center justify-center gap-2 disabled:opacity-50"><RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />Actualizar</button>
-            {canRegisterCentrals && <button onClick={() => setRegisterOpen(true)} className="px-5 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-xs font-black text-slate-950 flex items-center justify-center gap-2 shadow-xl shadow-amber-950/40"><Plus className="w-4 h-4" />Registrar nueva central</button>}
+            {canRegisterCentrals && <button onClick={() => setRegisterOpen(true)} className="px-5 py-3 rounded-xl border border-blue-300/35 bg-blue-500 hover:bg-blue-400 text-xs font-black text-white flex items-center justify-center gap-2 shadow-xl shadow-blue-950/35"><Plus className="w-4 h-4" />Registrar nueva central</button>}
           </div>
         </div>
       </section>
