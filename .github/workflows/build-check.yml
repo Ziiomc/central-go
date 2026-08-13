@@ -78,6 +78,7 @@ jobs:
           grant execute on function auth.uid() to anon, authenticated;
           create publication supabase_realtime;
           SQL
+          psql -v ON_ERROR_STOP=1 -f supabase/tests/storage-compat.sql
 
       - name: Ejecutar migraciones comerciales desde cero
         shell: bash
@@ -276,18 +277,65 @@ jobs:
           psql -v ON_ERROR_STOP=1 <<SQL
           set role authenticated;
           set request.jwt.claim.sub='$NEW_PARTNER';
-          select public.centralgo_complete_onboarding('sales_partner','Socio Comercial','+56922222222','Talca','CL',null,null,null);
+          select public.centralgo_complete_onboarding_v2('sales_partner','Socio Comercial','+56922222222','Talca','CL',null,null,null,'Maule',true);
           SQL
-          PARTNER_RATE=$(psql -qAt -v ON_ERROR_STOP=1 -c "select commission_percent from public.partners where user_id='$NEW_PARTNER';")
+          PARTNER_PENDING=$(psql -qAt -v ON_ERROR_STOP=1 -c "select count(*) from public.partner_applications where user_id='$NEW_PARTNER' and status='pending' and eligible_review_at>=created_at+interval '3 hours';")
+          PARTNER_CREATED=$(psql -qAt -v ON_ERROR_STOP=1 -c "select count(*) from public.partners where user_id='$NEW_PARTNER';")
+          test "$PARTNER_PENDING" = "1" || { echo 'ONBOARDING FAIL: postulación comercial pendiente ausente'; exit 1; }
+          test "$PARTNER_CREATED" = "0" || { echo 'SECURITY FAIL: socio activado antes de revisión'; exit 1; }
+
+          PARTNER_APPLICATION=$(psql -qAt -v ON_ERROR_STOP=1 -c "select id from public.partner_applications where user_id='$NEW_PARTNER';")
+          if psql -q -v ON_ERROR_STOP=1 <<SQL
+          set role authenticated;
+          set request.jwt.claim.sub='22222222-2222-4222-8222-222222222222';
+          select public.centralgo_superadmin_review_partner_application('$PARTNER_APPLICATION',true,null);
+          SQL
+          then
+            echo 'SECURITY FAIL: socio aprobado antes de cumplir 3 horas.'
+            exit 1
+          else
+            echo 'Espera comercial mínima de 3 horas: OK'
+          fi
+
+          psql -v ON_ERROR_STOP=1 -c "update public.partner_applications set eligible_review_at=now()-interval '1 second' where id='$PARTNER_APPLICATION';"
+          psql -v ON_ERROR_STOP=1 <<SQL
+          set role authenticated;
+          set request.jwt.claim.sub='22222222-2222-4222-8222-222222222222';
+          select public.centralgo_superadmin_review_partner_application('$PARTNER_APPLICATION',true,null);
+          SQL
+          PARTNER_RATE=$(psql -qAt -v ON_ERROR_STOP=1 -c "select commission_percent from public.partners where user_id='$NEW_PARTNER' and active;")
           test "$PARTNER_RATE" = "25.000" || { echo "ONBOARDING FAIL: comisión=$PARTNER_RATE"; exit 1; }
 
           psql -v ON_ERROR_STOP=1 <<SQL
           set role authenticated;
           set request.jwt.claim.sub='$DRIVER_APPLICANT';
-          select public.centralgo_complete_onboarding('driver','Conductor Solicitante','+56933333333',null,'CL',null,'$SELF_CODE','LIC-SELF-QA');
+          select public.centralgo_complete_onboarding_v2('driver','Conductor Solicitante','+56933333333','Linares','CL',null,null,null,'Maule',false);
           SQL
-          APPLICATION=$(psql -qAt -v ON_ERROR_STOP=1 -c "select id from public.driver_applications where user_id='$DRIVER_APPLICANT' and company_id='$SELF_COMPANY' and status='pending';")
-          test -n "$APPLICATION" || { echo 'ONBOARDING FAIL: solicitud de conductor ausente'; exit 1; }
+          DRIVER_PORTAL=$(psql -qAt -v ON_ERROR_STOP=1 -c "select count(*) from public.saas_accounts where user_id='$DRIVER_APPLICANT' and account_kind='driver' and status='active' and company_id is null;")
+          test "$DRIVER_PORTAL" = "1" || { echo 'ONBOARDING FAIL: portal inmediato del conductor ausente'; exit 1; }
+
+          psql -v ON_ERROR_STOP=1 <<SQL
+          set role authenticated;
+          set request.jwt.claim.sub='$DRIVER_APPLICANT';
+          select public.centralgo_prepare_driver_application('$SELF_COMPANY','Conductor Solicitante','+56933333333','11.111.111-1','LIC-SELF-QA','CL','Disponible jornada completa');
+          SQL
+          APPLICATION=$(psql -qAt -v ON_ERROR_STOP=1 -c "select id from public.driver_applications where user_id='$DRIVER_APPLICANT' and company_id='$SELF_COMPANY' and status='draft';")
+          test -n "$APPLICATION" || { echo 'ONBOARDING FAIL: borrador de conductor ausente'; exit 1; }
+
+          psql -v ON_ERROR_STOP=1 <<SQL
+          insert into public.driver_application_documents(
+            application_id,user_id,document_type,storage_path,original_name,mime_type,size_bytes,country_code
+          ) values
+            ('$APPLICATION','$DRIVER_APPLICANT','identity_document','$DRIVER_APPLICANT/$APPLICATION/identity.jpg','identity.jpg','image/jpeg',1024,'CL'),
+            ('$APPLICATION','$DRIVER_APPLICANT','driver_license','$DRIVER_APPLICANT/$APPLICATION/license.jpg','license.jpg','image/jpeg',1024,'CL');
+          SQL
+          psql -v ON_ERROR_STOP=1 <<SQL
+          set role authenticated;
+          set request.jwt.claim.sub='$DRIVER_APPLICANT';
+          select public.centralgo_submit_driver_application('$APPLICATION');
+          SQL
+          APPLICATION_STATUS=$(psql -qAt -v ON_ERROR_STOP=1 -c "select status from public.driver_applications where id='$APPLICATION';")
+          test "$APPLICATION_STATUS" = "pending" || { echo "ONBOARDING FAIL: solicitud=$APPLICATION_STATUS"; exit 1; }
 
           if psql -q -v ON_ERROR_STOP=1 <<SQL
           set role authenticated;

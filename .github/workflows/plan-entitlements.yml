@@ -57,6 +57,7 @@ jobs:
           grant execute on function auth.uid() to anon, authenticated;
           create publication supabase_realtime;
           SQL
+          psql -v ON_ERROR_STOP=1 -f supabase/tests/storage-compat.sql
           for migration in supabase/migrations/*.sql; do
             psql -v ON_ERROR_STOP=1 -f "$migration" >/dev/null
           done
