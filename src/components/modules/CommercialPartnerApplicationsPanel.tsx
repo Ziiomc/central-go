@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Check, Clock3, FileDown, Loader2, MapPin, RefreshCw, ShieldCheck, UserRoundCheck, X } from 'lucide-react';
+import { Check, Clock3, FileDown, Loader2, MapPin, RefreshCw, ShieldCheck, UserRoundCheck, UsersRound, X } from 'lucide-react';
 import {
   loadPendingCommercialPartnerApplications,
   reviewCommercialPartnerApplication,
@@ -46,7 +46,7 @@ export const CommercialPartnerApplicationsPanel: React.FC<{ onApproved?: () => v
         rejectionReason: approve ? undefined : 'La postulación no cumple los requisitos comerciales actuales.',
       });
       setApplications((current) => current.filter((item) => item.id !== application.id));
-      setNotice(approve ? `${application.fullName} fue aprobado con una comisión del 25%.` : `La postulación de ${application.fullName} fue rechazada.`);
+      setNotice(approve ? `${application.fullName} fue aprobado con una comisión comercial del 20%.` : `La postulación de ${application.fullName} fue rechazada.`);
       if (approve) onApproved?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No fue posible revisar la postulación.');
@@ -85,11 +85,12 @@ export const CommercialPartnerApplicationsPanel: React.FC<{ onApproved?: () => v
                   <span className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-1 text-[8px] font-black uppercase ${suggestedWaitComplete ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-300' : 'border-amber-500/25 bg-amber-500/10 text-amber-300'}`}><Clock3 className="h-3 w-3" />{waitingLabel(application.eligibleReviewAt)}</span>
                 </div>
                 <p className="mt-3 flex items-center gap-1.5 text-[10px] text-zinc-400"><MapPin className="h-3.5 w-3.5 text-blue-300" />{[application.city, application.region, application.countryCode].filter(Boolean).join(', ')}</p>
-                <div className="mt-3 rounded-lg border border-zinc-800 bg-zinc-950/60 p-3 text-[9px] leading-relaxed text-zinc-500">Aceptó la versión {application.requirementsVersion}: cierre de ventas, soporte personalizado regional y comisión del 25% sobre inscripciones pagadas y confirmadas.</div>
+                {application.referredByPartnerId && <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-cyan-500/20 bg-cyan-500/10 px-2.5 py-1 text-[9px] font-black text-cyan-200"><UsersRound className="h-3.5 w-3.5" />Captado mediante enlace de Partner Regional</div>}
+                <div className="mt-3 rounded-lg border border-zinc-800 bg-zinc-950/60 p-3 text-[9px] leading-relaxed text-zinc-500">Aceptó la versión {application.requirementsVersion}: cierre de ventas, soporte personalizado regional y comisión comercial del 20% sobre inscripciones pagadas y confirmadas.</div>
                 {!suggestedWaitComplete && <div className="mt-2 rounded-lg border border-blue-500/20 bg-blue-500/[0.06] px-3 py-2 text-[9px] leading-relaxed text-blue-200">El postulante sigue dentro del plazo estimado de 3 horas, pero el superadministrador puede resolver ahora mismo.</div>}
                 <div className="mt-3 grid grid-cols-2 gap-2">
                   <button type="button" disabled={busyId === application.id} onClick={() => void review(application, false)} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-rose-500/25 bg-rose-500/10 px-3 py-2 text-[10px] font-black text-rose-300 disabled:opacity-50"><X className="h-3.5 w-3.5" />Rechazar</button>
-                  <button type="button" disabled={busyId === application.id} onClick={() => void review(application, true)} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-emerald-400/25 bg-emerald-500 px-3 py-2 text-[10px] font-black text-white disabled:opacity-40">{busyId === application.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}Aprobar 25%</button>
+                  <button type="button" disabled={busyId === application.id} onClick={() => void review(application, true)} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-emerald-400/25 bg-emerald-500 px-3 py-2 text-[10px] font-black text-white disabled:opacity-40">{busyId === application.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}Aprobar 20%</button>
                 </div>
               </article>
             );
