@@ -143,7 +143,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [fareConfig, setFareConfig] = useState<FareConfig>(DEFAULT_FARE_CONFIG);
   const [zones] = useState<Zone[]>(ZONES);
   
-  const [soundMuted, setSoundMuted] = useState<boolean>(false);
+  const [soundMuted, setSoundMuted] = useState<boolean>(() => soundManager.isMuted());
   const [activeModule, setActiveModule] = useState<string>('dashboard');
   const [selectedTripForDetail, setSelectedTripForDetail] = useState<Trip | null>(null);
   const [newTripModalOpen, setNewTripModalOpen] = useState<boolean>(false);

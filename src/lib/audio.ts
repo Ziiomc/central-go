@@ -1,8 +1,14 @@
-// Web Audio API Sound Synthesizer for Royal Dispatch
+// Web Audio API Sound Synthesizer for Central GO
+
+const readMutedPreference = () => {
+  if (typeof window === 'undefined') return false;
+  try { return window.localStorage.getItem('centralgo:sound-muted') === '1'; }
+  catch { return false; }
+};
 
 class SoundManager {
   private ctx: AudioContext | null = null;
-  private muted: boolean = false;
+  private muted: boolean = readMutedPreference();
 
   private initCtx() {
     if (!this.ctx && typeof window !== 'undefined') {
@@ -18,6 +24,8 @@ class SoundManager {
 
   public toggleMute(): boolean {
     this.muted = !this.muted;
+    try { window.localStorage.setItem('centralgo:sound-muted', this.muted ? '1' : '0'); }
+    catch { /* The sound still toggles when private storage is unavailable. */ }
     return this.muted;
   }
 
@@ -25,7 +33,26 @@ class SoundManager {
     return this.muted;
   }
 
-  // Firma sonora breve: campana de tres tonos, clara aun con ruido de cabina.
+  /** Unlocks the notification context from a user gesture on mobile browsers. */
+  public async prime(): Promise<boolean> {
+    this.initCtx();
+    if (!this.ctx) return false;
+    try {
+      if (this.ctx.state === 'suspended') await this.ctx.resume();
+      const oscillator = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      gain.gain.value = 0;
+      oscillator.connect(gain);
+      gain.connect(this.ctx.destination);
+      oscillator.start();
+      oscillator.stop(this.ctx.currentTime + 0.01);
+      return this.ctx.state === 'running';
+    } catch {
+      return false;
+    }
+  }
+
+  // Firma sonora de nueva carrera: cálida, reconocible y clara aun con ruido de cabina.
   public playDispatchChime() {
     if (this.muted) return;
     this.initCtx();
@@ -33,17 +60,27 @@ class SoundManager {
 
     const now = this.ctx.currentTime;
     const master = this.ctx.createGain();
-    master.gain.setValueAtTime(0.72, now);
-    master.gain.exponentialRampToValueAtTime(0.001, now + 1.15);
-    master.connect(this.ctx.destination);
+    const compressor = this.ctx.createDynamicsCompressor();
+    compressor.threshold.setValueAtTime(-20, now);
+    compressor.knee.setValueAtTime(18, now);
+    compressor.ratio.setValueAtTime(4, now);
+    compressor.attack.setValueAtTime(0.006, now);
+    compressor.release.setValueAtTime(0.32, now);
+    master.gain.setValueAtTime(0.001, now);
+    master.gain.exponentialRampToValueAtTime(0.76, now + 0.025);
+    master.gain.exponentialRampToValueAtTime(0.001, now + 1.65);
+    master.connect(compressor);
+    compressor.connect(this.ctx.destination);
     [
-      {frequency:659.25,offset:0,duration:.42,type:'sine' as OscillatorType,gain:.34},
-      {frequency:987.77,offset:.13,duration:.56,type:'triangle' as OscillatorType,gain:.22},
-      {frequency:1318.51,offset:.31,duration:.72,type:'sine' as OscillatorType,gain:.18},
+      {frequency:392,offset:0,duration:.62,type:'sine' as OscillatorType,gain:.12},
+      {frequency:659.25,offset:0,duration:.78,type:'sine' as OscillatorType,gain:.27},
+      {frequency:880,offset:.12,duration:.86,type:'triangle' as OscillatorType,gain:.17},
+      {frequency:1174.66,offset:.27,duration:.92,type:'sine' as OscillatorType,gain:.16},
+      {frequency:1567.98,offset:.48,duration:.88,type:'sine' as OscillatorType,gain:.1},
     ].forEach(tone=>{
       const osc=this.ctx!.createOscillator(),gain=this.ctx!.createGain(),start=now+tone.offset;
       osc.type=tone.type;osc.frequency.setValueAtTime(tone.frequency,start);
-      gain.gain.setValueAtTime(.001,start);gain.gain.exponentialRampToValueAtTime(tone.gain,start+.025);gain.gain.exponentialRampToValueAtTime(.001,start+tone.duration);
+      gain.gain.setValueAtTime(.001,start);gain.gain.exponentialRampToValueAtTime(tone.gain,start+.035);gain.gain.exponentialRampToValueAtTime(.001,start+tone.duration);
       osc.connect(gain);gain.connect(master);osc.start(start);osc.stop(start+tone.duration);
     });
   }

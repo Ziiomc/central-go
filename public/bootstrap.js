@@ -9,6 +9,8 @@
   }
   document.documentElement.dataset.theme = theme;
   document.documentElement.style.colorScheme = theme;
+  var themeColor = document.querySelector('meta[name="theme-color"]');
+  if (themeColor) themeColor.setAttribute('content', theme === 'light' ? '#e7f0f9' : '#0b2340');
 
   var driverRoute = window.location.pathname === '/driver' || window.location.pathname.indexOf('/driver/') === 0;
   var manifest = document.createElement('link');
@@ -19,8 +21,7 @@
   if (driverRoute) {
     document.title = 'Central GO Conductor';
     var appTitle = document.querySelector('meta[name="apple-mobile-web-app-title"]');
-    var themeColor = document.querySelector('meta[name="theme-color"]');
     if (appTitle) appTitle.setAttribute('content', 'GO Conductor');
-    if (themeColor) themeColor.setAttribute('content', '#07111f');
+    if (themeColor) themeColor.setAttribute('content', theme === 'light' ? '#e7f0f9' : '#061120');
   }
 })();

@@ -1,30 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
   <title id="title">Central GO</title>
-  <desc id="desc">Ícono dorado de radiotaxi y ubicación GPS sobre fondo azul oscuro.</desc>
+  <desc id="desc">Pequeño taxi azul con un marcador de geolocalización.</desc>
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#111827"/>
-      <stop offset="1" stop-color="#030712"/>
-    </linearGradient>
-    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#fde68a"/>
-      <stop offset="0.55" stop-color="#fbbf24"/>
-      <stop offset="1" stop-color="#d97706"/>
-    </linearGradient>
-    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
-      <feGaussianBlur stdDeviation="7" result="blur"/>
-      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-    </filter>
+    <linearGradient id="bg" x1="52" y1="36" x2="448" y2="486" gradientUnits="userSpaceOnUse"><stop stop-color="#0B2340"/><stop offset="1" stop-color="#050B17"/></linearGradient>
+    <linearGradient id="pin" x1="192" y1="56" x2="320" y2="260" gradientUnits="userSpaceOnUse"><stop stop-color="#75DCFF"/><stop offset="1" stop-color="#168BFF"/></linearGradient>
+    <linearGradient id="car" x1="104" y1="290" x2="410" y2="425" gradientUnits="userSpaceOnUse"><stop stop-color="#46C9FF"/><stop offset=".58" stop-color="#168BFF"/><stop offset="1" stop-color="#0B63D1"/></linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="180%"><feDropShadow dx="0" dy="16" stdDeviation="18" flood-color="#0077FF" flood-opacity=".28"/></filter>
   </defs>
-  <rect x="18" y="18" width="476" height="476" rx="112" fill="url(#bg)" stroke="#fbbf24" stroke-width="16"/>
-  <circle cx="256" cy="202" r="104" fill="#fbbf24" opacity="0.08"/>
-  <g fill="none" stroke="url(#gold)" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)">
-    <path d="M256 94c-52 0-94 42-94 94 0 70 94 166 94 166s94-96 94-166c0-52-42-94-94-94Z" stroke-width="24"/>
-    <circle cx="256" cy="188" r="35" stroke-width="20"/>
-    <path d="M88 355h61l32-57h151l37 57h55" stroke-width="20"/>
-    <path d="M121 355h281v54H109c0-30 5-45 12-54Z" stroke-width="20"/>
-    <circle cx="172" cy="409" r="30" fill="#0b1220" stroke-width="18"/>
-    <circle cx="347" cy="409" r="30" fill="#0b1220" stroke-width="18"/>
-    <path d="M203 298l31 57M308 298l35 57" stroke-width="14"/>
-  </g>
+  <rect x="18" y="18" width="476" height="476" rx="116" fill="url(#bg)"/>
+  <path d="M40 350c91-66 148-75 226-34 72 38 130 32 206-35" fill="none" stroke="#2CB8FF" stroke-opacity=".09" stroke-width="22" stroke-linecap="round"/>
+  <g filter="url(#shadow)"><path d="M256 54c-57 0-103 45-103 101 0 75 103 164 103 164s103-89 103-164c0-56-46-101-103-101Z" fill="url(#pin)"/><circle cx="256" cy="153" r="43" fill="#071426"/><circle cx="256" cy="153" r="19" fill="#BCEEFF"/></g>
+  <g filter="url(#shadow)"><path d="M153 320c9-25 23-54 39-66 13-10 114-10 128 0 16 12 30 41 39 66l34 15c17 7 28 23 28 42v51H91v-51c0-19 11-35 28-42l34-15Z" fill="url(#car)"/><path d="M185 318c9-22 18-39 27-46 7-5 81-5 88 0 9 7 18 24 27 46H185Z" fill="#D9F5FF" fill-opacity=".92"/><path d="M256 271v47" stroke="#168BFF" stroke-width="8"/><rect x="221" y="231" width="70" height="26" rx="10" fill="#75DCFF"/><path d="M118 364h50M344 364h50" stroke="#D9F5FF" stroke-width="18" stroke-linecap="round"/><path d="M154 402h204" stroke="#7ADFFF" stroke-opacity=".55" stroke-width="8" stroke-linecap="round"/><circle cx="157" cy="424" r="35" fill="#050B17" stroke="#75DCFF" stroke-width="12"/><circle cx="355" cy="424" r="35" fill="#050B17" stroke="#75DCFF" stroke-width="12"/></g>
 </svg>

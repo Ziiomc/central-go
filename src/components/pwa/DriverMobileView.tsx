@@ -82,11 +82,11 @@ export const DriverMobileView: React.FC = () => {
   const newestRadioMessage = radioMessages[0];
 
   const enableRadioAlerts = async () => {
-    const audioReady = await primeRadioAudio();
+    const [audioReady, chimeReady] = await Promise.all([primeRadioAudio(), soundManager.prime()]);
     if ('Notification' in window && Notification.permission === 'default') {
       try { await Notification.requestPermission(); } catch {}
     }
-    setRadioReady(audioReady || 'speechSynthesis' in window);
+    setRadioReady(audioReady || chimeReady || 'speechSynthesis' in window);
     localStorage.setItem('centralgo-driver-radio-ready', '1');
     setRadioBanner('Radio digital activada.');
     if (radioToastTimerRef.current !== null) window.clearTimeout(radioToastTimerRef.current);
@@ -286,7 +286,7 @@ export const DriverMobileView: React.FC = () => {
       setIncomingOffer(activeTrip);
       setOfferTimer(15);
       soundManager.playDispatchChime();
-      if ('vibrate' in navigator) navigator.vibrate([300, 120, 300]);
+      if ('vibrate' in navigator) navigator.vibrate([90, 60, 150, 80, 260]);
     }
     if (activeTrip?.status && activeTrip.status !== 'assigned' && incomingOffer?.id === activeTrip.id) setIncomingOffer(null);
   }, [activeTrip?.id, activeTrip?.status, incomingOffer?.id]);
@@ -363,7 +363,7 @@ export const DriverMobileView: React.FC = () => {
   const changePhoto=async(file?:File)=>{if(!file)return;setPhotoBusy(true);try{await uploadOwnAvatar(currentUser.id,file);await refreshIdentity();}catch(error){setAnalyticsError(error instanceof Error?error.message:'No fue posible guardar tu fotografía.');}finally{setPhotoBusy(false);}};
 
   return (
-    <main className="min-h-screen bg-[#08090c] px-2.5 py-2.5 text-zinc-100 sm:px-3">
+    <main className="cg-driver-app min-h-screen bg-[#08090c] px-2.5 py-2.5 text-zinc-100 sm:px-3">
       {radioBanner && (
         <div className="fixed left-1/2 top-3 z-[160] w-[min(410px,calc(100vw-1rem))] -translate-x-1/2 rounded-2xl border border-amber-400/50 bg-[#111014]/95 px-3 py-2.5 shadow-2xl backdrop-blur-xl">
           <div className="flex gap-2.5"><Radio className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" /><p className="text-xs font-bold text-white">{radioBanner}</p></div>
@@ -371,11 +371,11 @@ export const DriverMobileView: React.FC = () => {
       )}
 
       <div className="relative mx-auto max-w-md space-y-2 pb-5">
-        <header className="flex items-center justify-between rounded-xl border border-amber-500/20 bg-[#111114] px-2.5 py-2 shadow-lg">
+        <header className="flex items-center justify-between rounded-xl border border-blue-500/25 bg-[#111114] px-2.5 py-2 shadow-lg shadow-blue-950/20">
           <div className="flex min-w-0 items-center gap-2">
-            <img src={centralGoLogo} alt="Central GO" className="h-8 w-8 rounded-lg border border-amber-400/50 bg-zinc-950 p-0.5" />
+            <img src={centralGoLogo} alt="Central GO" className="h-8 w-8 rounded-lg border border-blue-400/35 bg-zinc-950 p-0.5" />
             <div className="min-w-0">
-              <p className="truncate text-[12px] font-black text-white">Central <span className="text-amber-400">GO</span></p>
+              <p className="truncate text-[12px] font-black text-white">Central <span className="text-blue-300">GO</span></p>
               <div className="flex items-center gap-1.5 text-[8px]">
                 <span className={driver.status === 'available' ? 'text-emerald-300' : 'text-zinc-500'}>{driver.status === 'available' ? '● DISPONIBLE' : driver.status.toUpperCase()}</span>
                 <span className="text-blue-300"><Wifi className="mr-0.5 inline h-2.5 w-2.5" />Sincronizado</span>
