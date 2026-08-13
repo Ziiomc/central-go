@@ -1,7 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import centralGoLogo from '../../assets/images/central-go-logo.svg';
-import { useAuth } from '../../context/AuthContext';
+import { AlertTriangle, Building2, CarFront, Handshake, Loader2 } from 'lucide-react';
+import {
+  type OnboardingRole,
+  useAuth,
+} from '../../context/AuthContext';
 import { requireSupabase } from '../../lib/supabase';
+import { runtimeConfig } from '../../config/runtime';
+import { AuthShell } from './AuthShell';
 
 const friendlyAuthError = (error: unknown, fallback: string) => {
   const message = error instanceof Error ? error.message : String(error ?? '');
@@ -12,22 +17,231 @@ const friendlyAuthError = (error: unknown, fallback: string) => {
   return message || fallback;
 };
 type DriverActivationPayload = { tokenHash: string; type: 'invite' | 'recovery' };
-const getSafeDriverActivationPayload = (): DriverActivationPayload | null => { if (typeof window === 'undefined') return null; const params = new URLSearchParams(window.location.search); if (params.get('driver_activation') !== '1') return null; const tokenHash = params.get('driver_token_hash')?.trim() ?? ''; const type = params.get('driver_type'); if (!tokenHash || tokenHash.length < 20 || (type !== 'invite' && type !== 'recovery')) return null; return { tokenHash, type }; };
+
+const getSafeDriverActivationPayload = (): DriverActivationPayload | null => {
+  if (typeof window === 'undefined') return null;
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('driver_activation') !== '1') return null;
+  const tokenHash = params.get('driver_token_hash')?.trim() ?? '';
+  const type = params.get('driver_type');
+  if (!tokenHash || tokenHash.length < 20 || (type !== 'invite' && type !== 'recovery')) return null;
+  return { tokenHash, type };
+};
+
+const roleOptions: Array<{
+  id: OnboardingRole;
+  label: string;
+  detail: string;
+  icon: React.ComponentType<{ className?: string }>;
+}> = [
+  { id: 'central', label: 'Central', detail: '5 días Full', icon: Building2 },
+  { id: 'driver', label: 'Conductor', detail: 'Portal inmediato', icon: CarFront },
+  { id: 'sales_partner', label: 'Socio comercial', detail: 'Requiere aprobación', icon: Handshake },
+];
 
 export const LoginScreen: React.FC = () => {
   const { signInWithGoogle, signUp, signIn, requestPasswordReset, identityError } = useAuth();
-  const [mode,setMode]=useState<'login'|'register'>('login'); const [email,setEmail]=useState(''); const [password,setPassword]=useState(''); const [confirmPassword,setConfirmPassword]=useState(''); const [busy,setBusy]=useState(false); const [error,setError]=useState(''); const [notice,setNotice]=useState(''); const [recoveryCooldown,setRecoveryCooldown]=useState(0);
-  const driverActivation=useMemo(()=>getSafeDriverActivationPayload(),[]); const isDriverActivation=typeof window!=='undefined'&&new URLSearchParams(window.location.search).get('driver_activation')==='1';
-  useEffect(()=>{if(recoveryCooldown<=0)return;const timer=window.setInterval(()=>setRecoveryCooldown(v=>Math.max(0,v-1)),1000);return()=>window.clearInterval(timer);},[recoveryCooldown>0]);
-  const googleLogin=async()=>{setBusy(true);setError('');setNotice('');try{await signInWithGoogle();}catch(err){setError(friendlyAuthError(err,'No fue posible continuar con Google.'));setBusy(false);}};
-  const emailSubmit=async(event:React.FormEvent)=>{event.preventDefault();setBusy(true);setError('');setNotice('');try{if(mode==='register'){if(password!==confirmPassword)throw new Error('Las contraseñas no coinciden.');const active=await signUp(email,password);if(!active){setNotice('Cuenta creada. Te enviamos un correo de confirmación. Abre el mensaje y pulsa el enlace para activar tu cuenta de Socio Comercial.');setPassword('');setConfirmPassword('');setBusy(false);return;}}else await signIn(email,password);}catch(err){setError(friendlyAuthError(err,mode==='register'?'No fue posible crear tu cuenta.':'No fue posible iniciar sesión.'));setBusy(false);}};
-  const recoverPassword=async()=>{if(recoveryCooldown>0)return;setBusy(true);setError('');setNotice('');try{await requestPasswordReset(email);setRecoveryCooldown(60);setNotice('Correo de recuperación enviado. Abre solamente el correo más reciente.');}catch(err){setRecoveryCooldown(60);setError(friendlyAuthError(err,'No fue posible enviar el enlace de recuperación.'));}finally{setBusy(false);}};
-  const activateDriver=async()=>{if(!driverActivation||busy)return;setBusy(true);setError('');setNotice('');try{const db=requireSupabase();const {data,error:verifyError}=await db.auth.verifyOtp({token_hash:driverActivation.tokenHash,type:driverActivation.type});if(verifyError)throw verifyError;if(!data.session)throw new Error('No fue posible iniciar la sesión del conductor.');const clean=new URL(window.location.href);clean.searchParams.delete('driver_activation');clean.searchParams.delete('driver_token_hash');clean.searchParams.delete('driver_type');window.history.replaceState({},document.title,`${clean.pathname}${clean.search}${clean.hash}`);window.location.replace('/driver');}catch(err){setError(friendlyAuthError(err,'No fue posible activar la cuenta del conductor.'));setBusy(false);}};
-  if(isDriverActivation)return <main className="min-h-screen bg-[#070709] text-zinc-100 flex items-center justify-center p-4"><section className="w-full max-w-md rounded-3xl border border-zinc-800 bg-[#0d0d0f] p-7"><div className="flex items-center gap-3"><img src={centralGoLogo} alt="Central GO" className="h-14 w-14"/><div><p className="text-[10px] font-black uppercase tracking-[0.24em] text-blue-300">Central GO</p><h1 className="text-2xl font-black">Acceso de conductor</h1></div></div><p className="mt-5 text-sm text-zinc-400">Confirma la activación de tu cuenta de conductor.</p>{error&&<div className="mt-5 rounded-xl bg-rose-500/10 p-3 text-sm text-rose-200">{error}</div>}{driverActivation&&<button disabled={busy} onClick={()=>void activateDriver()} className="mt-6 w-full rounded-xl bg-blue-600 p-3.5 font-black">{busy?'Activando…':'Activar mi cuenta de conductor'}</button>}</section></main>;
-  return <main className="min-h-screen bg-[#070709] text-zinc-100 flex items-center justify-center p-4 relative overflow-hidden"><div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(245,158,11,0.14),transparent_44%)]"/><section className="relative w-full max-w-md rounded-3xl border border-zinc-800 bg-[#0d0d0f]/95 p-7 sm:p-9 shadow-2xl shadow-black/60"><div className="flex items-center gap-3"><img src={centralGoLogo} alt="Central GO" className="h-14 w-14 rounded-2xl border-2 border-amber-400/70 bg-zinc-950 p-1"/><div><p className="text-[10px] font-black uppercase tracking-[0.24em] text-amber-300">Central GO</p><h1 className="text-2xl font-black text-white">Socio Comercial</h1></div></div><p className="mt-5 text-sm leading-relaxed text-zinc-400">Crea gratis tu cuenta de Socio Comercial con correo y contraseña. Confirma tu correo y podrás comenzar a registrar centrales.</p>{(error||identityError)&&<div className="mt-4 rounded-xl border border-rose-500/25 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{error||friendlyAuthError(identityError,identityError)}</div>}{notice&&<div className="mt-4 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">{notice}</div>}
-  <div className="mt-6 grid grid-cols-2 rounded-xl bg-zinc-950 p-1"><button type="button" onClick={()=>{setMode('login');setError('');setNotice('');}} className={`rounded-lg py-2.5 text-xs font-black ${mode==='login'?'bg-zinc-800 text-white':'text-zinc-500'}`}>Iniciar sesión</button><button type="button" onClick={()=>{setMode('register');setError('');setNotice('');}} className={`rounded-lg py-2.5 text-xs font-black ${mode==='register'?'bg-amber-400 text-zinc-950':'text-zinc-500'}`}>Crear cuenta</button></div>
-  <form onSubmit={emailSubmit} className="mt-4 space-y-3"><input required type="email" autoComplete="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="Correo electrónico" className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm outline-none focus:border-amber-400/70"/><input required minLength={10} type="password" autoComplete={mode==='register'?'new-password':'current-password'} value={password} onChange={e=>setPassword(e.target.value)} placeholder={mode==='register'?'Contraseña · mínimo 10 caracteres':'Contraseña'} className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm outline-none focus:border-amber-400/70"/>{mode==='register'&&<input required minLength={10} type="password" autoComplete="new-password" value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} placeholder="Repite tu contraseña" className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3 text-sm outline-none focus:border-amber-400/70"/>}<button disabled={busy} className={`w-full rounded-xl px-4 py-3.5 text-sm font-black disabled:opacity-60 ${mode==='register'?'bg-amber-400 text-zinc-950':'border border-zinc-700 bg-zinc-900 text-white'}`}>{busy?(mode==='register'?'Creando cuenta…':'Ingresando…'):(mode==='register'?'Crear cuenta de Socio Comercial':'Iniciar sesión')}</button></form>
-  {mode==='login'&&<button type="button" disabled={busy||!email.trim()||recoveryCooldown>0} onClick={()=>void recoverPassword()} className="mt-3 w-full py-2 text-xs font-bold text-amber-300 disabled:opacity-40">{recoveryCooldown>0?`Puedes volver a solicitar en ${recoveryCooldown}s`:'Olvidé mi contraseña'}</button>}
-  {mode==='register'&&<div className="mt-4 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.06] p-3 text-[11px] leading-relaxed text-zinc-400"><strong className="text-emerald-300">Verificación por correo:</strong> después de registrarte recibirás un enlace. Tu cuenta se activa al pulsarlo y luego completarás tu perfil de Socio Comercial.</div>}
-  <div className="my-5 flex items-center gap-3"><div className="h-px flex-1 bg-zinc-800"/><span className="text-[10px] font-bold uppercase tracking-widest text-zinc-600">o</span><div className="h-px flex-1 bg-zinc-800"/></div><button type="button" disabled={busy} onClick={()=>void googleLogin()} className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm font-bold text-zinc-300 disabled:opacity-60">Continuar con Google</button><p className="mt-4 text-center text-[10px] text-zinc-600">Registro de Socio Comercial gratuito · sin tarjeta</p></section></main>;
+  const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [role, setRole] = useState<OnboardingRole>('central');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [googleAvailable, setGoogleAvailable] = useState<boolean | null>(null);
+  const [recoveryCooldown, setRecoveryCooldown] = useState(0);
+  const driverActivation = useMemo(() => getSafeDriverActivationPayload(), []);
+  const isDriverActivation = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('driver_activation') === '1';
+
+  useEffect(() => {
+    if (recoveryCooldown <= 0) return;
+    const timer = window.setInterval(() => setRecoveryCooldown((value) => Math.max(0, value - 1)), 1000);
+    return () => window.clearInterval(timer);
+  }, [recoveryCooldown]);
+
+  useEffect(() => {
+    let active = true;
+    fetch(`${runtimeConfig.supabaseUrl}/auth/v1/settings`, {
+      headers: { apikey: runtimeConfig.supabasePublishableKey },
+    })
+      .then((response) => response.ok ? response.json() : Promise.reject(new Error('Auth settings unavailable')))
+      .then((settings) => { if (active) setGoogleAvailable(settings?.external?.google === true); })
+      .catch(() => { if (active) setGoogleAvailable(null); });
+    return () => { active = false; };
+  }, []);
+
+  const resetMessages = () => {
+    setError('');
+    setNotice('');
+  };
+
+  const googleLogin = async () => {
+    if (googleAvailable === false) {
+      setError('El acceso con Google está en configuración. Por ahora, crea tu cuenta con correo.');
+      return;
+    }
+    setBusy(true);
+    resetMessages();
+    try {
+      await signInWithGoogle(mode === 'register' ? role : undefined);
+    } catch (err) {
+      setError(friendlyAuthError(err, 'No fue posible continuar con Google.'));
+      setBusy(false);
+    }
+  };
+
+  const emailSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setBusy(true);
+    resetMessages();
+    try {
+      if (mode === 'register') {
+        if (password !== confirmPassword) throw new Error('Las contraseñas no coinciden.');
+        const active = await signUp(email, password, role);
+        if (!active) {
+          setNotice('Cuenta creada. Revisa tu correo y confirma el enlace para continuar con tu perfil.');
+          setPassword('');
+          setConfirmPassword('');
+          setBusy(false);
+        }
+      } else {
+        await signIn(email, password);
+      }
+    } catch (err) {
+      setError(friendlyAuthError(err, mode === 'register' ? 'No fue posible crear tu cuenta.' : 'No fue posible iniciar sesión.'));
+      setBusy(false);
+    }
+  };
+
+  const recoverPassword = async () => {
+    if (recoveryCooldown > 0) return;
+    setBusy(true);
+    resetMessages();
+    try {
+      await requestPasswordReset(email);
+      setRecoveryCooldown(60);
+      setNotice('Correo de recuperación enviado. Abre solamente el mensaje más reciente.');
+    } catch (err) {
+      setRecoveryCooldown(60);
+      setError(friendlyAuthError(err, 'No fue posible enviar el enlace de recuperación.'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const activateDriver = async () => {
+    if (!driverActivation || busy) return;
+    setBusy(true);
+    resetMessages();
+    try {
+      const db = requireSupabase();
+      const { data, error: verifyError } = await db.auth.verifyOtp({
+        token_hash: driverActivation.tokenHash,
+        type: driverActivation.type,
+      });
+      if (verifyError) throw verifyError;
+      if (!data.session) throw new Error('No fue posible iniciar la sesión del conductor.');
+      const clean = new URL(window.location.href);
+      clean.searchParams.delete('driver_activation');
+      clean.searchParams.delete('driver_token_hash');
+      clean.searchParams.delete('driver_type');
+      window.history.replaceState({}, document.title, `${clean.pathname}${clean.search}${clean.hash}`);
+      window.location.replace('/driver');
+    } catch (err) {
+      setError(friendlyAuthError(err, 'No fue posible activar la cuenta del conductor.'));
+      setBusy(false);
+    }
+  };
+
+  if (isDriverActivation) {
+    return (
+      <AuthShell compact eyebrow="Acceso profesional" title="Activa tu cuenta de conductor">
+        <p className="cg-card-kicker">Central GO conductor</p>
+        <h1 className="cg-card-title">Tu acceso está listo</h1>
+        <p className="cg-card-copy">Confirma el enlace seguro para entrar a la aplicación del conductor.</p>
+        {error && <div className="cg-alert cg-alert-error">{error}</div>}
+        {driverActivation && (
+          <button type="button" disabled={busy} onClick={() => void activateDriver()} className="cg-primary-button mt-6">
+            {busy && <Loader2 className="h-4 w-4 animate-spin" />}
+            {busy ? 'Activando…' : 'Activar mi cuenta'}
+          </button>
+        )}
+      </AuthShell>
+    );
+  }
+
+  return (
+    <AuthShell>
+      <p className="cg-card-kicker">Bienvenido a Central GO</p>
+      <h2 className="cg-card-title">{mode === 'login' ? 'Vuelve a tu operación' : 'Crea tu cuenta'}</h2>
+      <p className="cg-card-copy">
+        {mode === 'login'
+          ? 'Accede con Google o con tu correo.'
+          : 'Elige cómo quieres participar. Puedes completar tus datos después de verificar el correo.'}
+      </p>
+
+      {(error || identityError) && <div className="cg-alert cg-alert-error">{error || friendlyAuthError(identityError, identityError)}</div>}
+      {notice && <div className="cg-alert cg-alert-success">{notice}</div>}
+
+      <div className="cg-segmented" role="tablist" aria-label="Acceso a Central GO">
+        <button type="button" role="tab" aria-selected={mode === 'login'} data-active={mode === 'login'} onClick={() => { setMode('login'); resetMessages(); }}>Iniciar sesión</button>
+        <button type="button" role="tab" aria-selected={mode === 'register'} data-active={mode === 'register'} onClick={() => { setMode('register'); resetMessages(); }}>Crear cuenta</button>
+      </div>
+
+      {mode === 'register' && (
+        <>
+          <div className="cg-role-grid" aria-label="Cómo quieres participar">
+            {roleOptions.map(({ id, label, detail, icon: Icon }) => (
+              <button key={id} type="button" className="cg-role-card" data-active={role === id} aria-pressed={role === id} onClick={() => setRole(id)}>
+                <span className="cg-role-icon"><Icon /></span>
+                <strong>{label}</strong>
+                <small>{detail}</small>
+              </button>
+            ))}
+          </div>
+          {role === 'sales_partner' && <div className="cg-alert cg-alert-warning"><AlertTriangle className="mr-1.5 inline h-4 w-4" />La cuenta comercial necesita aprobación del superadministrador y una espera mínima de 3 horas.</div>}
+        </>
+      )}
+
+      <button type="button" disabled={busy || googleAvailable === false} onClick={() => void googleLogin()} className="cg-google-button">
+        <span className="cg-google-mark" aria-hidden="true">G</span>
+        {googleAvailable === false ? 'Google en configuración' : mode === 'login' ? 'Continuar con Google' : 'Crear cuenta con Google'}
+      </button>
+      {googleAvailable === false && <p className="cg-auth-hint">El acceso por correo está disponible. Google se activará automáticamente al completar la configuración OAuth.</p>}
+
+      <div className="cg-divider">o usa tu correo</div>
+
+      <form onSubmit={emailSubmit} className="cg-form">
+        <label className="cg-field">
+          <span>Correo electrónico</span>
+          <input required type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="tu@correo.com" />
+        </label>
+        <label className="cg-field">
+          <span>Contraseña</span>
+          <input required minLength={10} type="password" autoComplete={mode === 'register' ? 'new-password' : 'current-password'} value={password} onChange={(event) => setPassword(event.target.value)} placeholder={mode === 'register' ? 'Mínimo 10 caracteres' : 'Tu contraseña'} />
+        </label>
+        {mode === 'register' && (
+          <label className="cg-field">
+            <span>Repetir contraseña</span>
+            <input required minLength={10} type="password" autoComplete="new-password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="Repite tu contraseña" />
+          </label>
+        )}
+        <button disabled={busy} className="cg-primary-button">
+          {busy && <Loader2 className="h-4 w-4 animate-spin" />}
+          {busy ? (mode === 'register' ? 'Creando cuenta…' : 'Ingresando…') : (mode === 'register' ? 'Crear mi cuenta' : 'Iniciar sesión')}
+        </button>
+      </form>
+
+      {mode === 'login' && (
+        <button type="button" disabled={busy || !email.trim() || recoveryCooldown > 0} onClick={() => void recoverPassword()} className="cg-subtle-button w-full disabled:opacity-40">
+          {recoveryCooldown > 0 ? `Puedes volver a solicitar en ${recoveryCooldown}s` : 'Olvidé mi contraseña'}
+        </button>
+      )}
+
+      <p className="cg-auth-hint">
+        {mode === 'register' ? 'Registro seguro · confirmación por correo · sin cobro al crear la cuenta' : 'Acceso cifrado y protegido por permisos según tu rol'}
+      </p>
+    </AuthShell>
+  );
 };

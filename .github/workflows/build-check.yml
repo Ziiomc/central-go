@@ -246,5 +246,68 @@ jobs:
           test "$TRIP_STATUS" = "pending" || { echo "DRIVER REJECT FAIL: trip=$TRIP_STATUS"; exit 1; }
           test "$DRIVER_STATUS" = "available" || { echo "DRIVER REJECT FAIL: driver=$DRIVER_STATUS"; exit 1; }
 
+      - name: Probar onboarding unificado y aprobación segura
+        shell: bash
+        run: |
+          set -euo pipefail
+          CENTRAL_OWNER='a1000000-0000-4000-8000-000000000001'
+          DRIVER_APPLICANT='a1000000-0000-4000-8000-000000000002'
+          NEW_PARTNER='a1000000-0000-4000-8000-000000000003'
+
+          psql -v ON_ERROR_STOP=1 <<SQL
+          insert into auth.users(id,email,email_confirmed_at,raw_user_meta_data) values
+            ('$CENTRAL_OWNER','self-central@centralgo.test',now(),'{"name":"Dueña Central"}'),
+            ('$DRIVER_APPLICANT','self-driver@centralgo.test',now(),'{"name":"Conductor Solicitante"}'),
+            ('$NEW_PARTNER','self-partner@centralgo.test',now(),'{"name":"Socio Comercial"}');
+          SQL
+
+          psql -v ON_ERROR_STOP=1 <<SQL
+          set role authenticated;
+          set request.jwt.claim.sub='$CENTRAL_OWNER';
+          select public.centralgo_complete_onboarding('central','Dueña Central','+56911111111','Linares','CL','Central Autoregistro QA',null,null);
+          SQL
+
+          SELF_COMPANY=$(psql -qAt -v ON_ERROR_STOP=1 -c "select company_id from public.company_memberships where user_id='$CENTRAL_OWNER' and role='company_admin' and active;")
+          test -n "$SELF_COMPANY" || { echo 'ONBOARDING FAIL: central sin membresía administrativa'; exit 1; }
+          SELF_CODE=$(psql -qAt -v ON_ERROR_STOP=1 -c "select code from public.companies where id='$SELF_COMPANY';")
+          FULL_TRIAL=$(psql -qAt -v ON_ERROR_STOP=1 -c "select count(*) from public.subscriptions s join public.subscription_plans p on p.id=s.plan_id where s.company_id='$SELF_COMPANY' and s.status='trialing' and p.code='enterprise' and s.trial_ends_at>now()+interval '4 days' and s.trial_ends_at<=now()+interval '5 days 1 minute';")
+          test "$FULL_TRIAL" = "1" || { echo 'ONBOARDING FAIL: la central no recibió 5 días Full'; exit 1; }
+
+          psql -v ON_ERROR_STOP=1 <<SQL
+          set role authenticated;
+          set request.jwt.claim.sub='$NEW_PARTNER';
+          select public.centralgo_complete_onboarding('sales_partner','Socio Comercial','+56922222222','Talca','CL',null,null,null);
+          SQL
+          PARTNER_RATE=$(psql -qAt -v ON_ERROR_STOP=1 -c "select commission_percent from public.partners where user_id='$NEW_PARTNER';")
+          test "$PARTNER_RATE" = "25.000" || { echo "ONBOARDING FAIL: comisión=$PARTNER_RATE"; exit 1; }
+
+          psql -v ON_ERROR_STOP=1 <<SQL
+          set role authenticated;
+          set request.jwt.claim.sub='$DRIVER_APPLICANT';
+          select public.centralgo_complete_onboarding('driver','Conductor Solicitante','+56933333333',null,'CL',null,'$SELF_CODE','LIC-SELF-QA');
+          SQL
+          APPLICATION=$(psql -qAt -v ON_ERROR_STOP=1 -c "select id from public.driver_applications where user_id='$DRIVER_APPLICANT' and company_id='$SELF_COMPANY' and status='pending';")
+          test -n "$APPLICATION" || { echo 'ONBOARDING FAIL: solicitud de conductor ausente'; exit 1; }
+
+          if psql -q -v ON_ERROR_STOP=1 <<SQL
+          set role authenticated;
+          set request.jwt.claim.sub='$DRIVER_APPLICANT';
+          select public.centralgo_review_driver_application('$APPLICATION',true,'Móvil SELF',null,null);
+          SQL
+          then
+            echo 'SECURITY FAIL: un conductor aprobó su propia solicitud.'
+            exit 1
+          else
+            echo 'Autoaprobación de conductor bloqueada: OK'
+          fi
+
+          psql -v ON_ERROR_STOP=1 <<SQL
+          set role authenticated;
+          set request.jwt.claim.sub='$CENTRAL_OWNER';
+          select public.centralgo_review_driver_application('$APPLICATION',true,'Móvil SELF',null,null);
+          SQL
+          DRIVER_ACCESS=$(psql -qAt -v ON_ERROR_STOP=1 -c "select count(*) from public.company_memberships m join public.drivers d on d.company_id=m.company_id and d.user_id=m.user_id where m.company_id='$SELF_COMPANY' and m.user_id='$DRIVER_APPLICANT' and m.role='driver' and m.active;")
+          test "$DRIVER_ACCESS" = "1" || { echo 'ONBOARDING FAIL: aprobación no creó acceso profesional'; exit 1; }
+
       - name: Compilar producción
         run: npm run build

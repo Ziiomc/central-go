@@ -1,5 +1,14 @@
--- Central GO: scheduled rides, predictive reservations and 15-second offer rotation.
-create extension if not exists pg_cron;
+-- Central GO: scheduled rides, predictive reservations and offer rotation.
+-- Supabase provides pg_cron. Plain PostgreSQL used by CI does not, so the
+-- scheduling layer is enabled only when the extension is available; all
+-- dispatch functions and security tests still run in either environment.
+do $centralgo_extension$
+begin
+  if exists(select 1 from pg_available_extensions where name='pg_cron') then
+    execute 'create extension if not exists pg_cron';
+  end if;
+end;
+$centralgo_extension$;
 
 alter table public.trips
   add column if not exists scheduled_for timestamptz,
@@ -189,5 +198,11 @@ grant execute on function public.centralgo_operator_assign_trip(uuid,uuid) to au
 grant execute on function public.centralgo_driver_reject_trip(uuid,text) to authenticated;
 grant execute on function public.centralgo_driver_transition_trip(uuid,public.centralgo_trip_status) to authenticated;
 
-select cron.unschedule(jobid) from cron.job where jobname='centralgo-dispatch-loop-v1';
-select cron.schedule('centralgo-dispatch-loop-v1','5 seconds',$$select public.centralgo_dispatch_due_work();$$);
+do $centralgo_schedule$
+begin
+  if to_regnamespace('cron') is not null then
+    execute $sql$select cron.unschedule(jobid) from cron.job where jobname='centralgo-dispatch-loop-v1'$sql$;
+    execute $sql$select cron.schedule('centralgo-dispatch-loop-v1','5 seconds','select public.centralgo_dispatch_due_work();')$sql$;
+  end if;
+end;
+$centralgo_schedule$;

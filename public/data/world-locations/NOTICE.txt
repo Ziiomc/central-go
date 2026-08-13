@@ -1,0 +1,5 @@
+Central GO world location data
+Source: SimpleMaps World Cities Database via world-cities-json.
+License: Creative Commons Attribution 4.0 International (CC BY 4.0).
+https://simplemaps.com/data/world-cities
+https://creativecommons.org/licenses/by/4.0/

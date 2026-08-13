@@ -1,10 +1,204 @@
-import React,{useState} from 'react';
-import {requireSupabase} from '../../lib/supabase';
-import {useAuth} from '../../context/AuthContext';
+import React, { useState } from 'react';
+import { AlertTriangle, ArrowLeft, Building2, CarFront, FileDown, Handshake, Loader2, Search, Sparkles } from 'lucide-react';
+import {
+  ONBOARDING_INTENT_KEY,
+  type OnboardingRole,
+  useAuth,
+} from '../../context/AuthContext';
+import { requireSupabase } from '../../lib/supabase';
+import { AuthShell } from './AuthShell';
+import { WorldLocationPicker, type WorldLocationValue } from './WorldLocationPicker';
 
-export const OnboardingScreen:React.FC=()=>{const {authUser,refreshIdentity}=useAuth();const [name,setName]=useState(authUser?.user_metadata?.full_name??authUser?.user_metadata?.name??''),[phone,setPhone]=useState(''),[city,setCity]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
- const submit=async(e:React.FormEvent)=>{e.preventDefault();setBusy(true);setError('');try{const {error}=await requireSupabase().rpc('centralgo_self_service_onboarding',{p_account_kind:'sales_partner',p_name:name,p_phone:phone||null,p_city:city||null,p_country_code:'CL',p_company_name:null});if(error)throw error;await refreshIdentity();}catch(err){setError(err instanceof Error?err.message:'No fue posible crear tu cuenta Partner Comercial.');}finally{setBusy(false);}};
- return <main className="mobile-safe-page bg-[#070709] text-white flex items-start justify-center p-4 pt-6 sm:items-center sm:py-8"><section className="w-full max-w-xl rounded-3xl border border-zinc-800 bg-[#0d0d0f] p-5 sm:p-7"><p className="text-xs font-black uppercase tracking-widest text-amber-300">Registro abierto · Central GO</p><h1 className="mt-2 text-2xl font-black">Crea tu cuenta de Partner Comercial</h1><p className="mt-2 text-sm leading-relaxed text-zinc-400">La cuenta Partner es gratuita y no vence. Desde tu panel podrás registrar tus propias centrales; cada alta quedará vinculada automáticamente a tu código y visible para Superadmin.</p>
- <div className="mt-5 rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] p-4"><p className="text-xs font-black text-emerald-300">¿Qué pasa con las centrales?</p><p className="mt-1 text-[11px] leading-relaxed text-zinc-400">Cada central que registres recibe su periodo de prueba de 5 días. Tú puedes seguir usando tu panel comercial aunque una central termine su prueba.</p></div>
- <form onSubmit={submit} className="mt-6 space-y-3 pb-2"><input required value={name} onChange={e=>setName(e.target.value)} placeholder="Tu nombre" className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3"/><div className="grid gap-3 sm:grid-cols-2"><input required value={phone} onChange={e=>setPhone(e.target.value)} placeholder="Teléfono" className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3"/><input required value={city} onChange={e=>setCity(e.target.value)} placeholder="Ciudad / región" className="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-3"/></div>{error&&<div className="rounded-xl bg-rose-500/10 p-3 text-sm text-rose-200">{error}</div>}<button disabled={busy} className="mobile-sticky-action w-full rounded-xl bg-amber-400 p-3.5 font-black text-zinc-950 shadow-2xl shadow-black/60">{busy?'Creando cuenta…':'Crear mi cuenta Partner Comercial'}</button><p className="text-center text-[10px] text-zinc-600">Registro inmediato · sin aprobación previa · sin tarjeta</p></form></section></main>;
+const validRole = (value: unknown): value is OnboardingRole =>
+  value === 'central' || value === 'driver' || value === 'sales_partner';
+
+const getInitialRole = (metadataRole: unknown): OnboardingRole => {
+  const stored = typeof window !== 'undefined' ? window.localStorage.getItem(ONBOARDING_INTENT_KEY) : null;
+  if (validRole(stored)) return stored;
+  return validRole(metadataRole) ? metadataRole : 'central';
+};
+
+const roleContent: Record<OnboardingRole, {
+  title: string;
+  description: string;
+  action: string;
+  icon: React.ComponentType<{ className?: string }>;
+}> = {
+  central: {
+    title: 'Quiero operar mi central',
+    description: 'Crea tu espacio de trabajo y usa todas las funciones durante 5 días, sin tarjeta.',
+    action: 'Crear mi central y comenzar',
+    icon: Building2,
+  },
+  driver: {
+    title: 'Quiero conducir',
+    description: 'Entra de inmediato a tu portal, busca centrales por país o ciudad y presenta tus antecedentes.',
+    action: 'Crear mi portal de conductor',
+    icon: CarFront,
+  },
+  sales_partner: {
+    title: 'Quiero ser socio comercial',
+    description: 'Postula para vender y dar soporte a tus centrales. El superadministrador revisará tu solicitud.',
+    action: 'Enviar postulación comercial',
+    icon: Handshake,
+  },
+};
+
+export const OnboardingScreen: React.FC = () => {
+  const { authUser, refreshIdentity, signOut } = useAuth();
+  const [role, setRole] = useState<OnboardingRole>(() =>
+    getInitialRole(authUser?.user_metadata?.account_kind),
+  );
+  const [name, setName] = useState(authUser?.user_metadata?.full_name ?? authUser?.user_metadata?.name ?? '');
+  const [phone, setPhone] = useState('');
+  const [location, setLocation] = useState<WorldLocationValue>({
+    countryCode: 'CL', countryName: 'Chile', region: '', regionCode: '', city: '',
+  });
+  const [companyName, setCompanyName] = useState('');
+  const [requirementsAccepted, setRequirementsAccepted] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const content = roleContent[role];
+  const ContentIcon = content.icon;
+
+  const chooseRole = (nextRole: OnboardingRole) => {
+    setRole(nextRole);
+    setError('');
+    window.localStorage.setItem(ONBOARDING_INTENT_KEY, nextRole);
+  };
+
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setBusy(true);
+    setError('');
+    try {
+      const { error: onboardingError } = await requireSupabase().rpc('centralgo_complete_onboarding_v2', {
+        p_account_kind: role,
+        p_name: name,
+        p_phone: phone || null,
+        p_city: location.city || null,
+        p_country_code: location.countryCode,
+        p_company_name: role === 'central' ? companyName : null,
+        p_central_code: null,
+        p_license_number: null,
+        p_region: location.region || null,
+        p_requirements_accepted: role === 'sales_partner' && requirementsAccepted,
+      });
+      if (onboardingError) throw onboardingError;
+      window.localStorage.removeItem(ONBOARDING_INTENT_KEY);
+      await refreshIdentity();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No fue posible completar tu registro.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <AuthShell
+      compact
+      eyebrow="Configuración inicial"
+      title="Elige cómo participar"
+      description="Tu panel y permisos se prepararán según el rol que elijas."
+    >
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="cg-card-kicker">Último paso</p>
+          <h1 className="cg-card-title">¿Cómo participas?</h1>
+          <p className="cg-card-copy">Puedes usar la misma cuenta con correo o Google. El acceso operativo se configura aquí.</p>
+        </div>
+        <button type="button" onClick={() => void signOut()} className="cg-subtle-button inline-flex shrink-0 items-center gap-1">
+          <ArrowLeft className="h-3.5 w-3.5" /> Salir
+        </button>
+      </div>
+
+      <div className="cg-role-grid" aria-label="Selecciona tu rol">
+        {(Object.keys(roleContent) as OnboardingRole[]).map((id) => {
+          const option = roleContent[id];
+          const Icon = option.icon;
+          return (
+            <button key={id} type="button" className="cg-role-card" data-active={role === id} aria-pressed={role === id} onClick={() => chooseRole(id)}>
+              <span className="cg-role-icon"><Icon /></span>
+              <strong>{id === 'central' ? 'Central' : id === 'driver' ? 'Conductor' : 'Socio comercial'}</strong>
+              <small>{id === 'central' ? '5 días Full' : id === 'driver' ? 'Portal inmediato' : 'Aprobación previa'}</small>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="mt-5 rounded-2xl border border-[var(--cg-border)] bg-[var(--cg-primary-soft)] p-4">
+        <div className="flex items-start gap-3">
+          <span className="cg-role-icon shrink-0"><ContentIcon className="h-4 w-4" /></span>
+          <div>
+            <h2 className="text-sm font-black text-[var(--cg-text)]">{content.title}</h2>
+            <p className="mt-1 text-[11px] leading-relaxed text-[var(--cg-muted)]">{content.description}</p>
+          </div>
+        </div>
+      </div>
+
+      <form onSubmit={submit} className="cg-form mt-5">
+        <label className="cg-field">
+          <span>Nombre completo</span>
+          <input required value={name} onChange={(event) => setName(event.target.value)} placeholder="Tu nombre y apellido" />
+        </label>
+
+        <div className="cg-form-row">
+          <label className="cg-field">
+            <span>Teléfono</span>
+            <input required type="tel" autoComplete="tel" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="+56 9…" />
+          </label>
+        </div>
+
+        <WorldLocationPicker value={location} onChange={setLocation} />
+
+        {role === 'central' && (
+          <label className="cg-field">
+            <span>Nombre de la central</span>
+            <input required value={companyName} onChange={(event) => setCompanyName(event.target.value)} placeholder="Ej. Radio Taxi Central" />
+          </label>
+        )}
+
+        {role === 'driver' && (
+          <div className="cg-alert cg-alert-info mt-0">
+            <Search className="mr-1.5 inline h-4 w-4" /> Tu acceso es inmediato. Dentro del portal buscarás centrales y podrás fotografiar o adjuntar cédula, licencia y documentos del vehículo.
+          </div>
+        )}
+
+        {role === 'sales_partner' && (
+          <div className="space-y-3">
+            <div className="cg-alert cg-alert-warning mt-0">
+              <AlertTriangle className="mr-1.5 inline h-4 w-4" /> Esta opción no entrega acceso comercial automático. La aprobación la realiza exclusivamente el superadministrador y requiere una espera mínima de 3 horas.
+            </div>
+            <a href="/docs/requisitos-socio-comercial-central-go.pdf" target="_blank" rel="noreferrer" className="cg-document-link">
+              <FileDown className="h-4 w-4" /> Descargar requisitos y responsabilidades
+            </a>
+            <label className="cg-consent-row">
+              <input required type="checkbox" checked={requirementsAccepted} onChange={(event) => setRequirementsAccepted(event.target.checked)} />
+              <span>Leí y acepto que deberé cerrar ventas y brindar atención y soporte personalizado a todas las centrales inscritas en mi región. La comisión es de 25% sobre inscripciones pagadas y confirmadas.</span>
+            </label>
+          </div>
+        )}
+
+        {role === 'central' && (
+          <div className="cg-alert cg-alert-success mt-0">
+            <Sparkles className="mr-1.5 inline h-4 w-4" /> Prueba Full Enterprise por 5 días. Sin tarjeta y con tus datos conservados al finalizar.
+          </div>
+        )}
+
+        {error && <div className="cg-alert cg-alert-error mt-0">{error}</div>}
+
+        <button disabled={busy} className="cg-primary-button">
+          {busy && <Loader2 className="h-4 w-4 animate-spin" />}
+          {busy ? 'Configurando tu acceso…' : content.action}
+        </button>
+        <p className="cg-auth-hint">
+          {role === 'driver'
+            ? 'Portal inmediato · el acceso a viajes y GPS comienza solo cuando una central te aprueba.'
+            : role === 'sales_partner'
+              ? 'Postulación gratuita · revisión exclusiva del superadministrador · comisión del 25%.'
+              : 'Acceso completo durante 5 días · después eliges el plan que mejor te sirve.'}
+        </p>
+      </form>
+    </AuthShell>
+  );
 };

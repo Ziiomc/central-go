@@ -20,7 +20,9 @@ export async function loadOperationalTripHistory(companyId:string,filters:Histor
  })).filter((t:Trip)=>!term||[t.code,t.clientName,t.clientPhone,t.origin.address,t.destination.address,t.driverName??'',t.driverUnitNumber??'',t.vehiclePlate??'',t.vehicleUnitNumber??'',t.operatorName].join(' ').toLowerCase().includes(term));
 }
 
-export async function loadDriverExtended(companyId:string){
+export interface DriverExtendedRecord {address:string;birthDate:string;complaintCount:number;dispatchPriorityCredit:number;rating:number;}
+
+export async function loadDriverExtended(companyId:string):Promise<Record<string,DriverExtendedRecord>>{
  const{data,error}=await requireSupabase().from('drivers').select('id,address,birth_date,complaint_count,dispatch_priority_credit,rating').eq('company_id',companyId);if(error)throw error;
  return Object.fromEntries((data??[]).map((r:any)=>[r.id,{address:r.address??'',birthDate:r.birth_date??'',complaintCount:Number(r.complaint_count??0),dispatchPriorityCredit:Number(r.dispatch_priority_credit??0),rating:Number(r.rating??5)}]));
 }

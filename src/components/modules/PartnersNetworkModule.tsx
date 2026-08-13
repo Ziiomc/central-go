@@ -21,6 +21,7 @@ import {
 import { useApp } from '../../context/AppContext';
 import { inviteNetworkPartner, loadVisiblePartners, setPartnerStatus, type PartnerDirectoryItem } from '../../lib/partnerRepository';
 import { money, NetworkKpi } from '../network/NetworkUi';
+import { CommercialPartnerApplicationsPanel } from './CommercialPartnerApplicationsPanel';
 
 export const PartnersNetworkModule: React.FC = () => {
   const { currentRole } = useApp();
@@ -84,6 +85,8 @@ export const PartnersNetworkModule: React.FC = () => {
       {notice && <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-xs font-bold text-emerald-200">{notice}</div>}
       {loading && <div className="flex items-center gap-2 rounded-xl border border-blue-500/20 bg-blue-500/5 px-4 py-3 text-xs font-bold text-blue-300"><Loader2 className="h-4 w-4 animate-spin" />Sincronizando partners…</div>}
 
+      {isSuper && <CommercialPartnerApplicationsPanel onApproved={() => void reload()} />}
+
       <div className="grid xl:grid-cols-[.72fr_1.28fr] gap-5">
         <section className="rounded-2xl border border-zinc-800 bg-[#0d0d0f] p-5 shadow-xl">
           <div className="flex items-center justify-between gap-3"><div><h2 className="font-extrabold text-white">Estructura territorial</h2><p className="mt-1 text-[10px] text-zinc-500">Regional → comerciales → centrales atribuidas.</p></div><div className="rounded-xl border border-purple-500/20 bg-purple-500/10 p-2 text-purple-300"><Globe2 className="h-5 w-5" /></div></div>
@@ -118,9 +121,9 @@ const InvitePartnerModal: React.FC<{ partners: PartnerDirectoryItem[]; onClose: 
   const [activationUrl,setActivationUrl]=useState('');
   const [createdName,setCreatedName]=useState('');
   const [copied,setCopied]=useState(false);
-  const [form,setForm]=useState({ name:'', email:'', kind:'sales' as 'regional'|'sales', code:'', commission:'20', parentPartnerId:'', countryCode:'CL', region:'', city:'' });
+  const [form,setForm]=useState({ name:'', email:'', kind:'sales' as 'regional'|'sales', code:'', commission:'25', parentPartnerId:'', countryCode:'CL', region:'', city:'' });
   const regionals=partners.filter((partner)=>partner.kind==='regional'&&partner.active);
-  const changeKind=(kind:'regional'|'sales')=>setForm((prev)=>({...prev,kind,commission:kind==='regional'?'5':'20',parentPartnerId:''}));
+  const changeKind=(kind:'regional'|'sales')=>setForm((prev)=>({...prev,kind,commission:kind==='regional'?'5':'25',parentPartnerId:''}));
   const submit=async(e:React.FormEvent)=>{ e.preventDefault(); setSaving(true); setCopied(false); onError(''); try { const result=await inviteNetworkPartner({ name:form.name,email:form.email,kind:form.kind,code:form.code,commissionPercent:Number(form.commission),parentPartnerId:form.kind==='sales'?(form.parentPartnerId||null):null,countryCode:form.countryCode,region:form.region,city:form.city,redirectTo:`${window.location.origin}/`,delivery:'whatsapp' }); if(!result.activationUrl) throw new Error('El partner fue creado, pero no se recibió el enlace de activación.'); setActivationUrl(result.activationUrl); setCreatedName(form.name); onCreated(result.message); } catch(err){ onError(err instanceof Error?err.message:'No fue posible crear el partner.'); } finally{ setSaving(false); } };
   const message=activationUrl?`Hola ${createdName}, te invitamos como Socio Comercial de Central GO. Abre este enlace privado para activar tu acceso y crear tu contraseña:\n\n${activationUrl}\n\nPor seguridad, no compartas este enlace con otras personas.`:'';
   const openWhatsApp=()=>{ if(!message)return; window.open(`https://wa.me/?text=${encodeURIComponent(message)}`,'_blank','noopener,noreferrer'); };
