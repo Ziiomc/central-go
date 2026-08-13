@@ -6,11 +6,11 @@ import {
   type CommercialPartnerApplication,
 } from '../../lib/partnerApplicationRepository';
 
-const remainingLabel = (date: string) => {
+const waitingLabel = (date: string) => {
   const milliseconds = new Date(date).getTime() - Date.now();
-  if (milliseconds <= 0) return 'Lista para revisión';
+  if (milliseconds <= 0) return 'Plazo estimado cumplido';
   const totalMinutes = Math.ceil(milliseconds / 60000);
-  return `Disponible en ${Math.floor(totalMinutes / 60)} h ${totalMinutes % 60} min`;
+  return `Espera estimada ${Math.floor(totalMinutes / 60)} h ${totalMinutes % 60} min`;
 };
 
 export const CommercialPartnerApplicationsPanel: React.FC<{ onApproved?: () => void }> = ({ onApproved }) => {
@@ -59,8 +59,8 @@ export const CommercialPartnerApplicationsPanel: React.FC<{ onApproved?: () => v
     <section className="rounded-2xl border border-amber-400/25 bg-amber-400/[0.045] p-4 sm:p-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <p className="flex items-center gap-2 text-xs font-black text-amber-300"><UserRoundCheck className="h-4 w-4" /> Postulaciones de socios comerciales</p>
-          <p className="mt-1 text-[10px] leading-relaxed text-zinc-500">Solo el superadministrador puede aprobar. El sistema bloquea cualquier aprobación antes de las 3 horas mínimas.</p>
+          <p className="flex items-center gap-2 text-xs font-black text-amber-300"><UserRoundCheck className="h-4 w-4" /> Postulaciones de socios comerciales / regionales</p>
+          <p className="mt-1 text-[10px] leading-relaxed text-zinc-500">Solo el superadministrador puede aprobar. Las 3 horas son un plazo estimado para el postulante; puedes aprobar o rechazar antes si ya tienes antecedentes suficientes.</p>
         </div>
         <div className="flex gap-2">
           <a href="/docs/requisitos-socio-comercial-central-go.pdf" target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-[10px] font-black text-zinc-300"><FileDown className="h-3.5 w-3.5" />Ver requisitos</a>
@@ -77,18 +77,19 @@ export const CommercialPartnerApplicationsPanel: React.FC<{ onApproved?: () => v
       ) : (
         <div className="mt-4 grid gap-3 xl:grid-cols-2">
           {applications.map((application) => {
-            const eligible = Date.now() >= new Date(application.eligibleReviewAt).getTime();
+            const suggestedWaitComplete = Date.now() >= new Date(application.eligibleReviewAt).getTime();
             return (
               <article key={application.id} className="rounded-xl border border-zinc-800 bg-[#0d0d0f] p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0"><p className="truncate text-sm font-black text-white">{application.fullName}</p><p className="mt-1 truncate text-[10px] text-zinc-500">{application.email} · {application.phone || 'Sin teléfono'}</p></div>
-                  <span className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-1 text-[8px] font-black uppercase ${eligible ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-300' : 'border-amber-500/25 bg-amber-500/10 text-amber-300'}`}><Clock3 className="h-3 w-3" />{remainingLabel(application.eligibleReviewAt)}</span>
+                  <span className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-1 text-[8px] font-black uppercase ${suggestedWaitComplete ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-300' : 'border-amber-500/25 bg-amber-500/10 text-amber-300'}`}><Clock3 className="h-3 w-3" />{waitingLabel(application.eligibleReviewAt)}</span>
                 </div>
                 <p className="mt-3 flex items-center gap-1.5 text-[10px] text-zinc-400"><MapPin className="h-3.5 w-3.5 text-blue-300" />{[application.city, application.region, application.countryCode].filter(Boolean).join(', ')}</p>
                 <div className="mt-3 rounded-lg border border-zinc-800 bg-zinc-950/60 p-3 text-[9px] leading-relaxed text-zinc-500">Aceptó la versión {application.requirementsVersion}: cierre de ventas, soporte personalizado regional y comisión del 25% sobre inscripciones pagadas y confirmadas.</div>
+                {!suggestedWaitComplete && <div className="mt-2 rounded-lg border border-blue-500/20 bg-blue-500/[0.06] px-3 py-2 text-[9px] leading-relaxed text-blue-200">El postulante sigue dentro del plazo estimado de 3 horas, pero el superadministrador puede resolver ahora mismo.</div>}
                 <div className="mt-3 grid grid-cols-2 gap-2">
                   <button type="button" disabled={busyId === application.id} onClick={() => void review(application, false)} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-rose-500/25 bg-rose-500/10 px-3 py-2 text-[10px] font-black text-rose-300 disabled:opacity-50"><X className="h-3.5 w-3.5" />Rechazar</button>
-                  <button type="button" disabled={!eligible || busyId === application.id} onClick={() => void review(application, true)} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-emerald-400/25 bg-emerald-500 px-3 py-2 text-[10px] font-black text-white disabled:cursor-not-allowed disabled:opacity-40">{busyId === application.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}Aprobar 25%</button>
+                  <button type="button" disabled={busyId === application.id} onClick={() => void review(application, true)} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-emerald-400/25 bg-emerald-500 px-3 py-2 text-[10px] font-black text-white disabled:opacity-40">{busyId === application.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}Aprobar 25%</button>
                 </div>
               </article>
             );
