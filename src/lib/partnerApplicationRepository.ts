@@ -14,12 +14,13 @@ export interface CommercialPartnerApplication {
   acceptedRequirementsAt: string;
   eligibleReviewAt: string;
   createdAt: string;
+  referredByPartnerId: string | null;
 }
 
 export const loadPendingCommercialPartnerApplications = async (): Promise<CommercialPartnerApplication[]> => {
   const { data, error } = await requireSupabase()
     .from('partner_applications')
-    .select('id,user_id,email,full_name,phone,country_code,region,city,status,requirements_version,accepted_requirements_at,eligible_review_at,created_at')
+    .select('id,user_id,email,full_name,phone,country_code,region,city,status,requirements_version,accepted_requirements_at,eligible_review_at,created_at,referred_by_partner_id')
     .eq('status', 'pending')
     .order('created_at', { ascending: true });
   if (error) throw error;
@@ -37,6 +38,7 @@ export const loadPendingCommercialPartnerApplications = async (): Promise<Commer
     acceptedRequirementsAt: row.accepted_requirements_at,
     eligibleReviewAt: row.eligible_review_at,
     createdAt: row.created_at,
+    referredByPartnerId: row.referred_by_partner_id ?? null,
   }));
 };
 
