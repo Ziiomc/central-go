@@ -29,7 +29,7 @@ export const UsersModule: React.FC = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
 
   const reload = async () => {
-    if (!currentCompany.id || currentCompany.id === 'network') return;
+    if (currentRole !== 'super_admin' || !currentCompany.id || currentCompany.id === 'network') return;
     setLoading(true);
     setError('');
     try {
@@ -104,6 +104,7 @@ export const UsersModule: React.FC = () => {
   };
 
   return (
+    currentRole !== 'super_admin' ? <div className="rounded-2xl border border-rose-500/25 bg-rose-500/10 p-6 text-sm text-rose-100">Este módulo pertenece exclusivamente al Panel Global.</div> :
     <div className="space-y-6">
       <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
         <div>

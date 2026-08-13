@@ -189,4 +189,3 @@ export const DriverApplicationsPanel: React.FC<{ companyId: string }> = ({ compa
     </section>
   );
 };
-

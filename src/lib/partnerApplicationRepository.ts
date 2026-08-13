@@ -53,4 +53,3 @@ export const reviewCommercialPartnerApplication = async (input: {
   if (error) throw error;
   return data;
 };
-

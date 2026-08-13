@@ -196,4 +196,3 @@ export const createDriverDocumentSignedUrl = async (path: string, expiresIn = 60
   if (error) throw error;
   return data.signedUrl;
 };
-

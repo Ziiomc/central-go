@@ -12,7 +12,6 @@ import {
   LayoutDashboard,
   Layers3,
   Lock,
-  MapPin,
   RadioTower,
   Route,
   Settings,
@@ -21,6 +20,7 @@ import {
   UserCheck,
   Users,
   UsersRound,
+  X,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -39,13 +39,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     { id: 'plans_network', label: currentRole === 'super_admin' ? 'Planes y Valores' : 'Planes para Vender', icon: Layers3, roles: ['super_admin', 'regional_partner', 'sales_partner'] },
     { id: 'commissions_network', label: 'Comisiones y Pagos', icon: BadgeDollarSign, roles: ['super_admin', 'regional_partner', 'sales_partner'] },
     { id: 'network_support', label: 'Soporte', icon: Headphones, roles: ['super_admin', 'regional_partner', 'sales_partner'] },
-    { id: 'live_map', label: 'Mapa de la Flota', icon: MapPin, roles: ['company_admin', 'operator'] },
     { id: 'trips', label: 'Todas las Carreras', icon: Route, roles: ['company_admin', 'operator'] },
     { id: 'drivers', label: 'Conductores', icon: Users, roles: ['company_admin', 'operator'] },
     { id: 'vehicles', label: 'Vehículos y Flota', icon: Car, roles: ['company_admin'] },
     { id: 'clients', label: 'Clientes', icon: UserCheck, roles: ['company_admin', 'operator'] },
     { id: 'operators', label: 'Operadoras', icon: Headphones, roles: ['company_admin'] },
-    { id: 'users', label: 'Usuarios y Permisos', icon: Lock, roles: ['company_admin'] },
+    { id: 'users', label: 'Usuarios y Permisos Globales', icon: Lock, roles: ['super_admin'] },
     { id: 'reports', label: 'Reportes de Operación', icon: BarChart3, roles: ['company_admin'] },
     { id: 'history', label: currentRole === 'super_admin' ? 'Auditoría Global' : 'Historial Auditoría', icon: History, roles: ['super_admin', 'company_admin'] },
     { id: 'settings', label: currentRole === 'super_admin' ? 'Configuración Global' : 'Configuración Tarifas', icon: Settings, roles: ['super_admin', 'company_admin'] },
@@ -57,9 +56,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
 
   return (
     <>
-      {isOpen && <div onClick={onClose} className="fixed inset-0 z-30 bg-slate-950/80 backdrop-blur-sm md:hidden" />}
-      <aside className={`fixed left-0 top-[61px] z-30 h-[calc(100vh-61px)] ${currentRole === 'operator' ? 'w-48' : 'w-64'} overflow-y-auto border-r border-zinc-800 bg-[#0d0d0f] transition-transform duration-300 md:sticky ${isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
+      {isOpen && <div onClick={onClose} className="fixed inset-0 z-40 bg-black/70 backdrop-blur-sm" />}
+      <aside aria-hidden={!isOpen} className={`fixed left-0 top-[61px] z-50 h-[calc(100vh-61px)] w-[min(88vw,300px)] overflow-y-auto border-r border-zinc-700 bg-[#0d0d0f] shadow-[24px_0_70px_rgba(0,0,0,.45)] transition-transform duration-300 ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className={currentRole === 'operator' ? 'space-y-2.5 p-2' : 'space-y-5 p-4'}>
+          <div className="flex justify-end"><button onClick={onClose} className="rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-400" aria-label="Cerrar menú"><X className="h-4 w-4" /></button></div>
           {isNetworkRole ? (
             <div className="rounded-2xl border border-purple-500/20 bg-gradient-to-br from-purple-500/10 to-blue-500/5 p-3.5"><div className="flex items-center justify-between gap-2"><div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-purple-300"><ShieldCheck className="h-4 w-4" />Central GO Network</div><span className="h-2 w-2 rounded-full bg-emerald-400" /></div><p className="mt-2 text-[10px] leading-relaxed text-zinc-500">{currentRole === 'super_admin' ? 'Control de centrales, planes, usuarios y red comercial.' : currentRole === 'regional_partner' ? 'Cartera regional, equipo comercial, comisiones y catálogo de venta.' : 'Cartera atribuida, comisiones y catálogo oficial de planes.'}</p></div>
           ) : (

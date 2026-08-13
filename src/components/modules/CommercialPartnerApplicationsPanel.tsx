@@ -98,4 +98,3 @@ export const CommercialPartnerApplicationsPanel: React.FC<{ onApproved?: () => v
     </section>
   );
 };
-

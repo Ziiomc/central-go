@@ -42,4 +42,3 @@ export const DriverApplicationStatusScreen: React.FC = () => {
     </AuthShell>
   );
 };
-

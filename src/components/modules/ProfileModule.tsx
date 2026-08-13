@@ -1,45 +1,17 @@
-import React from 'react';
-import { useApp } from '../../context/AppContext';
-import { User, Shield, Headphones, Car, Building2 } from 'lucide-react';
+import React,{useState}from'react';
+import{Building2,Camera,Loader2,Shield,User}from'lucide-react';
+import{useApp}from'../../context/AppContext';
+import{useAuth}from'../../context/AuthContext';
+import{uploadCompanyLogo,uploadOwnAvatar}from'../../lib/profileMediaRepository';
 
-export const ProfileModule: React.FC = () => {
-  const { currentUser, currentCompany } = useApp();
-
-  return (
-    <div className="space-y-6 max-w-xl">
-      <div>
-        <h1 className="font-extrabold text-2xl text-white tracking-tight flex items-center gap-2 uppercase font-sans">
-          <User className="w-6 h-6 text-blue-500" />
-          Perfil de Usuario
-        </h1>
-        <p className="text-xs text-zinc-400 mt-1 font-sans">
-          Credenciales de la sesión activa
-        </p>
-      </div>
-
-      <div className="bg-[#0d0d0f] border border-zinc-800 rounded-xl p-6 space-y-4 shadow-xl">
-        <div className="flex items-center gap-4">
-          <div className="w-16 h-16 rounded-full bg-blue-500/10 border-2 border-blue-500 flex items-center justify-center text-blue-400 font-extrabold text-2xl font-mono">
-            {currentUser.name[0]}
-          </div>
-          <div>
-            <div className="font-extrabold text-lg text-white">{currentUser.name}</div>
-            <div className="text-xs text-blue-400 font-mono font-bold uppercase tracking-wider">{currentUser.role}</div>
-            <div className="text-xs text-zinc-400 font-mono mt-0.5">{currentUser.email}</div>
-          </div>
-        </div>
-
-        <div className="bg-[#121215] p-4 rounded-lg border border-zinc-800 space-y-2 text-xs font-mono">
-          <div className="flex justify-between">
-            <span className="text-zinc-400 uppercase tracking-wider">Central:</span>
-            <span className="text-white font-bold">{currentCompany.name}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-zinc-400 uppercase tracking-wider">Frecuencia VHF:</span>
-            <span className="text-blue-400 font-bold">{currentCompany.vhfFrequency}</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+export const ProfileModule:React.FC=()=>{
+ const{currentUser,currentCompany,currentRole}=useApp();const{refreshIdentity}=useAuth();const[busy,setBusy]=useState<'avatar'|'company'|null>(null),[error,setError]=useState('');
+ const changeAvatar=async(file?:File)=>{if(!file)return;setBusy('avatar');setError('');try{await uploadOwnAvatar(currentUser.id,file);await refreshIdentity();}catch(err){setError(err instanceof Error?err.message:'No fue posible guardar la fotografía.');}finally{setBusy(null);}};
+ const changeCompany=async(file?:File)=>{if(!file)return;setBusy('company');setError('');try{await uploadCompanyLogo(currentCompany.id,file);await refreshIdentity();}catch(err){setError(err instanceof Error?err.message:'No fue posible guardar la imagen de la central.');}finally{setBusy(null);}};
+ return <div className="max-w-3xl space-y-6"><div><h1 className="flex items-center gap-2 text-2xl font-extrabold text-white"><User className="h-6 w-6 text-zinc-300"/>Perfil e identidad</h1><p className="mt-1 text-xs text-zinc-400">Fotografías visibles para una operación reconocible y profesional.</p></div>
+ <section className="cg-card p-6"><div className="flex flex-col gap-5 sm:flex-row sm:items-center"><Photo src={currentUser.avatarUrl} fallback={currentUser.name[0]}/><div className="flex-1"><h2 className="text-lg font-black text-white">{currentUser.name}</h2><p className="text-xs text-zinc-400">{currentUser.email}</p><p className="mt-1 text-[9px] font-black uppercase tracking-wider text-zinc-500">{currentUser.role}</p><label className="action-secondary mt-4 cursor-pointer"><Camera className="h-4 w-4"/>{busy==='avatar'?'Subiendo…':'Cambiar mi foto'}<input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" disabled={Boolean(busy)} onChange={e=>void changeAvatar(e.target.files?.[0])}/></label></div></div></section>
+ {currentRole==='company_admin'&&<section className="cg-card p-6"><div className="flex flex-col gap-5 sm:flex-row sm:items-center"><Photo src={currentCompany.logoUrl} fallback={<Building2 className="h-8 w-8"/>}/><div className="flex-1"><h2 className="text-lg font-black text-white">{currentCompany.name}</h2><p className="text-xs text-zinc-400">Foto oficial de la central para conductores y paneles.</p><label className="action-secondary mt-4 cursor-pointer"><Camera className="h-4 w-4"/>{busy==='company'?'Subiendo…':'Cambiar foto de central'}<input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" disabled={Boolean(busy)} onChange={e=>void changeCompany(e.target.files?.[0])}/></label></div></div></section>}
+ {error&&<div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-200">{error}</div>}{busy&&<div className="flex items-center gap-2 text-xs text-zinc-400"><Loader2 className="h-4 w-4 animate-spin"/>Optimizando y guardando imagen…</div>}
+ <div className="flex items-center gap-2 text-[10px] text-zinc-500"><Shield className="h-4 w-4"/>JPG, PNG o WebP · máximo 5 MB.</div></div>;
 };
+const Photo=({src,fallback}:{src?:string;fallback:React.ReactNode})=><div className="grid h-24 w-24 shrink-0 place-items-center overflow-hidden rounded-3xl border border-zinc-700 bg-zinc-900 text-3xl font-black text-zinc-300 shadow-xl">{src?<img src={src} alt="Foto de perfil" className="h-full w-full object-cover"/>:fallback}</div>;

@@ -102,10 +102,36 @@ export async function loadCallLogs(companyId:string, from?:string, to?:string): 
   return (data ?? []).map((row:any)=>({ id:row.id, companyId:row.company_id, operatorUserId:row.operator_user_id ?? undefined, clientName:row.client_name ?? undefined, phone:row.phone, direction:row.direction, outcome:row.outcome, notes:row.notes ?? undefined, tripId:row.trip_id ?? undefined, createdAt:row.created_at }));
 }
 
-export async function loadDispatchEvents(companyId:string, driverId?:string): Promise<TripDispatchEvent[]> {
+export async function loadDispatchEvents(companyId:string, driverId?:string, from?:string, to?:string): Promise<TripDispatchEvent[]> {
   let query = requireSupabase().from('trip_dispatch_events').select('*').eq('company_id', companyId).order('created_at', { ascending:false }).limit(5000);
   if (driverId) query = query.eq('driver_id', driverId);
+  if (from) query = query.gte('created_at', from);
+  if (to) query = query.lt('created_at', to);
   const { data, error } = await query;
   if (error) throw error;
   return (data ?? []).map((row:any)=>({ id:row.id, companyId:row.company_id, tripId:row.trip_id, driverId:row.driver_id ?? undefined, eventType:row.event_type, reason:row.reason ?? undefined, createdAt:row.created_at }));
+}
+
+export interface CompanyDriverMetric {driverId:string;name:string;unitNumber:string;connectedSeconds:number;drivingSeconds:number;tripsCompleted:number;offers:number;rejected:number;cancelled:number;earnings:number;serviceKm:number;effectiveness:number;}
+
+export async function loadCompanyShiftAnalytics(companyId:string,from:string,to:string):Promise<{trips:Trip[];events:TripDispatchEvent[];drivers:CompanyDriverMetric[]}> {
+ const db=requireSupabase();
+ const[trips,events,driverResult,presenceResult]=await Promise.all([
+  loadTripHistory(companyId,{from,to}),
+  loadDispatchEvents(companyId,undefined,from,to),
+  db.from('drivers').select('id,name,unit_number').eq('company_id',companyId).order('unit_number'),
+  db.from('driver_presence_sessions').select('driver_id,started_at,last_seen_at,ended_at').eq('company_id',companyId).lt('started_at',to).limit(10000),
+ ]);
+ if(driverResult.error)throw driverResult.error;if(presenceResult.error)throw presenceResult.error;
+ const fromMs=new Date(from).getTime(),toMs=new Date(to).getTime();
+ const metrics=(driverResult.data??[]).map((row:any)=>{
+  const ownTrips=trips.filter(t=>t.driverId===row.id),ownEvents=events.filter(e=>e.driverId===row.id);
+  const connectedSeconds=(presenceResult.data??[]).filter((s:any)=>s.driver_id===row.id).reduce((sum:number,s:any)=>{const start=Math.max(fromMs,new Date(s.started_at).getTime());const rawEnd=s.ended_at??s.last_seen_at;const end=Math.min(toMs,new Date(rawEnd).getTime());return sum+Math.max(0,(end-start)/1000);},0);
+  const completed=ownTrips.filter(t=>t.status==='completed'&&t.completedAt&&new Date(t.completedAt).getTime()>=fromMs&&new Date(t.completedAt).getTime()<toMs);
+  const drivingSeconds=ownTrips.reduce((sum,t)=>{if(!t.startedAt)return sum;const start=Math.max(fromMs,new Date(t.startedAt).getTime());const end=Math.min(toMs,new Date(t.completedAt??t.cancelledAt??to).getTime());return sum+Math.max(0,(end-start)/1000);},0);
+  const rejected=ownEvents.filter(e=>e.eventType==='rejected'||e.eventType==='expired').length,cancelled=ownTrips.filter(t=>t.status==='cancelled').length,offers=ownEvents.filter(e=>e.eventType==='offered').length;
+  const opportunities=Math.max(offers,completed.length+rejected+cancelled);
+  return{driverId:row.id,name:row.name,unitNumber:row.unit_number,connectedSeconds:Math.round(connectedSeconds),drivingSeconds:Math.round(drivingSeconds),tripsCompleted:completed.length,offers,rejected,cancelled,earnings:completed.reduce((s,t)=>s+(t.finalFare??t.estimatedFare??0),0),serviceKm:completed.reduce((s,t)=>s+t.estimatedDistanceKm,0),effectiveness:opportunities?Math.round(completed.length/opportunities*100):0};
+ });
+ return{trips,events,drivers:metrics};
 }

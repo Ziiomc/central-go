@@ -1,4 +1,4 @@
-const CACHE_NAME = 'centralgo-official-v6-push';
+const CACHE_NAME = 'centralgo-official-v7-resilient-push';
 
 self.addEventListener('install', () => {});
 
@@ -12,7 +12,20 @@ self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   const requestUrl = new URL(event.request.url);
   if (requestUrl.origin !== self.location.origin) return;
-  event.respondWith(fetch(event.request, { cache: 'no-store' }));
+  if (requestUrl.pathname.startsWith('/__supabase')) return;
+  event.respondWith((async () => {
+    const cache = await caches.open(CACHE_NAME);
+    try {
+      const response = await fetch(event.request, { cache: 'no-store' });
+      if (response.ok && response.type === 'basic') void cache.put(event.request, response.clone());
+      return response;
+    } catch {
+      const cached = await cache.match(event.request);
+      if (cached) return cached;
+      if (event.request.mode === 'navigate') return (await cache.match('/driver')) || (await cache.match('/')) || Response.error();
+      return Response.error();
+    }
+  })());
 });
 
 self.addEventListener('push', (event) => {
@@ -23,6 +36,8 @@ self.addEventListener('push', (event) => {
     body: payload.body || 'Abre Central GO para revisar el despacho.',
     tag: payload.tag || `centralgo-trip-${Date.now()}`,
     renotify: true,
+    silent: false,
+    timestamp: Date.now(),
     requireInteraction: true,
     icon: '/icon-192.svg',
     badge: '/icon-192.svg',

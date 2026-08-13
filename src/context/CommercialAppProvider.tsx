@@ -66,16 +66,21 @@ const upsertById = <T extends { id: string }>(items: T[], item: T) => {
   return next;
 };
 
+const snapshotKey=(companyId:string)=>`centralgo:operational-snapshot:v1:${companyId}`;
+type CachedSnapshot={savedAt:number;companyId:string;vehicles:Vehicle[];drivers:Driver[];clients:Client[];trips:Trip[];notifications:AppNotification[];auditLogs:AuditLog[];fareConfig:FareConfig};
+const readCachedSnapshot=(companyId:string):CachedSnapshot|undefined=>{try{const raw=localStorage.getItem(snapshotKey(companyId));if(!raw)return;const value=JSON.parse(raw) as CachedSnapshot;if(value.companyId!==companyId||Date.now()-value.savedAt>72*60*60*1000)return;return value;}catch{return undefined;}};
+
 export const CommercialAppProvider: React.FC<React.PropsWithChildren> = ({ children }) => {
   const { authUser, profile, memberships, companies: authorizedCompanies, effectiveRole } = useAuth();
   const [currentCompany, setCurrentCompany] = useState<Company>(authorizedCompanies[0] ?? NETWORK_COMPANY);
-  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
-  const [drivers, setDrivers] = useState<Driver[]>([]);
-  const [clients, setClients] = useState<Client[]>([]);
-  const [trips, setTrips] = useState<Trip[]>([]);
-  const [notifications, setNotifications] = useState<AppNotification[]>([]);
-  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
-  const [fareConfig, setFareConfig] = useState<FareConfig>(DEFAULT_FARE_CONFIG);
+  const initialCache=useMemo(()=>readCachedSnapshot(authorizedCompanies[0]?.id??'network'),[]);
+  const [vehicles, setVehicles] = useState<Vehicle[]>(()=>initialCache?.vehicles??[]);
+  const [drivers, setDrivers] = useState<Driver[]>(()=>initialCache?.drivers??[]);
+  const [clients, setClients] = useState<Client[]>(()=>initialCache?.clients??[]);
+  const [trips, setTrips] = useState<Trip[]>(()=>initialCache?.trips??[]);
+  const [notifications, setNotifications] = useState<AppNotification[]>(()=>initialCache?.notifications??[]);
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>(()=>initialCache?.auditLogs??[]);
+  const [fareConfig, setFareConfig] = useState<FareConfig>(()=>initialCache?.fareConfig??DEFAULT_FARE_CONFIG);
   const [soundMuted, setSoundMuted] = useState(false);
   const [activeModule, setActiveModule] = useState('dashboard');
   const [selectedTripForDetail, setSelectedTripForDetail] = useState<Trip | null>(null);
@@ -93,9 +98,9 @@ export const CommercialAppProvider: React.FC<React.PropsWithChildren> = ({ child
       setCurrentCompany(NETWORK_COMPANY);
       return;
     }
-    if (!authorizedCompanies.some((company) => company.id === currentCompany.id)) {
-      setCurrentCompany(authorizedCompanies[0]);
-    }
+    const refreshed=authorizedCompanies.find((company) => company.id === currentCompany.id);
+    if (!refreshed) setCurrentCompany(authorizedCompanies[0]);
+    else if (refreshed !== currentCompany) setCurrentCompany(refreshed);
   }, [authorizedCompanies, currentCompany.id]);
 
   useEffect(() => {
@@ -159,9 +164,33 @@ export const CommercialAppProvider: React.FC<React.PropsWithChildren> = ({ child
     }
   };
 
+  useEffect(()=>{
+    if(currentCompany.id==='network')return;
+    try{
+      const cached=readCachedSnapshot(currentCompany.id);if(!cached)return;
+      setVehicles(cached.vehicles||[]);setDrivers(cached.drivers||[]);setClients(cached.clients||[]);setTrips(cached.trips||[]);setNotifications(cached.notifications||[]);setAuditLogs(cached.auditLogs||[]);setFareConfig(cached.fareConfig||DEFAULT_FARE_CONFIG);
+      setActiveSOSDriver((cached.drivers||[]).find(driver=>driver.sosActive)??null);
+    }catch{}
+  },[currentCompany.id]);
+
+  useEffect(()=>{
+    if(currentCompany.id==='network'||!authUser)return;
+    const timer=window.setTimeout(()=>{
+      try{localStorage.setItem(snapshotKey(currentCompany.id),JSON.stringify({savedAt:Date.now(),companyId:currentCompany.id,vehicles,drivers,clients,trips:trips.slice(0,750),notifications:notifications.slice(0,300),auditLogs:auditLogs.slice(0,300),fareConfig} satisfies CachedSnapshot));}catch{}
+    },350);
+    return()=>window.clearTimeout(timer);
+  },[authUser?.id,currentCompany.id,vehicles,drivers,clients,trips,notifications,auditLogs,fareConfig]);
+
   useEffect(() => {
     void hydrate();
   }, [authUser?.id, currentCompany.id, currentRole]);
+
+  useEffect(()=>{
+    const resync=()=>{if(navigator.onLine)void hydrate();};
+    window.addEventListener('centralgo:driver-resync',resync);
+    window.addEventListener('online',resync);
+    return()=>{window.removeEventListener('centralgo:driver-resync',resync);window.removeEventListener('online',resync);};
+  },[authUser?.id,currentCompany.id,currentRole]);
 
   useEffect(() => {
     if (!authUser || currentCompany.id === 'network') return;
