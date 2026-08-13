@@ -1,0 +1,1 @@
+import React from'react';import{DriverInviteLinkPanel}from'./DriverInviteLinkPanel';import{DriverApplicationsPanel as Base}from'./DriverApplicationsPanelBase';export const DriverApplicationsPanel:React.FC<{companyId:string}>=({companyId})=><div><DriverInviteLinkPanel companyId={companyId}/><Base companyId={companyId}/></div>;
