@@ -1,8 +1,10 @@
 // Web Audio API & Speech Synthesis for Central GO radio dispatch
+import { installDriverTripButtonBehavior } from './driverUiBehavior';
 
 let audioCtx: AudioContext | null = null;
 let sosLoopTimer: number | null = null;
 let speechBusy = false;
+let unlockHandlersInstalled = false;
 
 type SpeechJob = { text: string; resolve: () => void };
 const speechQueue: SpeechJob[] = [];
@@ -23,15 +25,37 @@ export async function primeRadioAudio(): Promise<boolean> {
     if (ctx.state === 'suspended') await ctx.resume();
     if ('speechSynthesis' in window) {
       window.speechSynthesis.getVoices();
-      const silent = new SpeechSynthesisUtterance('');
-      silent.volume = 0;
-      window.speechSynthesis.speak(silent);
+      if (window.speechSynthesis.paused) window.speechSynthesis.resume();
+      // Prime speech only when the queue is idle. This avoids a silent unlock
+      // utterance getting in front of a real operator message.
+      if (!speechBusy && !window.speechSynthesis.speaking && !window.speechSynthesis.pending) {
+        const silent = new SpeechSynthesisUtterance('\u00a0');
+        silent.volume = 0;
+        silent.rate = 2;
+        window.speechSynthesis.speak(silent);
+      }
     }
     return ctx.state === 'running';
   } catch (error) {
     console.warn('Central GO audio unlock failed:', error);
     return false;
   }
+}
+
+function installAudioUnlockHandlers() {
+  if (unlockHandlersInstalled || typeof window === 'undefined' || typeof document === 'undefined') return;
+  unlockHandlersInstalled = true;
+  const unlock = () => {
+    void primeRadioAudio();
+    try { if ('speechSynthesis' in window && window.speechSynthesis.paused) window.speechSynthesis.resume(); } catch {}
+  };
+  window.addEventListener('pointerdown', unlock, { passive: true });
+  window.addEventListener('touchstart', unlock, { passive: true });
+  window.addEventListener('keydown', unlock);
+  window.addEventListener('pageshow', unlock);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') unlock();
+  });
 }
 
 /** Realistic VHF radio mic click / roger beep. */
@@ -133,6 +157,7 @@ function processSpeechQueue() {
   if (speechBusy || !speechQueue.length || !('speechSynthesis' in window)) return;
   const job = speechQueue.shift()!;
   speechBusy = true;
+  void primeRadioAudio();
   playVHFRadioChirp();
 
   window.setTimeout(() => {
@@ -145,17 +170,21 @@ function processSpeechQueue() {
       const voice = chooseSpanishVoice();
       if (voice) utterance.voice = voice;
 
+      let finished = false;
       const finish = () => {
+        if (finished) return;
+        finished = true;
         speechBusy = false;
         job.resolve();
         window.setTimeout(processSpeechQueue, 130);
       };
       utterance.onend = finish;
-      utterance.onerror = finish;
+      utterance.onerror = (event) => {
+        console.warn('Central GO speech synthesis warning:', event.error);
+        finish();
+      };
 
       if (window.speechSynthesis.paused) window.speechSynthesis.resume();
-      // Do not cancel existing speech: Central GO keeps a strict FIFO queue so
-      // simultaneous taxi messages are reproduced one after another.
       window.speechSynthesis.speak(utterance);
     } catch (err) {
       console.warn('Speech synthesis error:', err);
@@ -180,4 +209,9 @@ export function speakVHFDispatch(text: string, muted: boolean = false): Promise<
 
 export function getVHFQueueLength() {
   return speechQueue.length + (speechBusy ? 1 : 0);
+}
+
+if (typeof window !== 'undefined') {
+  installAudioUnlockHandlers();
+  installDriverTripButtonBehavior();
 }
