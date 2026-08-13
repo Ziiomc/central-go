@@ -36,4 +36,3 @@ await writeFile(resolve(target, 'NOTICE.txt'), [
   '',
 ].join('\n'));
 console.log(`Generated ${countries.length} country files in ${target}`);
-

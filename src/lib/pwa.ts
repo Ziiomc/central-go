@@ -27,10 +27,8 @@ let driverWakeLock: WakeLockSentinelLike | null = null;
 let driverWakeLockBusy = false;
 let driverHiddenAt: number | null = null;
 const FRESHNESS_KEY = 'centralgo-fresh-bundle-v8-push';
-const DRIVER_RESUME_RELOAD_KEY = 'centralgo-driver-last-auto-resume-reload';
 const DRIVER_PUSH_PROMPTED_KEY = 'centralgo-driver-push-prompted';
 const DRIVER_RESUME_THRESHOLD_MS = 8000;
-const DRIVER_RELOAD_GUARD_MS = 12000;
 const VAPID_PUBLIC_KEY = 'BEN4b02sauQecZUH30sIRi_tubjuPEmL9sWmvFgmwgJLKIvEj1DtDdAfff4xbYi3nCvgfB0p40R-IIdE0aEGwys';
 
 const vapidToUint8 = (value: string) => {
@@ -163,10 +161,10 @@ function recoverDriverAfterAndroidSuspend(force = false) {
   driverHiddenAt = null;
   const suspendedMs = hiddenAt ? Date.now() - hiddenAt : 0;
   if (!force && suspendedMs < DRIVER_RESUME_THRESHOLD_MS) return;
-  const lastReload = Number(sessionStorage.getItem(DRIVER_RESUME_RELOAD_KEY) || '0');
-  if (Date.now() - lastReload < DRIVER_RELOAD_GUARD_MS) return;
-  sessionStorage.setItem(DRIVER_RESUME_RELOAD_KEY, String(Date.now()));
-  window.setTimeout(() => window.location.reload(), 100);
+  // No recargamos la página: una recarga puede borrar la pantalla de la carrera
+  // mientras la red móvil vuelve. El proveedor restaura la copia local y luego
+  // reconcilia el estado autoritativo con Supabase.
+  window.dispatchEvent(new CustomEvent('centralgo:driver-resync',{detail:{suspendedMs}}));
 }
 
 function registerDriverAndroidReliability() {

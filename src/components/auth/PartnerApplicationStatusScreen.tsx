@@ -63,4 +63,3 @@ export const PartnerApplicationStatusScreen: React.FC = () => {
     </AuthShell>
   );
 };
-

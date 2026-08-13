@@ -88,26 +88,7 @@ Deno.serve(async (req) => {
     const { data: profile } = await service.from('profiles').select('global_role,active').eq('id', callerId).maybeSingle();
     if (!profile?.active) return json({ error: 'Cuenta suspendida' }, 403);
     const isSuper = profile.global_role === 'super_admin';
-    let authorized = isSuper;
-
-    if (!authorized && role !== 'company_admin') {
-      const { data: membership } = await service.from('company_memberships').select('id').eq('company_id', companyId).eq('user_id', callerId).eq('role', 'company_admin').eq('active', true).maybeSingle();
-      authorized = Boolean(membership);
-    }
-
-    if (!authorized && role === 'company_admin') {
-      const { data: ownPartner } = await service.from('partners').select('id,kind').eq('user_id', callerId).eq('active', true).maybeSingle();
-      if (ownPartner) {
-        const { data: referral } = await service.from('referrals').select('partner_id').eq('company_id', companyId).eq('active', true).maybeSingle();
-        if (referral?.partner_id === ownPartner.id) authorized = true;
-        if (!authorized && ownPartner.kind === 'regional' && referral?.partner_id) {
-          const { data: child } = await service.from('partners').select('id').eq('id', referral.partner_id).eq('parent_partner_id', ownPartner.id).eq('active', true).maybeSingle();
-          authorized = Boolean(child);
-        }
-      }
-    }
-
-    if (!authorized) return json({ error: 'No tienes permiso para administrar este acceso' }, 403);
+    if (!isSuper) return json({ error: 'Usuarios y permisos se administran exclusivamente desde el Panel Global' }, 403);
     if (password && (!isSuper || role !== 'company_admin')) return json({ error: 'Solo Superadmin puede definir la contraseña inicial del administrador' }, 403);
 
     const findUser = async () => {

@@ -25,41 +25,27 @@ class SoundManager {
     return this.muted;
   }
 
-  // Double beep when new trip dispatch is offered to driver or created by operator
+  // Firma sonora breve: campana de tres tonos, clara aun con ruido de cabina.
   public playDispatchChime() {
     if (this.muted) return;
     this.initCtx();
     if (!this.ctx) return;
 
     const now = this.ctx.currentTime;
-    
-    // Osc 1 - High chime
-    const osc1 = this.ctx.createOscillator();
-    const gain1 = this.ctx.createGain();
-    osc1.type = 'sine';
-    osc1.frequency.setValueAtTime(880, now); // A5
-    osc1.frequency.exponentialRampToValueAtTime(1320, now + 0.1);
-    gain1.gain.setValueAtTime(0.3, now);
-    gain1.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
-    
-    osc1.connect(gain1);
-    gain1.connect(this.ctx.destination);
-    osc1.start(now);
-    osc1.stop(now + 0.25);
-
-    // Osc 2 - Second confirmation pulse
-    const osc2 = this.ctx.createOscillator();
-    const gain2 = this.ctx.createGain();
-    osc2.type = 'sine';
-    osc2.frequency.setValueAtTime(1320, now + 0.15);
-    osc2.frequency.exponentialRampToValueAtTime(1760, now + 0.3);
-    gain2.gain.setValueAtTime(0.35, now + 0.15);
-    gain2.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
-
-    osc2.connect(gain2);
-    gain2.connect(this.ctx.destination);
-    osc2.start(now + 0.15);
-    osc2.stop(now + 0.4);
+    const master = this.ctx.createGain();
+    master.gain.setValueAtTime(0.72, now);
+    master.gain.exponentialRampToValueAtTime(0.001, now + 1.15);
+    master.connect(this.ctx.destination);
+    [
+      {frequency:659.25,offset:0,duration:.42,type:'sine' as OscillatorType,gain:.34},
+      {frequency:987.77,offset:.13,duration:.56,type:'triangle' as OscillatorType,gain:.22},
+      {frequency:1318.51,offset:.31,duration:.72,type:'sine' as OscillatorType,gain:.18},
+    ].forEach(tone=>{
+      const osc=this.ctx!.createOscillator(),gain=this.ctx!.createGain(),start=now+tone.offset;
+      osc.type=tone.type;osc.frequency.setValueAtTime(tone.frequency,start);
+      gain.gain.setValueAtTime(.001,start);gain.gain.exponentialRampToValueAtTime(tone.gain,start+.025);gain.gain.exponentialRampToValueAtTime(.001,start+tone.duration);
+      osc.connect(gain);gain.connect(master);osc.start(start);osc.stop(start+tone.duration);
+    });
   }
 
   // Driver arrived notification ding

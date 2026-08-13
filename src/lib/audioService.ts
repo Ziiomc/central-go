@@ -122,8 +122,11 @@ export function stopSOSAlarm() {
 
 function chooseSpanishVoice() {
   const voices = window.speechSynthesis.getVoices();
-  return voices.find((voice) => /es-CL/i.test(voice.lang))
-    ?? voices.find((voice) => /^es/i.test(voice.lang));
+  const feminineNames = /Paulina|Catalina|Monica|Mónica|Laura|Elvira|Dalia|Helena|Sabina|Paloma|Luciana|Soledad|Google.*español/i;
+  return [...voices].sort((a,b)=>{
+    const score=(voice:SpeechSynthesisVoice)=>(/es-CL/i.test(voice.lang)?80:/^es/i.test(voice.lang)?45:0)+(feminineNames.test(voice.name)?35:0)+(voice.localService?5:0);
+    return score(b)-score(a);
+  }).find((voice)=>/^es/i.test(voice.lang));
 }
 
 function processSpeechQueue() {
@@ -136,8 +139,8 @@ function processSpeechQueue() {
     try {
       const utterance = new SpeechSynthesisUtterance(job.text);
       utterance.lang = 'es-CL';
-      utterance.rate = 1.0;
-      utterance.pitch = 0.96;
+      utterance.rate = 0.96;
+      utterance.pitch = 1.06;
       utterance.volume = 1;
       const voice = chooseSpanishVoice();
       if (voice) utterance.voice = voice;

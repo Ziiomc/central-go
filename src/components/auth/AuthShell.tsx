@@ -50,4 +50,3 @@ export const AuthShell: React.FC<AuthShellProps> = ({
     </footer>
   </main>
 );
-

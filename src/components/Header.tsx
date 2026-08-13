@@ -12,6 +12,7 @@ import {
   Globe2,
   LogOut,
   MapPinned,
+  Menu,
   Plus,
   ShieldAlert,
   ShieldCheck,
@@ -23,6 +24,7 @@ import {
 
 interface HeaderProps {
   onToggleNotifications: () => void;
+  onToggleMenu: () => void;
 }
 
 const roleLabels: Record<string, string> = {
@@ -34,7 +36,7 @@ const roleLabels: Record<string, string> = {
   driver: 'Conductor',
 };
 
-export const Header: React.FC<HeaderProps> = ({ onToggleNotifications }) => {
+export const Header: React.FC<HeaderProps> = ({ onToggleNotifications, onToggleMenu }) => {
   const { signOut, profile } = useAuth();
   const {
     currentRole,
@@ -66,6 +68,7 @@ export const Header: React.FC<HeaderProps> = ({ onToggleNotifications }) => {
     <header className="sticky top-0 z-40 w-full shrink-0 border-b border-zinc-800 bg-[#0d0d0f] px-3 py-2.5 shadow-xl md:px-6">
       <div className="mx-auto flex max-w-[1800px] items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3 md:gap-4">
+          <button onClick={onToggleMenu} className="rounded-xl border border-zinc-800 bg-zinc-900 p-2.5 text-zinc-200 shadow-lg transition hover:bg-zinc-800" aria-label="Abrir menú principal"><Menu className="h-5 w-5" /></button>
           <div className="flex shrink-0 items-center gap-2.5">
             <img src={centralGoLogo} alt="Central GO" className="h-10 w-10 rounded-xl border-2 border-amber-400/70 bg-zinc-950 p-0.5" />
             <div className="hidden sm:block"><div className="flex items-center gap-1 text-lg font-black tracking-tight text-white">CENTRAL <span className="rounded-md border border-amber-400/50 bg-amber-500/20 px-1.5 py-0.5 text-amber-400">GO</span></div><p className="mt-0.5 text-[8px] font-black uppercase tracking-[0.16em] text-zinc-600">Plataforma oficial · datos sincronizados</p></div>

@@ -30,4 +30,3 @@ export const useColorTheme = () => {
 
   return { theme, toggleTheme };
 };
-

@@ -178,4 +178,3 @@ export const openDriverDocument = async (document: DriverDocumentRecord) => {
   const url = await createDriverDocumentSignedUrl(document.storagePath);
   window.open(url, '_blank', 'noopener,noreferrer');
 };
-

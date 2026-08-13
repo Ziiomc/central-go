@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Activity, BarChart3, BellRing, CheckCircle, Clock, DollarSign, Download, ExternalLink,
+  Activity, BarChart3, BellRing,Camera, CheckCircle, Clock, DollarSign, Download, ExternalLink,
   Gauge, MapPin, Navigation, Phone, Play, Radio, Route, ShieldAlert, Smartphone, User,
   UserCircle2, Wifi, X, XCircle,
 } from 'lucide-react';
@@ -13,6 +13,7 @@ import { isPWAStandalone, promptPWAInstall } from '../../lib/pwa';
 import { endDriverPresence, loadDriverAnalytics, pingDriverPresence, type DriverAnalytics } from '../../lib/driverOperations';
 import { loadFareDestinations } from '../../lib/operationalIntelligenceRepository';
 import centralGoLogo from '../../assets/images/central-go-logo.svg';
+import{uploadOwnAvatar}from'../../lib/profileMediaRepository';
 
 const GPS_WANTED_KEY = 'centralgo-driver-gps-wanted';
 
@@ -39,7 +40,7 @@ export const DriverMobileView: React.FC = () => {
     drivers, trips, notifications, markNotificationAsRead, updateTripStatus, toggleDriverAvailability,
     updateDriverLocation, triggerDriverSOS, resolveDriverSOS, rejectTripOffer, currentUser, currentCompany,
   } = useApp();
-  const { signOut } = useAuth();
+  const { signOut,refreshIdentity } = useAuth();
 
   const driver = drivers.find((item) => item.userId === currentUser.id);
   const [isGpsActive, setIsGpsActive] = useState(false);
@@ -58,6 +59,7 @@ export const DriverMobileView: React.FC = () => {
   const [sosConfirmOpen, setSosConfirmOpen] = useState(false);
   const [finishModalOpen, setFinishModalOpen] = useState(false);
   const [selectedPayment, setSelectedPayment] = useState('efectivo');
+  const[photoBusy,setPhotoBusy]=useState(false);
 
   const gpsWatchId = useRef<number | null>(null);
   const gpsPollId = useRef<number | null>(null);
@@ -72,7 +74,7 @@ export const DriverMobileView: React.FC = () => {
 
   const radioMessages = useMemo(
     () => driver
-      ? notifications.filter((item) => item.relatedId === driver.id && item.title === 'RADIO CENTRAL')
+      ? notifications.filter((item) => item.relatedId === driver.id && item.title.startsWith('RADIO CENTRAL'))
           .slice().sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
       : [],
     [driver?.id, notifications],
@@ -358,6 +360,7 @@ export const DriverMobileView: React.FC = () => {
   const navAddress = activeTrip ? (destinationIsNext ? activeTrip.destination.address : activeTrip.origin.address) : '';
   const navLat = activeTrip ? (destinationIsNext ? activeTrip.destination.lat : activeTrip.origin.lat) : 0;
   const navLng = activeTrip ? (destinationIsNext ? activeTrip.destination.lng : activeTrip.origin.lng) : 0;
+  const changePhoto=async(file?:File)=>{if(!file)return;setPhotoBusy(true);try{await uploadOwnAvatar(currentUser.id,file);await refreshIdentity();}catch(error){setAnalyticsError(error instanceof Error?error.message:'No fue posible guardar tu fotografía.');}finally{setPhotoBusy(false);}};
 
   return (
     <main className="min-h-screen bg-[#08090c] px-2.5 py-2.5 text-zinc-100 sm:px-3">
@@ -379,8 +382,8 @@ export const DriverMobileView: React.FC = () => {
               </div>
             </div>
           </div>
-          <button onClick={() => setProfileOpen(true)} className="flex h-9 w-9 items-center justify-center rounded-full border border-zinc-700 bg-zinc-950 text-zinc-300" aria-label="Perfil y analíticas">
-            <UserCircle2 className="h-5 w-5" />
+          <button onClick={() => setProfileOpen(true)} className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full border border-zinc-700 bg-zinc-950 text-zinc-300" aria-label="Perfil y analíticas">
+            {driver.photoUrl||currentUser.avatarUrl?<img src={driver.photoUrl||currentUser.avatarUrl} alt="Mi perfil" className="h-full w-full object-cover"/>:<UserCircle2 className="h-5 w-5" />}
           </button>
         </header>
 
@@ -449,7 +452,8 @@ export const DriverMobileView: React.FC = () => {
       {profileOpen && (
         <div className="fixed inset-0 z-[190] overflow-y-auto bg-black/80 p-3 backdrop-blur-md">
           <section className="mx-auto my-4 w-full max-w-sm rounded-3xl border border-zinc-700 bg-[#0d0d0f] p-5 shadow-2xl">
-            <div className="flex items-start justify-between"><div><p className="text-[9px] font-black uppercase tracking-widest text-amber-300">Conductor</p><h2 className="mt-1 text-xl font-black">{driver.name}</h2><p className="text-xs text-zinc-500">Móvil {driver.unitNumber}</p></div><button onClick={() => setProfileOpen(false)} className="rounded-xl border border-zinc-800 bg-zinc-950 p-2"><X className="h-4 w-4" /></button></div>
+            <div className="flex items-start justify-between"><div className="flex items-center gap-3"><div className="grid h-16 w-16 place-items-center overflow-hidden rounded-2xl border border-zinc-700 bg-zinc-950">{driver.photoUrl||currentUser.avatarUrl?<img src={driver.photoUrl||currentUser.avatarUrl} alt="Mi perfil" className="h-full w-full object-cover"/>:<UserCircle2 className="h-8 w-8 text-zinc-500"/>}</div><div><p className="text-[9px] font-black uppercase tracking-widest text-zinc-400">Conductor</p><h2 className="mt-1 text-xl font-black">{driver.name}</h2><p className="text-xs text-zinc-500">Móvil {driver.unitNumber}</p></div></div><button onClick={() => setProfileOpen(false)} className="rounded-xl border border-zinc-800 bg-zinc-950 p-2"><X className="h-4 w-4" /></button></div>
+            <label className="mt-3 flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900 py-2.5 text-[10px] font-black"><Camera className="h-4 w-4"/>{photoBusy?'Subiendo foto…':'Cambiar mi foto'}<input type="file" accept="image/jpeg,image/png,image/webp" capture="user" disabled={photoBusy} className="hidden" onChange={e=>void changePhoto(e.target.files?.[0])}/></label>
             <div className="mt-4 grid grid-cols-2 gap-2"><MiniValue label="Ganancias hoy" value={`$${(analytics?.earnings ?? driver.todayEarnings).toLocaleString('es-CL')}`} accent /><MiniValue label="Viajes hoy" value={String(analytics?.tripsCompleted ?? 0)} /></div>
             <div className="mt-3 rounded-2xl border border-zinc-800 bg-zinc-950/60 p-3">
               <div className="mb-3 flex items-center justify-between"><p className="flex items-center gap-2 text-xs font-black"><BarChart3 className="h-4 w-4 text-violet-400" />Mi jornada</p><button onClick={() => void refreshAnalytics()} className="rounded-lg border border-zinc-700 px-2 py-1 text-[8px]">Actualizar</button></div>
