@@ -1,4 +1,4 @@
-const CACHE_NAME = 'centralgo-official-v7-resilient-push';
+const CACHE_NAME = 'centralgo-official-v8-priority-push';
 
 self.addEventListener('install', () => {});
 
@@ -30,20 +30,22 @@ self.addEventListener('fetch', (event) => {
 
 self.addEventListener('push', (event) => {
   let payload = {};
-  try { payload = event.data ? event.data.json() : {}; } catch { payload = { title: 'Nueva carrera · Central GO', body: event.data?.text() || 'Tienes una nueva carrera.' }; }
-  const title = payload.title || 'Nueva carrera · Central GO';
+  try { payload = event.data ? event.data.json() : {}; } catch { payload = { title: 'Nueva carrera · Central GO', body: event.data?.text() || 'Tienes una nueva carrera.', kind: 'trip' }; }
+  const isTrip = payload.kind === 'trip' || Boolean(payload.tripId);
+  const title = payload.title || (isTrip ? 'Nueva carrera · Central GO' : 'Central GO');
   const options = {
     body: payload.body || 'Abre Central GO para revisar el despacho.',
-    tag: payload.tag || `centralgo-trip-${Date.now()}`,
+    tag: payload.tag || `${isTrip ? 'centralgo-trip' : 'centralgo-alert'}-${Date.now()}`,
     renotify: true,
     silent: false,
     timestamp: Date.now(),
-    requireInteraction: true,
+    requireInteraction: isTrip,
     icon: '/icon-192.svg',
     badge: '/icon-192.svg',
-    vibrate: [300, 100, 300, 100, 500],
-    data: { url: payload.url || '/driver', tripId: payload.tripId || null },
-    actions: [{ action: 'open', title: 'Abrir carrera' }],
+    vibrate: isTrip ? [400, 100, 400, 100, 650, 120, 650] : [240, 100, 380],
+    lang: 'es-CL',
+    data: { url: payload.url || '/driver', tripId: payload.tripId || null, kind: payload.kind || 'alert' },
+    actions: [{ action: 'open', title: isTrip ? 'Abrir carrera' : 'Abrir Central GO' }],
   };
   event.waitUntil(self.registration.showNotification(title, options));
 });
