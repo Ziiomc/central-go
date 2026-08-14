@@ -1,3 +1,21 @@
+/* Central GO typography: clean Windows-first variable UI font, with safe system fallbacks. */
+body,button,input,select,textarea{
+  font-family:"Segoe UI Variable Text","Segoe UI Variable","Segoe UI",Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif;
+  font-variant-numeric:tabular-nums;
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
+  text-rendering:optimizeLegibility;
+}
+
+/* Default operational readability. Keep the compact geometry, but never render critical UI copy at 8–10px. */
+.cg-operational{letter-spacing:-.006em;}
+.cg-operational [class~='text-[8px]']{font-size:10px!important;line-height:1.35!important;}
+.cg-operational [class~='text-[9px]']{font-size:11px!important;line-height:1.4!important;}
+.cg-operational [class~='text-[10px]']{font-size:12px!important;line-height:1.45!important;}
+.cg-operational [class~='text-[11px]']{font-size:12px!important;line-height:1.45!important;}
+.cg-operational .text-xs{font-size:13px;line-height:1.35rem;}
+.cg-operational input::placeholder{letter-spacing:0;}
+
 /* Central GO accessibility: increase text without scaling cards, maps or controls. */
 html[data-cg-font-size='large'] [class~='text-[8px]'] { font-size: 10px !important; }
 html[data-cg-font-size='large'] [class~='text-[9px]'] { font-size: 11px !important; }
