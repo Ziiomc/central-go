@@ -74,13 +74,19 @@
 [data-theme='light'] .cg-operational [class*='text-rose-300'],
 [data-theme='light'] .cg-operational [class*='text-rose-400'] { color: #be123c !important; }
 
-/* Keep filled action buttons legible after the global text remapping. */
+/* Filled controls/badges must retain white type even when semantic text colors
+   are remapped for light surfaces. */
 [data-theme='light'] .cg-operational button[class~='bg-blue-500'],
 [data-theme='light'] .cg-operational button[class~='bg-blue-600'],
 [data-theme='light'] .cg-operational button[class~='bg-purple-500'],
 [data-theme='light'] .cg-operational button[class~='bg-rose-500'],
 [data-theme='light'] .cg-operational button[class~='bg-red-600'],
-[data-theme='light'] .cg-operational button[class~='bg-emerald-500'] {
+[data-theme='light'] .cg-operational button[class~='bg-emerald-500'],
+[data-theme='light'] .cg-operational [class~='bg-blue-500'][class~='text-white'],
+[data-theme='light'] .cg-operational [class~='bg-blue-600'][class~='text-white'],
+[data-theme='light'] .cg-operational [class~='bg-purple-500'][class~='text-white'],
+[data-theme='light'] .cg-operational [class~='bg-rose-500'][class~='text-white'],
+[data-theme='light'] .cg-operational [class~='bg-emerald-500'][class~='text-white'] {
   color: #ffffff !important;
   text-shadow: 0 1px 1px rgba(0,0,0,.08);
 }
@@ -147,8 +153,11 @@
   opacity: .68;
 }
 
-/* The cards already contain the comparison on phones; the 780px desktop matrix
-   duplicated the content and forced a nearly empty horizontal view on iPhone. */
+/* The cards already contain the useful plan comparison on phones. Hiding the
+   780px desktop matrix prevents the one-column black/white strip seen in Safari. */
 @media (max-width: 767px) {
   .cg-plan-comparison-matrix { display: none !important; }
+  .cg-operational div.mt-8.overflow-x-auto.rounded-2xl.border:has(> table.min-w-\[780px\]) {
+    display: none !important;
+  }
 }
