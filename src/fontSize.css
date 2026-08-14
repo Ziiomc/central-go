@@ -1,20 +1,33 @@
-/* Central GO typography: clean Windows-first variable UI font, with safe system fallbacks. */
+/* Central GO typography: clean native variable UI font, no external font dependency. */
+:root{
+  --cg-font-ui:"Segoe UI Variable Text","Segoe UI Variable","Segoe UI",Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif;
+  --cg-font-display:"Segoe UI Variable Display","Segoe UI Variable","Segoe UI",Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif;
+}
 body,button,input,select,textarea{
-  font-family:"Segoe UI Variable Text","Segoe UI Variable","Segoe UI",Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif;
+  font-family:var(--cg-font-ui);
   font-variant-numeric:tabular-nums;
   -webkit-font-smoothing:antialiased;
   -moz-osx-font-smoothing:grayscale;
   text-rendering:optimizeLegibility;
 }
+h1,h2,h3,h4{font-family:var(--cg-font-display);letter-spacing:-.018em;}
 
-/* Default operational readability. Keep the compact geometry, but never render critical UI copy at 8–10px. */
-.cg-operational{letter-spacing:-.006em;}
+/* Default operational readability. Keep compact geometry without microscopic copy. */
+.cg-operational{letter-spacing:-.003em;}
 .cg-operational [class~='text-[8px]']{font-size:10px!important;line-height:1.35!important;}
 .cg-operational [class~='text-[9px]']{font-size:11px!important;line-height:1.4!important;}
 .cg-operational [class~='text-[10px]']{font-size:12px!important;line-height:1.45!important;}
 .cg-operational [class~='text-[11px]']{font-size:12px!important;line-height:1.45!important;}
 .cg-operational .text-xs{font-size:13px;line-height:1.35rem;}
 .cg-operational input::placeholder{letter-spacing:0;}
+
+/* Operator desk: prioritize fast scanning over decorative typography. */
+.cg-operator-workspace{font-family:var(--cg-font-ui);line-height:1.42;}
+.cg-operator-workspace button,.cg-operator-workspace input,.cg-operator-workspace select{letter-spacing:-.006em;}
+.cg-operator-workspace table thead{font-family:var(--cg-font-display);letter-spacing:.025em;}
+.cg-operator-workspace table tbody{letter-spacing:-.002em;}
+.cg-operator-workspace .recharts-text,.cg-operator-workspace .recharts-tooltip-wrapper{font-family:var(--cg-font-ui)!important;}
+.cg-operator-workspace .recharts-cartesian-axis-tick-value{font-size:10px!important;}
 
 /* Central GO accessibility: increase text without scaling cards, maps or controls. */
 html[data-cg-font-size='large'] [class~='text-[8px]'] { font-size: 10px !important; }
