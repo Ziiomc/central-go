@@ -5,16 +5,19 @@ import 'leaflet/dist/leaflet.css';
 import './index.css';
 import './driverReadability.css';
 import './fontSize.css';
+import './lightModePremium.css';
 import {registerServiceWorker} from './lib/pwa';
 import {registerRegionalPartnerReferralBootstrap} from './lib/regionalPartnerReferralBootstrap';
 import {registerGoogleOnboardingRoleBootstrap} from './lib/googleOnboardingRoleBootstrap';
 import {registerDriverWakeLock} from './lib/driverWakeLock';
+import {registerDriverStorageReliability} from './lib/driverStorageReliability';
 
-// Registrar PWA, atribuciones y protección de pantalla antes de montar React.
+// Registrar PWA, atribuciones y protecciones de operación antes de montar React.
 registerServiceWorker();
 registerRegionalPartnerReferralBootstrap();
 registerGoogleOnboardingRoleBootstrap();
 registerDriverWakeLock();
+registerDriverStorageReliability();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
