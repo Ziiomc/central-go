@@ -200,7 +200,7 @@ export const LoginScreen: React.FC = () => {
               </button>
             ))}
           </div>
-          {role === 'sales_partner' && <div className="cg-alert cg-alert-warning"><AlertTriangle className="mr-1.5 inline h-4 w-4" />La cuenta comercial necesita aprobación del superadministrador y una espera mínima de 3 horas.</div>}
+          {role === 'sales_partner' && <div className="cg-alert cg-alert-warning"><AlertTriangle className="mr-1.5 inline h-4 w-4" />La cuenta comercial necesita aprobación del superadministrador. El plazo habitual informado es de hasta 3 horas, pero puede aprobarse antes.</div>}
         </>
       )}
 
