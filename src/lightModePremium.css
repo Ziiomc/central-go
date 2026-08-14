@@ -1,0 +1,154 @@
+/* Central GO · premium light mode
+   Loaded after the base theme so hard-coded dark Tailwind utilities receive
+   a deliberate light equivalent instead of producing dark-on-dark UI. */
+
+[data-theme='light'] .cg-operational {
+  --cg-bg: #edf4fa;
+  --cg-bg-soft: #f7fbff;
+  --cg-surface: rgba(255, 255, 255, .965);
+  --cg-surface-solid: #ffffff;
+  --cg-border: rgba(31, 82, 121, .22);
+  --cg-text: #081f33;
+  --cg-muted: #46657d;
+  --cg-primary: #0878bd;
+  --cg-primary-strong: #07549b;
+  --cg-primary-soft: rgba(8, 120, 189, .10);
+  --cg-accent: #0a659f;
+  --cg-shadow: 0 22px 60px rgba(24, 65, 98, .15), 0 5px 18px rgba(24, 65, 98, .08), inset 0 1px 0 rgba(255,255,255,.95);
+  background: #edf4fa !important;
+  color: var(--cg-text) !important;
+}
+
+[data-theme='light'] .cg-operational::before {
+  opacity: .72;
+  background-image:
+    radial-gradient(circle at 8% 14%, rgba(8,120,189,.14) 0 1px, transparent 1.8px),
+    radial-gradient(circle at 80% 24%, rgba(7,84,155,.10) 0 1.1px, transparent 1.9px),
+    radial-gradient(112% 54% at 10% 113%, transparent 0 56%, rgba(8,120,189,.08) 56.4% 57%, transparent 57.4%),
+    linear-gradient(145deg,#edf4fa 0%,#f9fcff 52%,#e6f2fb 100%) !important;
+}
+
+/* Surfaces that were authored for dark mode only. */
+[data-theme='light'] .cg-operational [class*="bg-[#0b0b0d]"],
+[data-theme='light'] .cg-operational [class*="bg-[#0b0b0e]"],
+[data-theme='light'] .cg-operational [class*="bg-[#0c0c0e]"],
+[data-theme='light'] .cg-operational [class*="bg-[#0e0e10]"] {
+  background-color: #ffffff !important;
+  background-image: none !important;
+}
+
+/* Dark hero gradients need a true light counterpart, not just dark text. */
+[data-theme='light'] .cg-operational:not(.cg-fire-mode) [class*='from-blue-950'],
+[data-theme='light'] .cg-operational:not(.cg-fire-mode) [class*='from-cyan-950'],
+[data-theme='light'] .cg-operational:not(.cg-fire-mode) [class*='via-[#0d0d0f]'] {
+  background-color: #ffffff !important;
+  background-image: linear-gradient(135deg,#ffffff 0%,#f1f8fe 54%,#e5f3fd 100%) !important;
+  border-color: rgba(8,120,189,.23) !important;
+  box-shadow: 0 22px 58px rgba(22,72,108,.16), 0 4px 16px rgba(22,72,108,.08) !important;
+}
+
+/* Plan cards retain personality without washed-out copy. */
+[data-theme='light'] .cg-operational [class*='from-purple-500'] {
+  background-image: linear-gradient(180deg,#fcf8ff 0%,#f6edff 100%) !important;
+}
+[data-theme='light'] .cg-operational [class*='bg-amber-500/[0.04]'] {
+  background-color: #fffaf0 !important;
+}
+[data-theme='light'] .cg-operational [class*='bg-blue-500/[0.04]'] {
+  background-color: #f4faff !important;
+}
+
+/* Light-theme semantic colors: all are intentionally dark enough on white. */
+[data-theme='light'] .cg-operational [class*='text-blue-200'],
+[data-theme='light'] .cg-operational [class*='text-blue-300'] { color: #075985 !important; }
+[data-theme='light'] .cg-operational [class*='text-cyan-200'],
+[data-theme='light'] .cg-operational [class*='text-cyan-300'] { color: #0e657a !important; }
+[data-theme='light'] .cg-operational [class*='text-purple-200'],
+[data-theme='light'] .cg-operational [class*='text-purple-300'] { color: #6b21a8 !important; }
+[data-theme='light'] .cg-operational [class*='text-amber-200'],
+[data-theme='light'] .cg-operational [class*='text-amber-300'] { color: #8a4b08 !important; }
+[data-theme='light'] .cg-operational [class*='text-emerald-200'],
+[data-theme='light'] .cg-operational [class*='text-emerald-300'],
+[data-theme='light'] .cg-operational [class*='text-emerald-400'] { color: #047857 !important; }
+[data-theme='light'] .cg-operational [class*='text-rose-200'],
+[data-theme='light'] .cg-operational [class*='text-rose-300'],
+[data-theme='light'] .cg-operational [class*='text-rose-400'] { color: #be123c !important; }
+
+/* Keep filled action buttons legible after the global text remapping. */
+[data-theme='light'] .cg-operational button[class~='bg-blue-500'],
+[data-theme='light'] .cg-operational button[class~='bg-blue-600'],
+[data-theme='light'] .cg-operational button[class~='bg-purple-500'],
+[data-theme='light'] .cg-operational button[class~='bg-rose-500'],
+[data-theme='light'] .cg-operational button[class~='bg-red-600'],
+[data-theme='light'] .cg-operational button[class~='bg-emerald-500'] {
+  color: #ffffff !important;
+  text-shadow: 0 1px 1px rgba(0,0,0,.08);
+}
+
+/* Tables: remove the black islands visible on iPhone and increase row separation. */
+[data-theme='light'] .cg-operational table {
+  background: #ffffff !important;
+  color: var(--cg-text) !important;
+}
+[data-theme='light'] .cg-operational table thead,
+[data-theme='light'] .cg-operational thead[class*='bg-zinc'] {
+  background: #eaf3fa !important;
+}
+[data-theme='light'] .cg-operational table tbody,
+[data-theme='light'] .cg-operational table tbody[class*='bg-'] {
+  background: #ffffff !important;
+}
+[data-theme='light'] .cg-operational table tbody tr {
+  background-color: #ffffff !important;
+  border-color: #d6e3ed !important;
+}
+[data-theme='light'] .cg-operational table tbody tr:nth-child(even) {
+  background-color: #f7fafc !important;
+}
+[data-theme='light'] .cg-operational table td,
+[data-theme='light'] .cg-operational table th {
+  border-color: #d6e3ed !important;
+}
+
+/* Cards and fields get clearer edges on bright mobile displays. */
+[data-theme='light'] .cg-operational section[class*='border'],
+[data-theme='light'] .cg-operational article[class*='border'],
+[data-theme='light'] .cg-operational div[class*='rounded'][class*='border'] {
+  border-color: rgba(42,87,121,.20) !important;
+}
+[data-theme='light'] .cg-operational input,
+[data-theme='light'] .cg-operational select,
+[data-theme='light'] .cg-operational textarea {
+  background-color: #ffffff !important;
+  border-color: rgba(42,87,121,.24) !important;
+  color: #081f33 !important;
+}
+[data-theme='light'] .cg-operational input:focus,
+[data-theme='light'] .cg-operational select:focus,
+[data-theme='light'] .cg-operational textarea:focus {
+  border-color: #0878bd !important;
+  box-shadow: 0 0 0 3px rgba(8,120,189,.12) !important;
+}
+
+/* Header controls: crisp but not sterile. */
+[data-theme='light'] .cg-topbar {
+  background: rgba(255,255,255,.94) !important;
+  border-color: rgba(31,82,121,.18) !important;
+  box-shadow: 0 10px 32px rgba(22,65,97,.13) !important;
+}
+[data-theme='light'] .cg-sidebar {
+  background: rgba(250,253,255,.98) !important;
+  border-color: rgba(31,82,121,.18) !important;
+}
+
+/* Avoid pale helper copy becoming effectively invisible. */
+[data-theme='light'] .cg-operational [class*='opacity-40'],
+[data-theme='light'] .cg-operational [class*='opacity-50'] {
+  opacity: .68;
+}
+
+/* The cards already contain the comparison on phones; the 780px desktop matrix
+   duplicated the content and forced a nearly empty horizontal view on iPhone. */
+@media (max-width: 767px) {
+  .cg-plan-comparison-matrix { display: none !important; }
+}
