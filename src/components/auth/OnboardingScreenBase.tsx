@@ -32,7 +32,7 @@ const roleContent: Record<OnboardingRole, {
   },
   driver: {
     title: 'Quiero conducir',
-    description: 'Entra de inmediato a tu portal, busca centrales por país o ciudad y presenta tus antecedentes.',
+    description: 'Entra de inmediato a tu portal, busca centrales por país o ciudad y presenta tus antecedentes cuando corresponda.',
     action: 'Crear mi portal de conductor',
     icon: CarFront,
   },
@@ -160,21 +160,21 @@ export const OnboardingScreen: React.FC = () => {
 
         {role === 'driver' && (
           <div className="cg-alert cg-alert-info mt-0">
-            <Search className="mr-1.5 inline h-4 w-4" /> Tu acceso es inmediato. Dentro del portal buscarás centrales y podrás fotografiar o adjuntar cédula, licencia y documentos del vehículo.
+            <Search className="mr-1.5 inline h-4 w-4" /> Tu acceso es inmediato. Dentro del portal podrás buscar una central. Si ya perteneces a ella, podrás solicitar vinculación sin documentos; una postulación nueva puede requerir antecedentes.
           </div>
         )}
 
         {role === 'sales_partner' && (
           <div className="space-y-3">
             <div className="cg-alert cg-alert-warning mt-0">
-              <AlertTriangle className="mr-1.5 inline h-4 w-4" /> Esta opción no entrega acceso comercial automático. La aprobación la realiza exclusivamente el superadministrador y requiere una espera mínima de 3 horas.
+              <AlertTriangle className="mr-1.5 inline h-4 w-4" /> Esta opción no entrega acceso comercial automático. La revisión corresponde exclusivamente al superadministrador. El plazo habitual informado es de hasta 3 horas, pero puede aprobarse antes.
             </div>
             <a href="/docs/requisitos-socio-comercial-central-go.pdf" target="_blank" rel="noreferrer" className="cg-document-link">
               <FileDown className="h-4 w-4" /> Descargar requisitos y responsabilidades
             </a>
             <label className="cg-consent-row">
               <input required type="checkbox" checked={requirementsAccepted} onChange={(event) => setRequirementsAccepted(event.target.checked)} />
-              <span>Leí y acepto que deberé cerrar ventas y brindar atención y soporte personalizado a todas las centrales inscritas en mi región. La comisión es de 25% sobre inscripciones pagadas y confirmadas.</span>
+              <span>Leí y acepto que deberé cerrar ventas y brindar atención y soporte personalizado a las centrales de mi cartera. La comisión comercial es de 20% sobre suscripciones pagadas y confirmadas.</span>
             </label>
           </div>
         )}
@@ -193,9 +193,9 @@ export const OnboardingScreen: React.FC = () => {
         </button>
         <p className="cg-auth-hint">
           {role === 'driver'
-            ? 'Portal inmediato · el acceso a viajes y GPS comienza solo cuando una central te aprueba.'
+            ? 'Portal inmediato · el acceso a viajes y GPS comienza solo cuando una central te aprueba o valida una invitación directa.'
             : role === 'sales_partner'
-              ? 'Postulación gratuita · revisión exclusiva del superadministrador · comisión del 25%.'
+              ? 'Postulación gratuita · revisión exclusiva del superadministrador · comisión comercial del 20%.'
               : 'Acceso completo durante 5 días · después eliges el plan que mejor te sirve.'}
         </p>
       </form>
