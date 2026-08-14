@@ -1,18 +1,14 @@
 import React,{useEffect,useMemo,useState}from'react';
-import{ArrowDown,ArrowUp,CheckCircle2,Clock3,History,Loader2,MapPin,Navigation,ShieldCheck,XCircle,Zap}from'lucide-react';
+import{ArrowDown,ArrowUp,Loader2,MapPin,ShieldCheck,XCircle,Zap}from'lucide-react';
 import{useApp}from'../../context/AppContext';
 import{estimateDrivingDistanceKm}from'../../lib/tripDistance';
 import{isQueueConnected,loadDispatchQueue,moveDispatchPriority,refreshDispatchRouteMatrix,subscribeDispatchQueue,type DispatchQueueItem}from'../../lib/dispatchPriorityRepository';
 import type{Trip}from'../../types';
 
-type Tab='priority'|'history';
 const activeStatuses=['assigned','en_route','arrived','in_progress'] as const;
-const money=(value:number)=>`$${Math.round(value).toLocaleString('es-CL')}`;
-const time=(value:string)=>new Date(value).toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'});
 
 export const DispatchPriorityBoard:React.FC=()=>{
  const{currentCompany,trips,assignTrip,cancelTrip}=useApp();
- const[tab,setTab]=useState<Tab>('priority');
  const[queue,setQueue]=useState<DispatchQueueItem[]>([]);
  const[selectedTripId,setSelectedTripId]=useState('');
  const[busy,setBusy]=useState('');
@@ -24,7 +20,6 @@ export const DispatchPriorityBoard:React.FC=()=>{
  useEffect(()=>{if(!selectedTripId)return;let alive=true;void refreshDispatchRouteMatrix(selectedTripId).then(()=>{window.setTimeout(()=>{if(alive)void load(selectedTripId);},900);}).catch(()=>undefined);return()=>{alive=false;};},[selectedTripId]);
  const selectedTrip=pending.find(t=>t.id===selectedTripId);
  const connected=useMemo(()=>queue.filter(isQueueConnected).sort((a,b)=>a.queueOrder-b.queueOrder||a.unitNumber.localeCompare(b.unitNumber,'es',{numeric:true})),[queue]);
- const history=useMemo(()=>trips.filter(t=>['completed','cancelled'].includes(t.status)).sort((a,b)=>new Date(b.completedAt??b.cancelledAt??b.createdAt).getTime()-new Date(a.completedAt??a.cancelledAt??a.createdAt).getTime()).slice(0,80),[trips]);
  const activeByDriver=useMemo(()=>new Map(trips.filter(t=>t.driverId&&activeStatuses.includes(t.status as any)).map(t=>[t.driverId as string,t])),[trips]);
  const distanceFor=(item:DispatchQueueItem)=>item.routeDistanceKm??(selectedTrip&&item.lat!=null&&item.lng!=null?estimateDrivingDistanceKm({lat:item.lat,lng:item.lng},selectedTrip.origin):null);
  const move=async(item:DispatchQueueItem,direction:'up'|'down')=>{setBusy(`${item.driverId}:${direction}`);setError('');try{await moveDispatchPriority(item.driverId,direction);await load();}catch(err){setError(err instanceof Error?err.message:'No fue posible modificar la prioridad.');}finally{setBusy('');}};
@@ -32,12 +27,12 @@ export const DispatchPriorityBoard:React.FC=()=>{
  const cancelDriverTrip=async(item:DispatchQueueItem,trip:Trip)=>{if(!window.confirm(`¿Cancelar ${trip.code} del móvil ${item.unitNumber}?`))return;setBusy(`cancel:${item.driverId}`);setError('');try{await cancelTrip(trip.id,`Cancelada por operadora desde prioridad de móvil ${item.unitNumber}`);}catch(err){setError(err instanceof Error?err.message:'No fue posible cancelar la carrera.');}finally{setBusy('');}};
  if(currentCompany.id==='network')return null;
  return <section className="overflow-hidden rounded-2xl border border-zinc-800 bg-[#0d0d0f] shadow-xl shadow-black/20">
-  <header className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800 px-3 py-3">
-   <div><div className="flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-cyan-300"/><h2 className="text-sm font-black text-white">Designación automática equitativa</h2></div><p className="mt-1 text-[10px] text-zinc-500">Híbrido entre distancia vial real y turno en la cola. Si el router demora, entra el respaldo GPS sin frenar el despacho.</p></div>
-   <div className="flex rounded-xl border border-zinc-800 bg-zinc-950 p-1"><button onClick={()=>setTab('priority')} className={`rounded-lg px-3 py-2 text-[10px] font-black ${tab==='priority'?'bg-cyan-500 text-slate-950':'text-zinc-500'}`}>Prioridad automática</button><button onClick={()=>setTab('history')} className={`rounded-lg px-3 py-2 text-[10px] font-black ${tab==='history'?'bg-blue-600 text-white':'text-zinc-500'}`}>Carreras realizadas</button></div>
+  <header className="border-b border-zinc-800 px-3 py-3">
+   <div className="flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-cyan-300"/><h2 className="text-sm font-black text-white">Designación automática equitativa</h2></div>
+   <p className="mt-1 text-[10px] text-zinc-400">Híbrido entre distancia vial real y turno en la cola. Si el router demora, entra el respaldo GPS sin frenar el despacho.</p>
   </header>
   {error&&<div className="m-3 rounded-xl border border-rose-500/25 bg-rose-500/10 px-3 py-2 text-[11px] text-rose-200">{error}</div>}
-  {tab==='priority'?<div className="p-3">
+  <div className="p-3">
    <div className="mb-3 grid gap-2 lg:grid-cols-[minmax(260px,1fr)_auto]"><label className="block"><span className="mb-1.5 block text-[9px] font-black uppercase tracking-wider text-zinc-500">Carrera para asignación manual</span><select value={selectedTripId} onChange={e=>setSelectedTripId(e.target.value)} className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2.5 text-xs font-bold text-white outline-none focus:border-cyan-400"><option value="">Sin carrera pendiente</option>{pending.map(t=><option key={t.id} value={t.id}>{t.code} · {t.origin.address} → {t.destination.address}</option>)}</select></label><div className="flex items-end"><div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-2.5 text-center"><p className="text-[9px] font-black uppercase tracking-wider text-emerald-300">Móviles conectados</p><p className="text-lg font-black text-white">{connected.length}</p></div></div></div>
    <div className="space-y-2">{connected.map((item,index)=>{const active=activeByDriver.get(item.driverId);const km=distanceFor(item);const real=item.routeDistanceKm!=null;const zone=km==null?'Sin GPS':km<3?'Cercano <3 km':km<=5?'Dentro de 5 km':`${km.toFixed(1)} km`;return <div key={item.driverId} className="grid items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-950/55 p-2.5 md:grid-cols-[58px_minmax(150px,1fr)_minmax(105px,.7fr)_auto]">
     <div className="text-center"><div className="mx-auto flex h-9 w-9 items-center justify-center rounded-xl bg-cyan-500 text-sm font-black text-slate-950">#{index+1}</div><p className="mt-1 text-[8px] font-black uppercase text-zinc-600">de {connected.length}</p></div>
@@ -46,6 +41,6 @@ export const DispatchPriorityBoard:React.FC=()=>{
     <div className="flex flex-wrap justify-end gap-1.5"><button disabled={index===0||Boolean(busy)} onClick={()=>void move(item,'up')} className="rounded-lg border border-zinc-700 bg-zinc-900 p-2 text-zinc-300 disabled:opacity-30" title="Subir prioridad">{busy===`${item.driverId}:up`?<Loader2 className="h-3.5 w-3.5 animate-spin"/>:<ArrowUp className="h-3.5 w-3.5"/>}</button><button disabled={index===connected.length-1||Boolean(busy)} onClick={()=>void move(item,'down')} className="rounded-lg border border-zinc-700 bg-zinc-900 p-2 text-zinc-300 disabled:opacity-30" title="Bajar prioridad">{busy===`${item.driverId}:down`?<Loader2 className="h-3.5 w-3.5 animate-spin"/>:<ArrowDown className="h-3.5 w-3.5"/>}</button>{active?<button disabled={Boolean(busy)} onClick={()=>void cancelDriverTrip(item,active)} className="flex items-center gap-1 rounded-lg border border-rose-500/30 bg-rose-500/10 px-2.5 py-2 text-[9px] font-black text-rose-300"><XCircle className="h-3.5 w-3.5"/>Cancelar</button>:<button disabled={!selectedTrip||item.status!=='available'||Boolean(busy)} onClick={()=>void manualAssign(item)} className="flex items-center gap-1 rounded-lg bg-cyan-500 px-2.5 py-2 text-[9px] font-black text-slate-950 disabled:opacity-35"><Zap className="h-3.5 w-3.5"/>Asignar</button>}</div>
    </div>})}{!connected.length&&<div className="rounded-xl border border-dashed border-zinc-800 p-6 text-center text-xs text-zinc-500">No hay móviles conectados en la cola.</div>}</div>
    <div className="mt-3 grid gap-2 text-[9px] text-zinc-500 sm:grid-cols-3"><div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-2.5"><strong className="text-cyan-300">1. Menos de 3 km:</strong> manda la prioridad de la cola.</div><div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-2.5"><strong className="text-blue-300">2. Hasta 5 km:</strong> se mantiene la equidad por turno.</div><div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-2.5"><strong className="text-amber-300">3. Sin móviles cerca:</strong> se busca el más cercano por calles y se desempata por prioridad.</div></div>
-  </div>:<div className="max-h-[430px] overflow-y-auto p-3"><div className="space-y-2">{history.map(t=><div key={t.id} className="grid gap-2 rounded-xl border border-zinc-800 bg-zinc-950/55 p-3 md:grid-cols-[82px_120px_minmax(240px,1fr)_100px_90px]"><div><p className="flex items-center gap-1 text-[10px] font-black text-zinc-300"><Clock3 className="h-3.5 w-3.5"/>{time(t.completedAt??t.cancelledAt??t.createdAt)}</p><p className="mt-1 text-[8px] text-zinc-600">{new Date(t.createdAt).toLocaleDateString('es-CL')}</p></div><div><strong className="text-[10px] text-white">{t.code}</strong><p className="mt-1 text-[9px] text-zinc-500">{t.driverUnitNumber??'Sin móvil'}</p></div><div className="min-w-0"><p className="truncate text-[10px] font-bold text-zinc-300"><MapPin className="mr-1 inline h-3 w-3 text-emerald-400"/>{t.origin.address}</p><p className="mt-1 truncate text-[9px] text-zinc-500"><Navigation className="mr-1 inline h-3 w-3 text-blue-400"/>{t.destination.address}</p></div><div><p className="text-[10px] font-black text-white">{money(t.finalFare??t.estimatedFare??0)}</p><p className="mt-1 text-[8px] text-zinc-600">{t.estimatedDistanceKm?`${t.estimatedDistanceKm.toFixed(1)} km`:''}</p></div><div className={`flex items-center justify-end gap-1 text-[9px] font-black ${t.status==='completed'?'text-emerald-300':'text-rose-300'}`}>{t.status==='completed'?<CheckCircle2 className="h-3.5 w-3.5"/>:<XCircle className="h-3.5 w-3.5"/>}{t.status==='completed'?'Realizada':'Cancelada'}</div></div>)}{!history.length&&<div className="rounded-xl border border-dashed border-zinc-800 p-7 text-center text-xs text-zinc-500"><History className="mx-auto mb-2 h-5 w-5"/>Aún no hay carreras cerradas en el historial.</div>}</div></div>}
+  </div>
  </section>;
 };
