@@ -1,85 +1,154 @@
 /* Central GO · premium light mode
-   Loaded after the base theme so hard-coded dark Tailwind utilities receive
-   a deliberate light equivalent instead of producing dark-on-dark UI. */
+   Stronger contrast, layered surfaces and deeper visual hierarchy. */
 
 [data-theme='light'] .cg-operational {
-  --cg-bg: #edf4fa;
-  --cg-bg-soft: #f7fbff;
-  --cg-surface: rgba(255, 255, 255, .965);
-  --cg-surface-solid: #ffffff;
-  --cg-border: rgba(31, 82, 121, .22);
-  --cg-text: #081f33;
-  --cg-muted: #46657d;
-  --cg-primary: #0878bd;
-  --cg-primary-strong: #07549b;
-  --cg-primary-soft: rgba(8, 120, 189, .10);
-  --cg-accent: #0a659f;
-  --cg-shadow: 0 22px 60px rgba(24, 65, 98, .15), 0 5px 18px rgba(24, 65, 98, .08), inset 0 1px 0 rgba(255,255,255,.95);
-  background: #edf4fa !important;
+  --cg-bg: #dfeaf4;
+  --cg-bg-soft: #edf4fa;
+  --cg-surface: rgba(248, 252, 255, .975);
+  --cg-surface-solid: #f9fcff;
+  --cg-border: rgba(27, 72, 108, .26);
+  --cg-text: #071d31;
+  --cg-muted: #3e5f79;
+  --cg-primary: #0876ba;
+  --cg-primary-strong: #064c8f;
+  --cg-primary-soft: rgba(8, 118, 186, .12);
+  --cg-accent: #075f99;
+  --cg-shadow: 0 26px 70px rgba(18, 54, 83, .20), 0 7px 22px rgba(18, 54, 83, .11), inset 0 1px 0 rgba(255,255,255,.98);
+  background: #dfeaf4 !important;
   color: var(--cg-text) !important;
 }
 
 [data-theme='light'] .cg-operational::before {
-  opacity: .72;
+  opacity: .9;
   background-image:
-    radial-gradient(circle at 8% 14%, rgba(8,120,189,.14) 0 1px, transparent 1.8px),
-    radial-gradient(circle at 80% 24%, rgba(7,84,155,.10) 0 1.1px, transparent 1.9px),
-    radial-gradient(112% 54% at 10% 113%, transparent 0 56%, rgba(8,120,189,.08) 56.4% 57%, transparent 57.4%),
-    linear-gradient(145deg,#edf4fa 0%,#f9fcff 52%,#e6f2fb 100%) !important;
+    radial-gradient(circle at 8% 14%, rgba(8,118,186,.18) 0 1px, transparent 1.8px),
+    radial-gradient(circle at 80% 24%, rgba(6,76,143,.13) 0 1.1px, transparent 1.9px),
+    radial-gradient(112% 54% at 10% 113%, transparent 0 56%, rgba(8,118,186,.10) 56.4% 57%, transparent 57.4%),
+    radial-gradient(92% 42% at 92% -8%, transparent 0 58%, rgba(68,148,201,.09) 58.4% 59%, transparent 59.4%),
+    linear-gradient(145deg,#dce8f3 0%,#f5f9fc 48%,#d9e8f4 100%) !important;
 }
 
-/* Surfaces that were authored for dark mode only. */
+/* Core surfaces: light does not mean flat white. */
+[data-theme='light'] .cg-operational [class*="bg-[#0d0d0f]"],
+[data-theme='light'] .cg-operational [class*="bg-[#111014]"],
+[data-theme='light'] .cg-operational [class*="bg-[#111114]"],
+[data-theme='light'] .cg-operational [class*="bg-[#121215]"],
 [data-theme='light'] .cg-operational [class*="bg-[#0b0b0d]"],
 [data-theme='light'] .cg-operational [class*="bg-[#0b0b0e]"],
 [data-theme='light'] .cg-operational [class*="bg-[#0c0c0e]"],
-[data-theme='light'] .cg-operational [class*="bg-[#0e0e10]"] {
-  background-color: #ffffff !important;
-  background-image: none !important;
+[data-theme='light'] .cg-operational [class*="bg-[#0e0e10]"],
+[data-theme='light'] .cg-operational [class*="bg-zinc-950"],
+[data-theme='light'] .cg-operational [class*="bg-zinc-900"] {
+  background-color: #f9fcff !important;
+  background-image: linear-gradient(145deg,#ffffff 0%,#f4f9fd 58%,#eaf3fa 100%) !important;
+  box-shadow: 0 15px 38px rgba(19,58,88,.13), 0 3px 10px rgba(19,58,88,.07), inset 0 1px 0 rgba(255,255,255,.98) !important;
 }
 
-/* Dark hero gradients need a true light counterpart, not just dark text. */
+[data-theme='light'] .cg-operational [class*="bg-zinc-800"] { background-color:#d7e5f0 !important; }
+
+[data-theme='light'] .cg-operational section[class*='border'],
+[data-theme='light'] .cg-operational article[class*='border'],
+[data-theme='light'] .cg-operational div[class*='rounded-xl'][class*='border'],
+[data-theme='light'] .cg-operational div[class*='rounded-2xl'][class*='border'],
+[data-theme='light'] .cg-card {
+  border-color: rgba(31,78,113,.25) !important;
+  box-shadow: 0 18px 45px rgba(20,59,88,.14), 0 4px 12px rgba(20,59,88,.07), inset 0 1px 0 rgba(255,255,255,.96) !important;
+}
+
+[data-theme='light'] .cg-operator-workspace > section,
+[data-theme='light'] .cg-operator-workspace > div[class*='rounded'] {
+  background-image: linear-gradient(150deg,#ffffff 0%,#f5f9fd 62%,#e9f2f8 100%) !important;
+}
+
+[data-theme='light'] .cg-operator-workspace .cg-card {
+  background: linear-gradient(145deg,#ffffff 0%,#f4f9fd 55%,#e8f2f9 100%) !important;
+}
+
+/* KPI cards get a darker base edge so they read as real modules. */
+[data-theme='light'] .cg-operator-workspace div[class*='rounded-xl'][class*='border'] {
+  border-color: rgba(35,81,116,.28) !important;
+}
+[data-theme='light'] .cg-operator-workspace div[class*='rounded-xl'][class*='border']:hover {
+  border-color: rgba(8,118,186,.38) !important;
+}
+
+/* Header and sidebar: crisp navigation chrome. */
+[data-theme='light'] .cg-topbar {
+  background: linear-gradient(180deg,#ffffff 0%,#f3f8fc 100%) !important;
+  border-color: rgba(28,72,105,.24) !important;
+  box-shadow: 0 12px 34px rgba(18,54,83,.16), 0 2px 7px rgba(18,54,83,.08) !important;
+}
+[data-theme='light'] .cg-sidebar {
+  background: linear-gradient(180deg,#fafdff 0%,#edf4fa 100%) !important;
+  border-color: rgba(28,72,105,.24) !important;
+  box-shadow: 12px 0 36px rgba(18,54,83,.12) !important;
+}
+
+/* Inputs look inset rather than disappearing into the white cards. */
+[data-theme='light'] .cg-operational input,
+[data-theme='light'] .cg-operational select,
+[data-theme='light'] .cg-operational textarea {
+  background: linear-gradient(180deg,#f8fbfe 0%,#edf4f9 100%) !important;
+  border-color: rgba(35,81,116,.30) !important;
+  color:#071d31 !important;
+  box-shadow: inset 0 1px 3px rgba(23,58,84,.08), 0 1px 0 #fff !important;
+}
+[data-theme='light'] .cg-operational input:focus,
+[data-theme='light'] .cg-operational select:focus,
+[data-theme='light'] .cg-operational textarea:focus {
+  background:#fff !important;
+  border-color:#0876ba !important;
+  box-shadow:0 0 0 3px rgba(8,118,186,.14), inset 0 1px 2px rgba(23,58,84,.05) !important;
+}
+
+/* Dark hero gradients need a true light counterpart. */
 [data-theme='light'] .cg-operational:not(.cg-fire-mode) [class*='from-blue-950'],
 [data-theme='light'] .cg-operational:not(.cg-fire-mode) [class*='from-cyan-950'],
 [data-theme='light'] .cg-operational:not(.cg-fire-mode) [class*='via-[#0d0d0f]'] {
-  background-color: #ffffff !important;
-  background-image: linear-gradient(135deg,#ffffff 0%,#f1f8fe 54%,#e5f3fd 100%) !important;
-  border-color: rgba(8,120,189,.23) !important;
-  box-shadow: 0 22px 58px rgba(22,72,108,.16), 0 4px 16px rgba(22,72,108,.08) !important;
+  background-color:#f7fbff !important;
+  background-image:linear-gradient(135deg,#ffffff 0%,#eaf5fd 52%,#dcecf8 100%) !important;
+  border-color:rgba(8,118,186,.28) !important;
+  box-shadow:0 24px 62px rgba(20,59,88,.18),0 5px 16px rgba(20,59,88,.09)!important;
 }
 
-/* Plan cards retain personality without washed-out copy. */
-[data-theme='light'] .cg-operational [class*='from-purple-500'] {
-  background-image: linear-gradient(180deg,#fcf8ff 0%,#f6edff 100%) !important;
-}
-[data-theme='light'] .cg-operational [class*='bg-amber-500/[0.04]'] {
-  background-color: #fffaf0 !important;
-}
-[data-theme='light'] .cg-operational [class*='bg-blue-500/[0.04]'] {
-  background-color: #f4faff !important;
-}
+/* Semantic light surfaces are more saturated and readable. */
+[data-theme='light'] .cg-operational [class*='bg-blue-500/10'],
+[data-theme='light'] .cg-operational [class*='bg-blue-500/[0.05]'],
+[data-theme='light'] .cg-operational [class*='bg-blue-500/[0.06]'] { background-color:#e3f2fc !important; }
+[data-theme='light'] .cg-operational [class*='bg-cyan-500/10'] { background-color:#dcf5fa !important; }
+[data-theme='light'] .cg-operational [class*='bg-emerald-500/10'] { background-color:#dcf4ea !important; }
+[data-theme='light'] .cg-operational [class*='bg-amber-500/10'],
+[data-theme='light'] .cg-operational [class*='bg-amber-500/[0.04]'] { background-color:#fff1cf !important; }
+[data-theme='light'] .cg-operational [class*='bg-rose-500/10'] { background-color:#fde7ec !important; }
 
-/* Light-theme semantic colors: all are intentionally dark enough on white. */
+[data-theme='light'] .cg-operational [class*='from-purple-500'] { background-image:linear-gradient(180deg,#f9f2ff 0%,#eadcf8 100%)!important; }
+[data-theme='light'] .cg-operational [class*='bg-blue-500/[0.04]'] { background-color:#eaf5fd!important; }
+
+/* Semantic typography: darker than the previous washed-out palette. */
 [data-theme='light'] .cg-operational [class*='text-blue-200'],
-[data-theme='light'] .cg-operational [class*='text-blue-300'] { color: #075985 !important; }
+[data-theme='light'] .cg-operational [class*='text-blue-300'],
+[data-theme='light'] .cg-operational [class*='text-blue-400'] { color:#075383!important; }
 [data-theme='light'] .cg-operational [class*='text-cyan-200'],
-[data-theme='light'] .cg-operational [class*='text-cyan-300'] { color: #0e657a !important; }
+[data-theme='light'] .cg-operational [class*='text-cyan-300'],
+[data-theme='light'] .cg-operational [class*='text-cyan-400'] { color:#075e70!important; }
 [data-theme='light'] .cg-operational [class*='text-purple-200'],
-[data-theme='light'] .cg-operational [class*='text-purple-300'] { color: #6b21a8 !important; }
+[data-theme='light'] .cg-operational [class*='text-purple-300'] { color:#63208e!important; }
 [data-theme='light'] .cg-operational [class*='text-amber-200'],
-[data-theme='light'] .cg-operational [class*='text-amber-300'] { color: #8a4b08 !important; }
+[data-theme='light'] .cg-operational [class*='text-amber-300'],
+[data-theme='light'] .cg-operational [class*='text-amber-400'] { color:#7b4306!important; }
 [data-theme='light'] .cg-operational [class*='text-emerald-200'],
 [data-theme='light'] .cg-operational [class*='text-emerald-300'],
-[data-theme='light'] .cg-operational [class*='text-emerald-400'] { color: #047857 !important; }
+[data-theme='light'] .cg-operational [class*='text-emerald-400'] { color:#046c4e!important; }
 [data-theme='light'] .cg-operational [class*='text-rose-200'],
 [data-theme='light'] .cg-operational [class*='text-rose-300'],
-[data-theme='light'] .cg-operational [class*='text-rose-400'] { color: #be123c !important; }
+[data-theme='light'] .cg-operational [class*='text-rose-400'] { color:#b3143b!important; }
 
-/* Filled controls/badges must retain white type even when semantic text colors
-   are remapped for light surfaces. */
+/* Filled controls preserve their intended foreground colors. */
 [data-theme='light'] .cg-operational button[class~='bg-blue-500'],
 [data-theme='light'] .cg-operational button[class~='bg-blue-600'],
 [data-theme='light'] .cg-operational button[class~='bg-purple-500'],
 [data-theme='light'] .cg-operational button[class~='bg-rose-500'],
+[data-theme='light'] .cg-operational button[class~='bg-rose-600'],
 [data-theme='light'] .cg-operational button[class~='bg-red-600'],
 [data-theme='light'] .cg-operational button[class~='bg-emerald-500'],
 [data-theme='light'] .cg-operational [class~='bg-blue-500'][class~='text-white'],
@@ -87,77 +156,45 @@
 [data-theme='light'] .cg-operational [class~='bg-purple-500'][class~='text-white'],
 [data-theme='light'] .cg-operational [class~='bg-rose-500'][class~='text-white'],
 [data-theme='light'] .cg-operational [class~='bg-emerald-500'][class~='text-white'] {
-  color: #ffffff !important;
-  text-shadow: 0 1px 1px rgba(0,0,0,.08);
+  color:#fff!important;
+  text-shadow:0 1px 1px rgba(0,0,0,.12);
 }
 
-/* Tables: remove the black islands visible on iPhone and increase row separation. */
-[data-theme='light'] .cg-operational table {
-  background: #ffffff !important;
-  color: var(--cg-text) !important;
-}
+/* Tables are layered, not stark black/white bands. */
+[data-theme='light'] .cg-operational table { background:#f8fbfe!important;color:var(--cg-text)!important; }
 [data-theme='light'] .cg-operational table thead,
 [data-theme='light'] .cg-operational thead[class*='bg-zinc'] {
-  background: #eaf3fa !important;
+  background:linear-gradient(180deg,#dcebf6 0%,#d2e3f0 100%)!important;
+  color:#284d68!important;
 }
-[data-theme='light'] .cg-operational table tbody,
-[data-theme='light'] .cg-operational table tbody[class*='bg-'] {
-  background: #ffffff !important;
-}
-[data-theme='light'] .cg-operational table tbody tr {
-  background-color: #ffffff !important;
-  border-color: #d6e3ed !important;
-}
-[data-theme='light'] .cg-operational table tbody tr:nth-child(even) {
-  background-color: #f7fafc !important;
-}
+[data-theme='light'] .cg-operational table tbody { background:#f8fbfe!important; }
+[data-theme='light'] .cg-operational table tbody tr { background:#fbfdff!important;border-color:#cbdce8!important; }
+[data-theme='light'] .cg-operational table tbody tr:nth-child(even) { background:#edf4f9!important; }
+[data-theme='light'] .cg-operational table tbody tr:hover { background:#e3f1fa!important; }
 [data-theme='light'] .cg-operational table td,
-[data-theme='light'] .cg-operational table th {
-  border-color: #d6e3ed !important;
+[data-theme='light'] .cg-operational table th { border-color:#cbdce8!important; }
+
+/* Driver app: stronger card separation on bright phones. */
+[data-theme='light'] .cg-driver-app {
+  background:linear-gradient(160deg,#dce9f4 0%,#edf5fb 50%,#d9e8f4 100%)!important;
+}
+[data-theme='light'] .cg-driver-app header,
+[data-theme='light'] .cg-driver-app section {
+  border-color:rgba(31,78,113,.25)!important;
+  box-shadow:0 15px 36px rgba(19,58,88,.14),0 3px 9px rgba(19,58,88,.07),inset 0 1px 0 #fff!important;
+}
+[data-theme='light'] .cg-driver-app header {
+  background:linear-gradient(145deg,#ffffff 0%,#eef6fc 100%)!important;
+}
+[data-theme='light'] .cg-driver-app section:not([class*='bg-red-']):not([class*='bg-blue-']) {
+  background-image:linear-gradient(145deg,#ffffff 0%,#f3f8fc 60%,#e8f2f9 100%)!important;
 }
 
-/* Cards and fields get clearer edges on bright mobile displays. */
-[data-theme='light'] .cg-operational section[class*='border'],
-[data-theme='light'] .cg-operational article[class*='border'],
-[data-theme='light'] .cg-operational div[class*='rounded'][class*='border'] {
-  border-color: rgba(42,87,121,.20) !important;
-}
-[data-theme='light'] .cg-operational input,
-[data-theme='light'] .cg-operational select,
-[data-theme='light'] .cg-operational textarea {
-  background-color: #ffffff !important;
-  border-color: rgba(42,87,121,.24) !important;
-  color: #081f33 !important;
-}
-[data-theme='light'] .cg-operational input:focus,
-[data-theme='light'] .cg-operational select:focus,
-[data-theme='light'] .cg-operational textarea:focus {
-  border-color: #0878bd !important;
-  box-shadow: 0 0 0 3px rgba(8,120,189,.12) !important;
-}
-
-/* Header controls: crisp but not sterile. */
-[data-theme='light'] .cg-topbar {
-  background: rgba(255,255,255,.94) !important;
-  border-color: rgba(31,82,121,.18) !important;
-  box-shadow: 0 10px 32px rgba(22,65,97,.13) !important;
-}
-[data-theme='light'] .cg-sidebar {
-  background: rgba(250,253,255,.98) !important;
-  border-color: rgba(31,82,121,.18) !important;
-}
-
-/* Avoid pale helper copy becoming effectively invisible. */
+/* Avoid helper copy becoming effectively invisible. */
 [data-theme='light'] .cg-operational [class*='opacity-40'],
-[data-theme='light'] .cg-operational [class*='opacity-50'] {
-  opacity: .68;
-}
+[data-theme='light'] .cg-operational [class*='opacity-50'] { opacity:.72; }
 
-/* The cards already contain the useful plan comparison on phones. Hiding the
-   780px desktop matrix prevents the one-column black/white strip seen in Safari. */
-@media (max-width: 767px) {
-  .cg-plan-comparison-matrix { display: none !important; }
-  .cg-operational div.mt-8.overflow-x-auto.rounded-2xl.border:has(> table.min-w-\[780px\]) {
-    display: none !important;
-  }
+@media (max-width:767px) {
+  .cg-plan-comparison-matrix { display:none!important; }
+  .cg-operational div.mt-8.overflow-x-auto.rounded-2xl.border:has(> table.min-w-\[780px\]) { display:none!important; }
 }
