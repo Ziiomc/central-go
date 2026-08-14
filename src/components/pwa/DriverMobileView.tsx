@@ -12,6 +12,7 @@ import { primeRadioAudio, speakVHFDispatch } from '../../lib/audioService';
 import { isPWAStandalone, promptPWAInstall } from '../../lib/pwa';
 import { endDriverPresence, loadDriverAnalytics, pingDriverPresence, type DriverAnalytics } from '../../lib/driverOperations';
 import { loadFareDestinations } from '../../lib/operationalIntelligenceRepository';
+import { isFlexibleDestinationAddress, isValidMapCoordinate } from '../../lib/flexibleDestination';
 import centralGoLogo from '../../assets/images/central-go-logo.svg';
 import{uploadOwnAvatar}from'../../lib/profileMediaRepository';
 
@@ -71,6 +72,7 @@ export const DriverMobileView: React.FC = () => {
   const activeTrip = trips.find(
     (trip) => trip.driverId === driver?.id && ['assigned', 'en_route', 'arrived', 'in_progress'].includes(trip.status),
   );
+  const activeTripHasFlexibleDestination = Boolean(activeTrip && isFlexibleDestinationAddress(activeTrip.destination.address));
 
   const radioMessages = useMemo(
     () => driver
@@ -336,6 +338,18 @@ export const DriverMobileView: React.FC = () => {
   };
 
   const openGpsNavigation = (address: string, lat: number, lng: number) => {
+    if (isFlexibleDestinationAddress(address)) {
+      setRadioBanner('Destino a convenir: no existe una dirección fija para abrir en GPS.');
+      if (radioToastTimerRef.current !== null) window.clearTimeout(radioToastTimerRef.current);
+      radioToastTimerRef.current = window.setTimeout(() => setRadioBanner(null), 4000);
+      return;
+    }
+    if (!isValidMapCoordinate(lat,lng)) {
+      setRadioBanner('La dirección todavía no tiene coordenadas GPS válidas.');
+      if (radioToastTimerRef.current !== null) window.clearTimeout(radioToastTimerRef.current);
+      radioToastTimerRef.current = window.setTimeout(() => setRadioBanner(null), 4000);
+      return;
+    }
     const label = encodeURIComponent(address);
     if (/Android/i.test(navigator.userAgent || '')) {
       window.location.href = `geo:${lat},${lng}?q=${lat},${lng}(${label})`;
@@ -360,6 +374,7 @@ export const DriverMobileView: React.FC = () => {
   const navAddress = activeTrip ? (destinationIsNext ? activeTrip.destination.address : activeTrip.origin.address) : '';
   const navLat = activeTrip ? (destinationIsNext ? activeTrip.destination.lat : activeTrip.origin.lat) : 0;
   const navLng = activeTrip ? (destinationIsNext ? activeTrip.destination.lng : activeTrip.origin.lng) : 0;
+  const canNavigateCurrentLeg = Boolean(activeTrip && (!destinationIsNext || (!activeTripHasFlexibleDestination && isValidMapCoordinate(navLat,navLng))));
   const changePhoto=async(file?:File)=>{if(!file)return;setPhotoBusy(true);try{await uploadOwnAvatar(currentUser.id,file);await refreshIdentity();}catch(error){setAnalyticsError(error instanceof Error?error.message:'No fue posible guardar tu fotografía.');}finally{setPhotoBusy(false);}};
 
   return (
@@ -424,7 +439,7 @@ export const DriverMobileView: React.FC = () => {
           <section className="rounded-2xl border-2 border-blue-500 bg-blue-500/[0.06] p-4 shadow-2xl">
             <div className="flex items-center justify-between"><span className="rounded-lg bg-blue-600 px-3 py-1 text-[9px] font-black uppercase">Nueva carrera</span><span className="text-sm font-black text-blue-300">{offerTimer > 0 ? `${offerTimer}s` : 'Pendiente'}</span></div>
             <div className="mt-3"><p className="text-[8px] uppercase text-zinc-600">Retiro</p><p className="mt-1 flex gap-2 text-xs font-bold"><MapPin className="h-4 w-4 text-emerald-400" />{incomingOffer.origin.address}</p></div>
-            <div className="mt-3 grid grid-cols-2 gap-2"><MiniValue label="Tarifa estimada" value={`$${incomingOffer.estimatedFare.toLocaleString('es-CL')}`} accent /><MiniValue label="Distancia" value={`${incomingOffer.estimatedDistanceKm} km`} /></div>
+            <div className="mt-3 grid grid-cols-2 gap-2"><MiniValue label="Tarifa estimada" value={`$${incomingOffer.estimatedFare.toLocaleString('es-CL')}`} accent /><MiniValue label="Distancia" value={isFlexibleDestinationAddress(incomingOffer.destination.address)?'A convenir':`${incomingOffer.estimatedDistanceKm} km`} /></div>
             <div className="mt-3 grid grid-cols-2 gap-2"><button onClick={rejectOffer} className="rounded-xl bg-zinc-800 py-2.5 text-[10px] font-black text-rose-300">Rechazar</button><button onClick={acceptOffer} className="rounded-xl bg-emerald-400 py-2.5 text-[10px] font-black text-zinc-950">Aceptar carrera</button></div>
           </section>
         )}
@@ -435,7 +450,7 @@ export const DriverMobileView: React.FC = () => {
             <div className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-950 p-2.5"><div className="flex items-center gap-2.5"><User className="h-4 w-4 text-blue-400" /><div><p className="text-[11px] font-black">{activeTrip.clientName}</p><p className="text-[9px] text-zinc-500">{activeTrip.clientPhone || 'Sin teléfono'}</p></div></div>{activeTrip.clientPhone && <a href={`tel:${activeTrip.clientPhone}`} className="rounded-lg bg-blue-600 p-2"><Phone className="h-4 w-4" /></a>}</div>
             <div className="space-y-2.5"><RoutePoint label="Retiro" text={activeTrip.origin.address} /><RoutePoint label="Destino" text={activeTrip.destination.address} destination /></div>
             <div className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-950 p-2.5"><div><p className="text-[8px] uppercase text-zinc-600">Tarifa</p><p className="text-sm font-black text-emerald-400">${activeTrip.estimatedFare.toLocaleString('es-CL')}</p></div><div className="text-right"><p className="text-[8px] uppercase text-zinc-600">Pago</p><p className="text-[9px] font-black uppercase">{activeTrip.paymentMethod}</p></div></div>
-            <button onClick={() => openGpsNavigation(navAddress, navLat, navLng)} className="flex w-full items-center justify-center gap-2 rounded-xl border border-blue-500/25 bg-blue-500/10 py-2.5 text-[10px] font-black text-blue-300"><ExternalLink className="h-4 w-4" />{destinationIsNext ? 'Abrir GPS al destino' : 'Abrir GPS al pasajero'}</button>
+            {canNavigateCurrentLeg?<button onClick={() => openGpsNavigation(navAddress, navLat, navLng)} className="flex w-full items-center justify-center gap-2 rounded-xl border border-blue-500/25 bg-blue-500/10 py-2.5 text-[10px] font-black text-blue-300"><ExternalLink className="h-4 w-4" />{destinationIsNext ? 'Abrir GPS al destino' : 'Abrir GPS al pasajero'}</button>:<div className="rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-2.5 text-center"><p className="text-[10px] font-black text-amber-300">Destino a convenir / Taxímetro</p><p className="mt-0.5 text-[9px] text-zinc-500">No se abrirá un GPS de destino hasta que exista una dirección real.</p></div>}
             <div className="space-y-1.5 border-t border-zinc-800 pt-2.5">
               <button onClick={() => void arrivedAtPassenger()} disabled={activeTrip.status === 'arrived' || activeTrip.status === 'in_progress'} className="flex w-full items-center justify-center gap-2 rounded-xl border border-blue-500/30 bg-blue-500/10 py-2.5 text-[10px] font-black text-blue-300 disabled:opacity-30"><CheckCircle className="h-4 w-4" />Llegué al pasajero</button>
               <button onClick={() => { void Promise.resolve(updateTripStatus(activeTrip.id, 'in_progress')); requestFreshPosition(true); }} className="flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 py-2.5 text-[10px] font-black text-emerald-300"><Play className="h-4 w-4" />Pasajero a bordo</button>
