@@ -15,6 +15,12 @@ let registered = false;
 let retryTimer: number | null = null;
 
 const isDriverRoute = () => typeof window !== 'undefined' && window.location.pathname.startsWith('/driver');
+const isAndroid = () => typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent || '');
+
+/* Android already has a specialized wake-lock + suspend/resync manager in pwa.ts.
+   This helper covers Safari/iOS and other compatible browsers so we do not run
+   two independent WakeLockSentinels on the same Android driver session. */
+const shouldManageWakeLockHere = () => isDriverRoute() && !isAndroid();
 
 const clearRetry = () => {
   if (retryTimer !== null) window.clearTimeout(retryTimer);
@@ -23,12 +29,12 @@ const clearRetry = () => {
 
 const scheduleRetry = () => {
   clearRetry();
-  if (!isDriverRoute() || document.visibilityState !== 'visible') return;
+  if (!shouldManageWakeLockHere() || document.visibilityState !== 'visible') return;
   retryTimer = window.setTimeout(() => void acquireDriverWakeLock(), 15000);
 };
 
 export const acquireDriverWakeLock = async () => {
-  if (!isDriverRoute() || document.visibilityState !== 'visible') return false;
+  if (!shouldManageWakeLockHere() || document.visibilityState !== 'visible') return false;
   const nav = navigator as NavigatorWithWakeLock;
   if (!nav.wakeLock?.request) return false;
   if (sentinel && sentinel.released !== true) return true;
@@ -60,14 +66,14 @@ export const releaseDriverWakeLock = async () => {
 };
 
 export const registerDriverWakeLock = () => {
-  if (registered || typeof window === 'undefined' || typeof document === 'undefined') return;
+  if (registered || typeof window === 'undefined' || typeof document === 'undefined' || isAndroid()) return;
   registered = true;
 
   const resume = () => {
-    if (isDriverRoute() && document.visibilityState === 'visible') void acquireDriverWakeLock();
+    if (shouldManageWakeLockHere() && document.visibilityState === 'visible') void acquireDriverWakeLock();
   };
   const gestureResume = () => {
-    if (isDriverRoute()) void acquireDriverWakeLock();
+    if (shouldManageWakeLockHere()) void acquireDriverWakeLock();
   };
   const pageHide = () => void releaseDriverWakeLock();
 
@@ -79,5 +85,5 @@ export const registerDriverWakeLock = () => {
   window.addEventListener('keydown', gestureResume);
   window.addEventListener('pagehide', pageHide);
 
-  if (isDriverRoute()) void acquireDriverWakeLock();
+  if (shouldManageWakeLockHere()) void acquireDriverWakeLock();
 };
