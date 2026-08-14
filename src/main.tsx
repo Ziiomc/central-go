@@ -4,6 +4,7 @@ import App from './App.tsx';
 import 'leaflet/dist/leaflet.css';
 import './index.css';
 import './driverReadability.css';
+import './driverActionLayout.css';
 import './fontSize.css';
 import './lightModePremium.css';
 import {registerServiceWorker} from './lib/pwa';
