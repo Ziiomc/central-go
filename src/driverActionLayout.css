@@ -1,0 +1,4 @@
+/* Driver action layout: keep secondary actions inside the radio menu. */
+button[aria-label="Cliente solicita otro viaje"] {
+  display: none !important;
+}
