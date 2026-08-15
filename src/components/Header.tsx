@@ -20,6 +20,7 @@ import {
   UsersRound,
   Volume2,
   VolumeX,
+  WalletCards,
   Zap,
 } from 'lucide-react';
 
@@ -98,6 +99,7 @@ export const Header: React.FC<HeaderProps> = ({
           {currentRole === 'operator' && <button onClick={() => setNewTripModalOpen(true)} className="hidden items-center gap-2 rounded-xl border border-blue-300/50 bg-blue-500 px-4 py-2 text-xs font-black uppercase text-white shadow-lg shadow-blue-950/30 lg:flex"><Zap className="h-4 w-4" />Nueva carrera <kbd className="rounded bg-black/10 px-1.5 py-0.5 text-[9px]">F2</kbd></button>}
           {currentRole === 'sales_partner' && <button onClick={() => setActiveModule('network_centrals')} className="hidden items-center gap-2 rounded-xl border border-blue-400/25 bg-blue-600 px-4 py-2 text-xs font-black text-white xl:flex"><Plus className="h-4 w-4" />Registrar central</button>}
           {currentRole === 'super_admin' && <button onClick={() => setActiveModule('partners_network')} className="hidden items-center gap-2 rounded-xl border border-blue-500/20 bg-blue-500/10 px-3 py-2 text-[10px] font-black text-blue-300 xl:flex" title="Partners y territorios"><UsersRound className="h-4 w-4" />Partners</button>}
+          {currentRole === 'super_admin' && <button onClick={() => setActiveModule('payments')} className="cg-header-payment-button" title="Pagos y Mercado Pago"><WalletCards className="h-4 w-4" /><span className="hidden 2xl:inline">Mercado Pago</span></button>}
           {currentRole === 'super_admin' && <label className="hidden items-center gap-1.5 rounded-xl border border-blue-500/20 bg-blue-500/[0.06] px-2 py-1.5 lg:flex" title="Vista segura de inspección; no cambia permisos reales"><Eye className="h-4 w-4 text-blue-300" /><select defaultValue="" onChange={(event) => { openRolePreview(event.target.value); event.currentTarget.value = ''; }} className="max-w-[125px] bg-transparent text-[9px] font-black text-blue-200 outline-none"><option value="" className="bg-zinc-950">Ver como…</option><option value="operator" className="bg-zinc-950">Operadora</option><option value="company_admin" className="bg-zinc-950">Administrador</option><option value="driver" className="bg-zinc-950">Conductor</option><option value="sales_partner" className="bg-zinc-950">Partner comercial</option><option value="regional_partner" className="bg-zinc-950">Partner regional</option><option value="plans" className="bg-zinc-950">Planes</option></select></label>}
           {activeSOSDriver && !isNetworkRole && <button onClick={() => setActiveSOSDriver(activeSOSDriver)} className="hidden items-center gap-2 rounded-xl border border-red-400 bg-red-600 px-3 py-2 text-xs font-black text-white shadow-lg shadow-red-950/40 lg:flex"><ShieldAlert className="h-4 w-4" />SOS {activeSOSDriver.unitNumber}</button>}
           {!isNetworkRole && <button onClick={toggleSound} className={`rounded-lg border p-2 ${soundMuted ? 'border-zinc-800 bg-zinc-900 text-zinc-500' : 'border-blue-500/20 bg-blue-500/10 text-blue-400'}`} title={soundMuted ? 'Activar sonidos' : 'Silenciar sonidos'}>{soundMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}</button>}

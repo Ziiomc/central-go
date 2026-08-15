@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Building2, CircleDollarSign, Globe2, MapPinned, RefreshCw, ShieldCheck, UsersRound } from 'lucide-react';
+import { ArrowUpRight, Building2, CircleDollarSign, Globe2, MapPinned, RefreshCw, ShieldCheck, UsersRound, WalletCards } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 import type { NetworkCentral } from '../../data/networkMockData';
@@ -48,7 +48,7 @@ export const CommercialGlobalAdminDashboard: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-3xl border border-blue-500/20 bg-gradient-to-br from-blue-950/35 via-[#0d0d0f] to-cyan-950/25 p-6 md:p-8 shadow-2xl">
+      <section className="cg-dashboard-hero rounded-3xl border border-blue-500/20 bg-gradient-to-br from-blue-950/35 via-[#0d0d0f] to-cyan-950/25 p-6 md:p-8 shadow-2xl">
         <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-6">
           <div className="max-w-3xl">
             <div className="inline-flex items-center gap-2 rounded-full border border-blue-500/25 bg-blue-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-blue-300">
@@ -60,6 +60,7 @@ export const CommercialGlobalAdminDashboard: React.FC = () => {
           <div className="flex flex-col sm:flex-row gap-2">
             <button onClick={() => void reload()} disabled={loading} className="px-4 py-3 rounded-xl bg-zinc-950/70 hover:bg-zinc-900 border border-zinc-700 text-xs font-extrabold text-white flex items-center justify-center gap-2 disabled:opacity-50"><RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />Actualizar</button>
             <button onClick={() => setActiveModule('partners_network')} className="px-4 py-3 rounded-xl border border-blue-500/25 bg-blue-500/10 text-xs font-black text-blue-300">Ver Partners</button>
+            <button onClick={() => setActiveModule('payments')} className="cg-mp-shortcut"><WalletCards className="h-4 w-4" />Pagos<ArrowUpRight className="h-3.5 w-3.5" /></button>
           </div>
         </div>
       </section>

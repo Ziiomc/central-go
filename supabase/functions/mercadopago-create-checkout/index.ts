@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { resolveMercadoPagoAccessToken } from "../_shared/mercadopago.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -15,10 +16,9 @@ Deno.serve(async (req) => {
     const authorization = req.headers.get("Authorization");
     if (!authorization) return json({ error: "Sesión requerida" }, 401);
 
-    const accessToken = Deno.env.get("MERCADOPAGO_ACCESS_TOKEN");
     const webhookSecret = Deno.env.get("MERCADOPAGO_WEBHOOK_SECRET");
-    if (!accessToken || !webhookSecret) {
-      return json({ code: "MERCADOPAGO_NOT_CONFIGURED", error: "Mercado Pago está preparado pero aún falta cargar las credenciales privadas del comercio." }, 503);
+    if (!webhookSecret) {
+      return json({ code: "MERCADOPAGO_WEBHOOK_NOT_CONFIGURED", error: "Falta configurar la firma privada del webhook de Mercado Pago." }, 503);
     }
 
     const body = await req.json().catch(() => ({})) as { companyId?: string; planCode?: string; billingCycle?: "monthly" | "annual" };
@@ -35,6 +35,10 @@ Deno.serve(async (req) => {
     const { data: userData, error: userError } = await userClient.auth.getUser();
     if (userError || !userData.user) return json({ error: "Sesión inválida" }, 401);
     const user = userData.user;
+    const accessToken = await resolveMercadoPagoAccessToken(service);
+    if (!accessToken) {
+      return json({ code: "MERCADOPAGO_ACCOUNT_NOT_CONNECTED", error: "La cuenta de Mercado Pago todavía no está vinculada o necesita renovarse." }, 503);
+    }
 
     const [{ data: profile }, { data: membership }, { data: plan, error: planError }] = await Promise.all([
       service.from("profiles").select("global_role").eq("id", user.id).maybeSingle(),

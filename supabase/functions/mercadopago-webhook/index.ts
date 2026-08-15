@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { resolveMercadoPagoAccessToken } from "../_shared/mercadopago.ts";
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 const hex = (bytes: ArrayBuffer) => Array.from(new Uint8Array(bytes)).map((b) => b.toString(16).padStart(2, "0")).join("");
@@ -19,8 +20,13 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ ok: true });
   try {
     const secret = Deno.env.get("MERCADOPAGO_WEBHOOK_SECRET");
-    const accessToken = Deno.env.get("MERCADOPAGO_ACCESS_TOKEN");
-    if (!secret || !accessToken) return json({ error: "Mercado Pago webhook no configurado" }, 503);
+    if (!secret) return json({ error: "Mercado Pago webhook no configurado" }, 503);
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const db = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
+    const accessToken = await resolveMercadoPagoAccessToken(db);
+    if (!accessToken) return json({ error: "La cuenta de Mercado Pago no está vinculada o necesita renovarse" }, 503);
 
     const url = new URL(req.url);
     const body = await req.json().catch(() => ({})) as any;
@@ -54,9 +60,6 @@ Deno.serve(async (req) => {
     const billingCycle = payment?.metadata?.billing_cycle === "annual" ? "annual" : "monthly";
     if (!companyId || !planId) return json({ error: "Pago sin metadata de Central GO" }, 422);
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const db = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
     const [{ data: plan, error: planError }, { data: subscription, error: subReadError }] = await Promise.all([
       db.from("subscription_plans").select("id,code,name,monthly_price_clp,annual_price_clp,active").eq("id", planId).eq("active", true).single(),
       db.from("subscriptions").select("id,company_id").eq("company_id", companyId).maybeSingle(),
