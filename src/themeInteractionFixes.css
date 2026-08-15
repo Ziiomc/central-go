@@ -1,0 +1,57 @@
+/* Central GO · interaction fixes for theme controls */
+
+/* The auth header and auth card were sibling stacking contexts with the same z-index.
+   Keep the theme dropdown above the login card so it stays visible and tappable on mobile. */
+.cg-auth-header {
+  z-index: 120;
+  overflow: visible;
+}
+
+.cg-auth-header .cg-theme-menu-wrap {
+  z-index: 130;
+}
+
+.cg-auth-header .cg-theme-menu {
+  z-index: 140;
+}
+
+/* Driver light mode: preserve the compact mobile layout while making hard-coded dark
+   utility classes readable after the driver selects Claro from their profile. */
+[data-theme='light'] .cg-driver-app {
+  color: #071d31 !important;
+}
+
+[data-theme='light'] .cg-driver-app [class*='text-white'],
+[data-theme='light'] .cg-driver-app [class*='text-zinc-100'],
+[data-theme='light'] .cg-driver-app [class*='text-zinc-200'],
+[data-theme='light'] .cg-driver-app [class*='text-zinc-300'] {
+  color: #173f5c !important;
+}
+
+[data-theme='light'] .cg-driver-app [class*='text-zinc-400'],
+[data-theme='light'] .cg-driver-app [class*='text-zinc-500'],
+[data-theme='light'] .cg-driver-app [class*='text-zinc-600'] {
+  color: #56748a !important;
+}
+
+[data-theme='light'] .cg-driver-app [class*='border-zinc-700'],
+[data-theme='light'] .cg-driver-app [class*='border-zinc-800'] {
+  border-color: rgba(31, 78, 113, .24) !important;
+}
+
+[data-theme='light'] .cg-driver-app [class*='bg-black/80'],
+[data-theme='light'] .cg-driver-app [class*='bg-black/85'] {
+  background-color: rgba(223, 234, 244, .88) !important;
+}
+
+/* Filled action buttons keep their intended contrast in driver light mode. */
+[data-theme='light'] .cg-driver-app button[class*='bg-blue-600'],
+[data-theme='light'] .cg-driver-app button[class*='bg-red-600'],
+[data-theme='light'] .cg-driver-app button[class*='bg-rose-600'] {
+  color: #fff !important;
+}
+
+[data-theme='light'] .cg-driver-app button[class*='bg-emerald-400'],
+[data-theme='light'] .cg-driver-app button[class*='bg-amber-400'] {
+  color: #07130d !important;
+}
