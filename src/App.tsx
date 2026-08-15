@@ -36,7 +36,7 @@ const FIRE_MODE_OWNER='ziiomc3@gmail.com';
 const readFireModePreference=()=>{try{return window.localStorage.getItem(FIRE_MODE_STORAGE_KEY)!=='off';}catch{return true;}};
 
 const MainAppContent:React.FC=()=>{
- const{currentRole,activeModule,setActiveModule,setNewTripModalOpen}=useApp();
+ const{currentRole,activeModule,setActiveModule,newTripModalOpen,setNewTripModalOpen}=useApp();
  const{authUser}=useAuth();
  const[sidebarOpen,setSidebarOpen]=useState(false);
  const[notificationsOpen,setNotificationsOpen]=useState(false);
@@ -60,11 +60,16 @@ const MainAppContent:React.FC=()=>{
    if(key==='f2'||code==='F2'){e.preventDefault();e.stopPropagation();setNewTripModalOpen(true);return;}
    if((key==='f3'||code==='F3')&&!typing){e.preventDefault();e.stopPropagation();window.dispatchEvent(new CustomEvent('centralgo:toggle-queue-view'));return;}
    if((e.ctrlKey||e.metaKey)&&key==='k'){e.preventDefault();e.stopPropagation();if(activeModule!=='dashboard')setActiveModule('dashboard');window.setTimeout(()=>window.dispatchEvent(new CustomEvent('centralgo:focus-search')),80);return;}
-   if(key==='escape')window.dispatchEvent(new CustomEvent('centralgo:escape'));
+   if(key==='escape'){
+    e.preventDefault();
+    e.stopPropagation();
+    if(newTripModalOpen){setNewTripModalOpen(false);return;}
+    window.dispatchEvent(new CustomEvent('centralgo:escape'));
+   }
   };
   window.addEventListener('keydown',h,true);
   return()=>window.removeEventListener('keydown',h,true);
- },[currentRole,activeModule,setActiveModule,setNewTripModalOpen]);
+ },[currentRole,activeModule,newTripModalOpen,setActiveModule,setNewTripModalOpen]);
 
  const authorized=(module:string)=>MODULE_ACCESS[module]?.includes(currentRole)??false;
  useEffect(()=>{if(!authorized(activeModule))setActiveModule('dashboard');},[activeModule,currentRole,setActiveModule]);
