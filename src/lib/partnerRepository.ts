@@ -136,3 +136,21 @@ export async function setPartnerStatus(partnerId: string, active: boolean) {
   const { error } = await db.rpc('centralgo_superadmin_set_partner_status', { p_partner_id: partnerId, p_active: active });
   if (error) throw error;
 }
+
+export async function changePartnerKind(partnerId: string, kind: 'regional' | 'sales', parentPartnerId?: string | null) {
+  const db = requireSupabase();
+  const { data, error } = await db.rpc('centralgo_owner_change_partner_kind', {
+    p_partner_id: partnerId,
+    p_kind: kind,
+    p_parent_partner_id: parentPartnerId ?? null,
+  });
+  if (error) throw error;
+  return data as { partnerId?: string; kind?: 'regional' | 'sales'; reassignedChildren?: number; unchanged?: boolean } | null;
+}
+
+export async function archivePartnerProfile(partnerId: string) {
+  const db = requireSupabase();
+  const { data, error } = await db.rpc('centralgo_owner_archive_partner_profile', { p_partner_id: partnerId });
+  if (error) throw error;
+  return data as { partnerId?: string; userId?: string; archived?: boolean } | null;
+}
