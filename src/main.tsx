@@ -7,6 +7,7 @@ import './driverReadability.css';
 import './driverActionLayout.css';
 import './fontSize.css';
 import './lightModePremium.css';
+import './premiumThemeModes.css';
 import {registerServiceWorker} from './lib/pwa';
 import {registerRegionalPartnerReferralBootstrap} from './lib/regionalPartnerReferralBootstrap';
 import {registerGoogleOnboardingRoleBootstrap} from './lib/googleOnboardingRoleBootstrap';
