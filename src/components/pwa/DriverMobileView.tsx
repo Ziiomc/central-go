@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity, BarChart3, BellRing,Camera, CheckCircle, Clock, DollarSign, Download, ExternalLink,
-  Gauge, MapPin, Navigation, Phone, Play, Radio, Route, ShieldAlert, Smartphone, User,
+  Gauge, MapPin, Moon, Navigation, Phone, Play, Radio, Route, ShieldAlert, Smartphone, Sun, User,
   UserCircle2, Wifi, X, XCircle,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
@@ -13,6 +13,7 @@ import { isPWAStandalone, promptPWAInstall } from '../../lib/pwa';
 import { endDriverPresence, loadDriverAnalytics, pingDriverPresence, type DriverAnalytics } from '../../lib/driverOperations';
 import { loadFareDestinations } from '../../lib/operationalIntelligenceRepository';
 import { isFlexibleDestinationAddress, isValidMapCoordinate } from '../../lib/flexibleDestination';
+import { useColorTheme } from '../../lib/theme';
 import centralGoLogo from '../../assets/images/central-go-logo.svg';
 import{uploadOwnAvatar}from'../../lib/profileMediaRepository';
 
@@ -42,6 +43,7 @@ export const DriverMobileView: React.FC = () => {
     updateDriverLocation, triggerDriverSOS, resolveDriverSOS, rejectTripOffer, currentUser, currentCompany,
   } = useApp();
   const { signOut,refreshIdentity } = useAuth();
+  const { theme, setTheme } = useColorTheme();
 
   const driver = drivers.find((item) => item.userId === currentUser.id);
   const [isGpsActive, setIsGpsActive] = useState(false);
@@ -469,6 +471,13 @@ export const DriverMobileView: React.FC = () => {
           <section className="mx-auto my-4 w-full max-w-sm rounded-3xl border border-zinc-700 bg-[#0d0d0f] p-5 shadow-2xl">
             <div className="flex items-start justify-between"><div className="flex items-center gap-3"><div className="grid h-16 w-16 place-items-center overflow-hidden rounded-2xl border border-zinc-700 bg-zinc-950">{driver.photoUrl||currentUser.avatarUrl?<img src={driver.photoUrl||currentUser.avatarUrl} alt="Mi perfil" className="h-full w-full object-cover"/>:<UserCircle2 className="h-8 w-8 text-zinc-500"/>}</div><div><p className="text-[9px] font-black uppercase tracking-widest text-zinc-400">Conductor</p><h2 className="mt-1 text-xl font-black">{driver.name}</h2><p className="text-xs text-zinc-500">Móvil {driver.unitNumber}</p></div></div><button onClick={() => setProfileOpen(false)} className="rounded-xl border border-zinc-800 bg-zinc-950 p-2"><X className="h-4 w-4" /></button></div>
             <label className="mt-3 flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900 py-2.5 text-[10px] font-black"><Camera className="h-4 w-4"/>{photoBusy?'Subiendo foto…':'Cambiar mi foto'}<input type="file" accept="image/jpeg,image/png,image/webp" capture="user" disabled={photoBusy} className="hidden" onChange={e=>void changePhoto(e.target.files?.[0])}/></label>
+            <div className="mt-3 rounded-2xl border border-zinc-800 bg-zinc-950/60 p-3">
+              <div className="flex items-center justify-between gap-3"><div><p className="text-xs font-black">Apariencia</p><p className="mt-0.5 text-[8px] text-zinc-500">Elige cómo quieres ver tu aplicación.</p></div><span className="text-[8px] font-black uppercase text-blue-300">Personal</span></div>
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                <button type="button" onClick={() => setTheme('light')} aria-pressed={theme === 'light'} className={`flex items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-[10px] font-black transition ${theme === 'light' ? 'border-blue-400 bg-blue-500/15 text-blue-300' : 'border-zinc-800 bg-zinc-900 text-zinc-400'}`}><Sun className="h-4 w-4" />Claro</button>
+                <button type="button" onClick={() => setTheme('dark')} aria-pressed={theme === 'dark'} className={`flex items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-[10px] font-black transition ${theme === 'dark' ? 'border-blue-400 bg-blue-500/15 text-blue-300' : 'border-zinc-800 bg-zinc-900 text-zinc-400'}`}><Moon className="h-4 w-4" />Oscuro</button>
+              </div>
+            </div>
             <div className="mt-4 grid grid-cols-2 gap-2"><MiniValue label="Ganancias hoy" value={`$${(analytics?.earnings ?? driver.todayEarnings).toLocaleString('es-CL')}`} accent /><MiniValue label="Viajes hoy" value={String(analytics?.tripsCompleted ?? 0)} /></div>
             <div className="mt-3 rounded-2xl border border-zinc-800 bg-zinc-950/60 p-3">
               <div className="mb-3 flex items-center justify-between"><p className="flex items-center gap-2 text-xs font-black"><BarChart3 className="h-4 w-4 text-violet-400" />Mi jornada</p><button onClick={() => void refreshAnalytics()} className="rounded-lg border border-zinc-700 px-2 py-1 text-[8px]">Actualizar</button></div>
