@@ -13,12 +13,31 @@ const mapSubscriptionStatus = (status?: string): NetworkCentral['status'] => {
   return 'suspended';
 };
 
-export const mapVisibleNetworkCentral = (row: any): NetworkCentral => {
+export interface NetworkCentralRecord extends NetworkCentral {
+  planCode: 'start' | 'pro' | 'enterprise';
+  billingCycle: 'monthly' | 'annual';
+  paymentFrequency: 'monthly' | 'annual';
+  discountPercent: number;
+  listAmount: number;
+  effectiveAmount: number;
+  commitmentEndAt: string | null;
+  offerLabel: string | null;
+  offerNotes: string | null;
+  manualActivation: boolean;
+}
+
+export const mapVisibleNetworkCentral = (row: any): NetworkCentralRecord => {
   const countryCode = row.countryCode || 'CL';
-  const nextBilling = row.trialEndsAt || row.currentPeriodEnd || row.createdAt || new Date().toISOString();
-  const monthlyFee = row.billingCycle === 'annual'
+  const status = mapSubscriptionStatus(row.subscriptionStatus);
+  const billingCycle: 'monthly' | 'annual' = row.billingCycle === 'annual' ? 'annual' : 'monthly';
+  const paymentFrequency: 'monthly' | 'annual' = row.paymentFrequency === 'annual' ? 'annual' : 'monthly';
+  const fallbackMonthlyFee = billingCycle === 'annual'
     ? Math.round(Number(row.annualPrice ?? 0) / 12)
     : Number(row.monthlyPrice ?? 0);
+  const monthlyFee = Number(row.monthlyEquivalent ?? fallbackMonthlyFee);
+  const nextBilling = status === 'trial'
+    ? (row.trialEndsAt || row.currentPeriodEnd || row.createdAt)
+    : (row.currentPeriodEnd || row.trialEndsAt || row.createdAt);
 
   return {
     id: String(row.id),
@@ -33,17 +52,27 @@ export const mapVisibleNetworkCentral = (row: any): NetworkCentral => {
     vehicles: Number(row.vehicles ?? 0),
     operators: Number(row.operators ?? 0),
     plan: (row.planName ?? 'Enterprise') as NetworkCentral['plan'],
-    monthlyFee,
-    status: mapSubscriptionStatus(row.subscriptionStatus),
+    planCode: (row.planCode ?? 'enterprise') as NetworkCentralRecord['planCode'],
+    billingCycle,
+    paymentFrequency,
+    discountPercent: Number(row.discountPercent ?? 0),
+    listAmount: Number(row.listAmount ?? 0),
+    effectiveAmount: Number(row.effectiveAmount ?? 0),
+    commitmentEndAt: row.commitmentEndAt ? String(row.commitmentEndAt) : null,
+    offerLabel: row.offerLabel ? String(row.offerLabel) : null,
+    offerNotes: row.offerNotes ? String(row.offerNotes) : null,
+    manualActivation: Boolean(row.manualActivation),
+    monthlyFee: Number.isFinite(monthlyFee) ? Math.round(monthlyFee) : 0,
+    status,
     partner: row.partnerName ?? 'Sin atribuir',
     regionalPartner: row.regionalPartnerName ?? 'Sin atribuir',
     joinedAt: String(row.createdAt ?? new Date().toISOString()).slice(0, 10),
-    nextBillingAt: String(nextBilling).slice(0, 10),
+    nextBillingAt: String(nextBilling ?? new Date().toISOString()).slice(0, 10),
     activityScore: row.active ? 100 : 0,
   };
 };
 
-export async function loadNetworkCentrals(): Promise<NetworkCentral[]> {
+export async function loadNetworkCentrals(): Promise<NetworkCentralRecord[]> {
   const db = requireSupabase();
   const { data, error } = await db.rpc('centralgo_visible_network_centrals');
   if (error) throw error;
@@ -121,6 +150,60 @@ export async function createNetworkCentral(
   }
 
   return { companyId, ownerAssigned };
+}
+
+export interface ActivateNetworkCentralManualInput {
+  companyId: string;
+  planCode: 'start' | 'pro' | 'enterprise';
+  term: 'monthly' | 'annual';
+  paymentFrequency: 'monthly' | 'annual';
+  discountPercent?: number;
+  offerLabel?: string;
+  offerNotes?: string;
+}
+
+export interface ManualSubscriptionResult {
+  activated: boolean;
+  subscriptionId: string;
+  companyId: string;
+  planCode: string;
+  planName: string;
+  term: 'monthly' | 'annual';
+  paymentFrequency: 'monthly' | 'annual';
+  discountPercent: number;
+  listAmountClp: number;
+  effectiveAmountClp: number;
+  nextBillingAt: string;
+  commitmentEndAt: string;
+}
+
+export async function activateNetworkCentralManual(input: ActivateNetworkCentralManualInput): Promise<ManualSubscriptionResult> {
+  const db = requireSupabase();
+  const { data, error } = await db.rpc('centralgo_superadmin_manual_subscription', {
+    p_company_id: input.companyId,
+    p_plan_code: input.planCode,
+    p_term: input.term,
+    p_payment_frequency: input.paymentFrequency,
+    p_discount_percent: Number(input.discountPercent ?? 0),
+    p_offer_label: input.offerLabel?.trim() || null,
+    p_offer_notes: input.offerNotes?.trim() || null,
+  });
+  if (error) throw error;
+  const raw = (data ?? {}) as any;
+  return {
+    activated: Boolean(raw.activated),
+    subscriptionId: String(raw.subscriptionId ?? ''),
+    companyId: String(raw.companyId ?? input.companyId),
+    planCode: String(raw.planCode ?? input.planCode),
+    planName: String(raw.planName ?? input.planCode),
+    term: raw.term === 'annual' ? 'annual' : 'monthly',
+    paymentFrequency: raw.paymentFrequency === 'annual' ? 'annual' : 'monthly',
+    discountPercent: Number(raw.discountPercent ?? 0),
+    listAmountClp: Number(raw.listAmountClp ?? 0),
+    effectiveAmountClp: Number(raw.effectiveAmountClp ?? 0),
+    nextBillingAt: String(raw.nextBillingAt ?? ''),
+    commitmentEndAt: String(raw.commitmentEndAt ?? ''),
+  };
 }
 
 export async function setNetworkCentralStatus(
