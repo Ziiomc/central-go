@@ -69,7 +69,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   return (
     <>
       {isOpen && <div onClick={onClose} className="fixed inset-0 z-40 bg-black/70 backdrop-blur-sm" />}
-      <aside aria-hidden={!isOpen} inert={!isOpen} className={`cg-sidebar fixed left-0 top-[61px] z-50 h-[calc(100vh-61px)] w-[min(88vw,300px)] overflow-y-auto border-r border-zinc-700 bg-[#0d0d0f] shadow-[24px_0_70px_rgba(0,0,0,.45)] transition-transform duration-300 ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+      <aside aria-hidden={!isOpen} inert={!isOpen} className={`cg-sidebar fixed left-0 top-0 z-50 h-[100dvh] w-[min(88vw,300px)] overflow-y-auto border-r border-zinc-700 bg-[#0d0d0f] shadow-[24px_0_70px_rgba(0,0,0,.45)] transition-transform duration-300 ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className={currentRole === 'operator' ? 'space-y-2.5 p-2' : 'space-y-5 p-4'}>
           <div className="flex justify-end"><button onClick={onClose} className="rounded-lg border border-zinc-800 bg-zinc-900 p-2 text-zinc-400" aria-label="Cerrar menú"><X className="h-4 w-4" /></button></div>
           {isNetworkRole ? (
