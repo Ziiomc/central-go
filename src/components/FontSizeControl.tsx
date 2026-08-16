@@ -1,44 +1,48 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Type } from 'lucide-react';
-
-type FontSizeMode = 'normal' | 'large' | 'xlarge';
-
-const STORAGE_KEY = 'central-go-font-size';
-
-const readInitialMode = (): FontSizeMode => {
-  if (typeof window === 'undefined') return 'normal';
-  const saved = window.localStorage.getItem(STORAGE_KEY);
-  return saved === 'large' || saved === 'xlarge' ? saved : 'normal';
-};
-
-const applyMode = (mode: FontSizeMode) => {
-  document.documentElement.dataset.cgFontSize = mode;
-  window.localStorage.setItem(STORAGE_KEY, mode);
-};
+import {
+  applyFontSizeMode,
+  FONT_SIZE_OPTIONS,
+  readFontSizeMode,
+  type FontSizeMode,
+} from '../lib/fontSizePreference';
 
 export const FontSizeControl: React.FC = () => {
-  const [mode, setMode] = useState<FontSizeMode>(readInitialMode);
+  const [mode, setMode] = useState<FontSizeMode>(readFontSizeMode);
+  const activeOption = useMemo(() => FONT_SIZE_OPTIONS.find((option) => option.value === mode) ?? FONT_SIZE_OPTIONS[0], [mode]);
 
   useEffect(() => {
-    applyMode(mode);
+    applyFontSizeMode(mode);
   }, [mode]);
 
   return (
-    <label
-      className="flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-900 px-2 py-1.5 text-zinc-300"
-      title="Cambiar tamaño de las letras"
-    >
-      <Type className="h-4 w-4 shrink-0 text-blue-300" />
-      <select
-        aria-label="Tamaño de letra"
-        value={mode}
-        onChange={(event) => setMode(event.target.value as FontSizeMode)}
-        className="max-w-[88px] bg-transparent text-[10px] font-black text-zinc-200 outline-none sm:max-w-[110px]"
-      >
-        <option value="normal" className="bg-zinc-950">Letra normal</option>
-        <option value="large" className="bg-zinc-950">Letra grande</option>
-        <option value="xlarge" className="bg-zinc-950">Muy grande</option>
-      </select>
-    </label>
+    <div className="w-full sm:w-auto" aria-label="Tamaño de letra">
+      <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-wider text-zinc-400">
+        <Type className="h-4 w-4 text-blue-300" />
+        Tamaño de letra
+      </div>
+      <div className="mt-2 grid grid-cols-3 gap-1.5 rounded-xl border border-zinc-800 bg-zinc-950/70 p-1.5">
+        {FONT_SIZE_OPTIONS.map((option) => {
+          const active = option.value === mode;
+          return (
+            <button
+              key={option.value}
+              type="button"
+              aria-pressed={active}
+              onClick={() => setMode(option.value)}
+              className={`min-w-[76px] rounded-lg px-3 py-2 text-center transition ${
+                active
+                  ? 'bg-blue-600 text-white shadow-lg shadow-blue-950/30'
+                  : 'text-zinc-400 hover:bg-zinc-900 hover:text-white'
+              }`}
+            >
+              <span className={`block font-black ${option.value === 'normal' ? 'text-sm' : option.value === 'large' ? 'text-base' : 'text-lg'}`}>{option.shortLabel}</span>
+              <span className="mt-0.5 block text-[9px] font-bold">{option.label}</span>
+            </button>
+          );
+        })}
+      </div>
+      <p className="mt-2 max-w-sm text-[10px] leading-relaxed text-zinc-500">{activeOption.description}</p>
+    </div>
   );
 };
