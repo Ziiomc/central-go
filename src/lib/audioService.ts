@@ -1,5 +1,10 @@
 // Web Audio API & Speech Synthesis for Central GO radio dispatch
 import { installDriverTripButtonBehavior } from './driverUiBehavior';
+import {
+  DRIVER_RADIO_AUDIO_CHANGE_EVENT,
+  installDriverRadioAudioPreferenceControl,
+  isDriverRadioAudioEnabled,
+} from './driverRadioPreferences';
 
 let audioCtx: AudioContext | null = null;
 let sosLoopTimer: number | null = null;
@@ -8,6 +13,7 @@ let unlockHandlersInstalled = false;
 
 type SpeechJob = { text: string; resolve: () => void };
 const speechQueue: SpeechJob[] = [];
+let activeSpeechJob: SpeechJob | null = null;
 
 function getAudioContext(): AudioContext {
   if (!audioCtx) {
@@ -17,6 +23,21 @@ function getAudioContext(): AudioContext {
   if (audioCtx.state === 'suspended') void audioCtx.resume();
   return audioCtx;
 }
+
+const driverRadioAudioDisabled = () =>
+  typeof window !== 'undefined' &&
+  window.location.pathname.startsWith('/driver') &&
+  !isDriverRadioAudioEnabled();
+
+const stopQueuedRadioSpeech = () => {
+  try {
+    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+  } catch {}
+  activeSpeechJob?.resolve();
+  activeSpeechJob = null;
+  speechBusy = false;
+  while (speechQueue.length) speechQueue.shift()?.resolve();
+};
 
 /** Call from a user gesture to unlock audio on restrictive browsers. */
 export async function primeRadioAudio(): Promise<boolean> {
@@ -155,12 +176,25 @@ function chooseSpanishVoice() {
 
 function processSpeechQueue() {
   if (speechBusy || !speechQueue.length || !('speechSynthesis' in window)) return;
+  if (driverRadioAudioDisabled()) {
+    while (speechQueue.length) speechQueue.shift()?.resolve();
+    return;
+  }
+
   const job = speechQueue.shift()!;
+  activeSpeechJob = job;
   speechBusy = true;
   void primeRadioAudio();
   playVHFRadioChirp();
 
   window.setTimeout(() => {
+    if (driverRadioAudioDisabled()) {
+      activeSpeechJob = null;
+      speechBusy = false;
+      job.resolve();
+      processSpeechQueue();
+      return;
+    }
     try {
       const utterance = new SpeechSynthesisUtterance(job.text);
       utterance.lang = 'es-CL';
@@ -174,6 +208,7 @@ function processSpeechQueue() {
       const finish = () => {
         if (finished) return;
         finished = true;
+        if (activeSpeechJob === job) activeSpeechJob = null;
         speechBusy = false;
         job.resolve();
         window.setTimeout(processSpeechQueue, 130);
@@ -188,6 +223,7 @@ function processSpeechQueue() {
       window.speechSynthesis.speak(utterance);
     } catch (err) {
       console.warn('Speech synthesis error:', err);
+      activeSpeechJob = null;
       speechBusy = false;
       job.resolve();
       processSpeechQueue();
@@ -200,7 +236,7 @@ function processSpeechQueue() {
  * Calls can arrive simultaneously; each Promise resolves after its message finishes.
  */
 export function speakVHFDispatch(text: string, muted: boolean = false): Promise<void> {
-  if (muted || !text.trim() || !('speechSynthesis' in window)) return Promise.resolve();
+  if (muted || driverRadioAudioDisabled() || !text.trim() || !('speechSynthesis' in window)) return Promise.resolve();
   return new Promise<void>((resolve) => {
     speechQueue.push({ text: text.trim(), resolve });
     processSpeechQueue();
@@ -214,4 +250,10 @@ export function getVHFQueueLength() {
 if (typeof window !== 'undefined') {
   installAudioUnlockHandlers();
   installDriverTripButtonBehavior();
+  installDriverRadioAudioPreferenceControl();
+  window.addEventListener(DRIVER_RADIO_AUDIO_CHANGE_EVENT, ((event: Event) => {
+    const enabled = Boolean((event as CustomEvent<{ enabled?: boolean }>).detail?.enabled);
+    if (!enabled) stopQueuedRadioSpeech();
+    else void primeRadioAudio();
+  }) as EventListener);
 }
