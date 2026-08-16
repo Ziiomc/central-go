@@ -1,0 +1,211 @@
+/* Central GO Design System v1.0
+   Visual rules shared across Central, Operator, Partner, Admin and Driver surfaces.
+   Loaded last so it can normalize legacy Tailwind utilities without changing product logic. */
+
+:root {
+  --cg-space-1: 4px;
+  --cg-space-2: 8px;
+  --cg-space-3: 12px;
+  --cg-space-4: 16px;
+  --cg-space-5: 20px;
+  --cg-space-6: 24px;
+  --cg-space-8: 32px;
+  --cg-space-10: 40px;
+  --cg-radius-sm: 10px;
+  --cg-radius-md: 14px;
+  --cg-radius-lg: 18px;
+  --cg-radius-xl: 24px;
+  --cg-radius-pill: 999px;
+  --cg-control-h: 44px;
+  --cg-control-h-lg: 48px;
+  --cg-ease: cubic-bezier(.2,.8,.2,1);
+  --cg-duration-fast: 160ms;
+  --cg-duration: 220ms;
+  --cg-duration-slow: 320ms;
+  --cg-focus: 0 0 0 3px color-mix(in srgb, var(--cg-primary) 22%, transparent);
+  --cg-shadow-1: 0 1px 2px rgba(0,0,0,.14), 0 8px 24px rgba(0,8,22,.12);
+  --cg-shadow-2: 0 18px 54px rgba(0,8,22,.24), 0 1px 0 rgba(255,255,255,.04) inset;
+  --cg-shadow-3: 0 32px 90px rgba(0,8,22,.34), 0 1px 0 rgba(255,255,255,.05) inset;
+}
+
+[data-theme="light"] {
+  --cg-shadow-1: 0 1px 2px rgba(16,56,88,.06), 0 8px 24px rgba(20,72,112,.08);
+  --cg-shadow-2: 0 18px 50px rgba(20,72,112,.12), 0 1px 0 #fff inset;
+  --cg-shadow-3: 0 30px 80px rgba(20,72,112,.16), 0 1px 0 #fff inset;
+}
+
+html { text-rendering: optimizeLegibility; }
+body { letter-spacing: -.006em; }
+button, input, select, textarea { font: inherit; }
+button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
+button { cursor: pointer; }
+button:disabled { cursor: not-allowed; }
+
+/* TYPOGRAPHY — one strong hierarchy throughout the product. */
+.cg-operational h1,
+.cg-operational h2,
+.cg-operational h3,
+.cg-auth-shell h1,
+.cg-auth-shell h2,
+.cg-auth-shell h3 {
+  letter-spacing: -.035em;
+  text-wrap: balance;
+}
+.cg-operational h1 { line-height: 1.08; }
+.cg-operational h2,
+.cg-operational h3 { line-height: 1.15; }
+.cg-operational p,
+.cg-auth-shell p { text-wrap: pretty; }
+
+/* BACKGROUND / TEXTURE — atmospheric, never decorative noise. */
+.cg-operational {
+  background:
+    radial-gradient(80% 55% at 8% -8%, color-mix(in srgb,var(--cg-primary) 10%,transparent), transparent 70%),
+    radial-gradient(70% 48% at 94% 12%, color-mix(in srgb,var(--cg-primary-strong) 8%,transparent), transparent 72%),
+    linear-gradient(180deg, var(--cg-bg), color-mix(in srgb,var(--cg-bg) 92%,#071b31)) !important;
+}
+.cg-operational::after {
+  content:"";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: .32;
+  background:
+    radial-gradient(circle at 20% 18%, color-mix(in srgb,var(--cg-primary) 36%,transparent) 0 1px, transparent 1.5px),
+    radial-gradient(circle at 76% 68%, color-mix(in srgb,var(--cg-primary) 22%,transparent) 0 1px, transparent 1.4px);
+  background-size: 260px 260px, 340px 340px;
+  mask-image: linear-gradient(to bottom, #000, transparent 88%);
+}
+
+/* TOP BAR — quieter chrome, clearer hierarchy. */
+.cg-topbar {
+  border-bottom-color: color-mix(in srgb,var(--cg-border) 82%,transparent) !important;
+  background: color-mix(in srgb,var(--cg-bg) 78%,transparent) !important;
+  box-shadow: 0 10px 30px rgba(0,8,22,.16) !important;
+  backdrop-filter: blur(22px) saturate(135%);
+  -webkit-backdrop-filter: blur(22px) saturate(135%);
+}
+.cg-topbar button,
+.cg-topbar select,
+.cg-topbar label {
+  transition: transform var(--cg-duration-fast) var(--cg-ease), border-color var(--cg-duration) var(--cg-ease), background-color var(--cg-duration) var(--cg-ease), color var(--cg-duration) var(--cg-ease), box-shadow var(--cg-duration) var(--cg-ease);
+}
+.cg-topbar button:hover { transform: translateY(-1px); }
+.cg-topbar button:active { transform: translateY(0) scale(.98); }
+
+/* MAIN CANVAS — consistent breathing room. */
+.cg-main { scrollbar-gutter: stable; }
+.cg-main > * { animation: cgPageEnter var(--cg-duration-slow) var(--cg-ease) both; }
+@keyframes cgPageEnter { from { opacity: .01; transform: translateY(5px); } to { opacity: 1; transform: none; } }
+
+/* SURFACES — normalize legacy cards and containers. */
+.cg-operational :is(.rounded-xl,.rounded-2xl,.rounded-3xl)[class*="border"] {
+  border-color: color-mix(in srgb,var(--cg-border) 92%,transparent) !important;
+}
+.cg-operational :is(.rounded-xl,.rounded-2xl,.rounded-3xl)[class*="bg-zinc-900"],
+.cg-operational :is(.rounded-xl,.rounded-2xl,.rounded-3xl)[class*="bg-[#0d0d0f]"],
+.cg-operational :is(.rounded-xl,.rounded-2xl,.rounded-3xl)[class*="bg-[#111"],
+.cg-operational :is(.rounded-xl,.rounded-2xl,.rounded-3xl)[class*="bg-black"] {
+  background-color: color-mix(in srgb,var(--cg-surface-solid) 90%,transparent) !important;
+  box-shadow: var(--cg-shadow-1);
+}
+
+/* CONTROLS — 44–48px touch targets, one radius family. */
+.cg-operational input:not([type="checkbox"]):not([type="radio"]),
+.cg-operational select,
+.cg-operational textarea,
+.cg-auth-shell input:not([type="checkbox"]):not([type="radio"]),
+.cg-auth-shell select,
+.cg-auth-shell textarea {
+  min-height: var(--cg-control-h);
+  border-radius: var(--cg-radius-md) !important;
+  transition: border-color var(--cg-duration) var(--cg-ease), box-shadow var(--cg-duration) var(--cg-ease), background-color var(--cg-duration) var(--cg-ease);
+}
+.cg-operational input:focus,
+.cg-operational select:focus,
+.cg-operational textarea:focus,
+.cg-auth-shell input:focus,
+.cg-auth-shell select:focus,
+.cg-auth-shell textarea:focus {
+  outline: none;
+  box-shadow: var(--cg-focus);
+}
+
+/* BUTTONS — primary action gets depth; secondary actions stay quieter. */
+.cg-operational button,
+.cg-auth-shell button,
+.cg-operational a {
+  transition: transform var(--cg-duration-fast) var(--cg-ease), box-shadow var(--cg-duration) var(--cg-ease), filter var(--cg-duration) var(--cg-ease), background-color var(--cg-duration) var(--cg-ease), border-color var(--cg-duration) var(--cg-ease), color var(--cg-duration) var(--cg-ease);
+}
+.cg-operational button:not(:disabled):active,
+.cg-auth-shell button:not(:disabled):active { transform: scale(.985); }
+.cg-primary-button,
+.action-primary,
+.cg-operational button[class*="bg-blue-500"],
+.cg-operational button[class*="bg-blue-600"] {
+  box-shadow: 0 12px 28px color-mix(in srgb,var(--cg-primary) 18%,transparent), inset 0 1px 0 rgba(255,255,255,.18);
+}
+.cg-primary-button:hover,
+.action-primary:hover,
+.cg-operational button[class*="bg-blue-500"]:hover,
+.cg-operational button[class*="bg-blue-600"]:hover {
+  filter: brightness(1.07) saturate(1.05);
+  box-shadow: 0 16px 34px color-mix(in srgb,var(--cg-primary) 24%,transparent), inset 0 1px 0 rgba(255,255,255,.22);
+}
+
+/* DATA DENSITY — tables stay operational, not cramped. */
+.cg-operational table { border-collapse: separate; border-spacing: 0; }
+.cg-operational th {
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: .085em;
+  text-transform: uppercase;
+  color: var(--cg-muted);
+}
+.cg-operational td { line-height: 1.35; }
+.cg-operational tbody tr { transition: background-color var(--cg-duration-fast) ease; }
+.cg-operational tbody tr:hover { background: color-mix(in srgb,var(--cg-primary) 4.5%,transparent); }
+
+/* STATUS — keep semantic colors distinct and restrained. */
+.cg-operational :is([class*="bg-emerald-500/10"],[class*="bg-green-500/10"]) { box-shadow: inset 0 0 0 1px rgba(52,211,153,.03); }
+.cg-operational :is([class*="bg-amber-500/10"],[class*="bg-yellow-500/10"]) { box-shadow: inset 0 0 0 1px rgba(251,191,36,.03); }
+.cg-operational [class*="bg-red-500/10"] { box-shadow: inset 0 0 0 1px rgba(248,113,113,.04); }
+
+/* LIGHT MODE — crisp executive surfaces, not washed out. */
+[data-theme="light"] .cg-operational {
+  background:
+    radial-gradient(75% 48% at 0% 0%, rgba(56,160,220,.13), transparent 70%),
+    radial-gradient(60% 44% at 100% 5%, rgba(14,108,190,.08), transparent 72%),
+    linear-gradient(180deg,#eef5fb 0%,#e7f0f8 100%) !important;
+}
+[data-theme="light"] .cg-topbar {
+  background: rgba(248,252,255,.82) !important;
+  border-bottom-color: rgba(30,91,135,.14) !important;
+  box-shadow: 0 10px 30px rgba(36,84,120,.08) !important;
+}
+[data-theme="light"] .cg-operational :is(.text-white,.text-zinc-100,.text-zinc-200) { color: var(--cg-text) !important; }
+[data-theme="light"] .cg-operational :is(.text-zinc-300,.text-zinc-400) { color: #526b80 !important; }
+[data-theme="light"] .cg-operational :is(.text-zinc-500,.text-zinc-600) { color: #6f8495 !important; }
+[data-theme="light"] .cg-operational :is(.bg-zinc-950,.bg-zinc-900,.bg-[#0d0d0f]) { background-color: rgba(255,255,255,.86) !important; }
+[data-theme="light"] .cg-operational :is(.border-zinc-800,.border-zinc-700) { border-color: rgba(34,91,132,.15) !important; }
+
+/* MOBILE — prioritize task completion over decorative density. */
+@media (max-width: 767px) {
+  .cg-topbar { padding-inline: 10px !important; }
+  .cg-main { padding: 10px !important; }
+  .cg-main :is(h1,.text-2xl,.text-3xl) { letter-spacing: -.035em; }
+  .cg-operational button,
+  .cg-auth-shell button { min-height: 42px; }
+  .cg-operational :is(.rounded-2xl,.rounded-3xl) { border-radius: var(--cg-radius-lg) !important; }
+}
+
+/* ACCESSIBILITY / PERFORMANCE */
+:where(.cg-operational,.cg-auth-shell) :focus-visible {
+  outline: 2px solid color-mix(in srgb,var(--cg-primary) 76%,white);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cg-main > * { animation: none !important; }
+  .cg-operational *, .cg-auth-shell * { scroll-behavior: auto !important; transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
+}
