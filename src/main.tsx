@@ -9,15 +9,18 @@ import './fontSize.css';
 import './lightModePremium.css';
 import './premiumThemeModes.css';
 import './themeInteractionFixes.css';
+import './operatorQueueUsability.css';
 import {registerServiceWorker} from './lib/pwa';
 import {registerRegionalPartnerReferralBootstrap} from './lib/regionalPartnerReferralBootstrap';
 import {registerGoogleOnboardingRoleBootstrap} from './lib/googleOnboardingRoleBootstrap';
 import {registerDriverWakeLock} from './lib/driverWakeLock';
 import {registerDriverStorageReliability} from './lib/driverStorageReliability';
 import {initializeFontSizePreference} from './lib/fontSizePreference';
+import {registerOperatorQueueUsability} from './lib/operatorQueueUsability';
 
 // Aplicar accesibilidad visual antes de montar React evita que el texto cambie de tamaño después de cargar.
 initializeFontSizePreference();
+registerOperatorQueueUsability();
 
 // Registrar PWA, atribuciones y protecciones de operación antes de montar React.
 registerServiceWorker();
