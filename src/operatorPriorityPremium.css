@@ -1,0 +1,263 @@
+/* Central GO · premium dispatch priority board.
+   Keeps the board compact for operators while giving each mobile a cleaner visual hierarchy. */
+
+.cg-priority-board {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-radius: 24px !important;
+  border-color: rgba(126, 214, 255, .13) !important;
+  background:
+    radial-gradient(circle at 88% -8%, rgba(34, 211, 238, .11), transparent 34%),
+    linear-gradient(180deg, #11141b 0%, #0a0c11 100%) !important;
+  box-shadow: 0 28px 80px rgba(0, 0, 0, .34), inset 0 1px 0 rgba(255,255,255,.035) !important;
+}
+
+.cg-priority-board::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(115deg, rgba(255,255,255,.018), transparent 28%, transparent 72%, rgba(34,211,238,.035));
+}
+
+.cg-priority-board > header {
+  position: relative;
+  padding: 15px 14px !important;
+  border-color: rgba(255,255,255,.075) !important;
+  background: rgba(255,255,255,.018) !important;
+  backdrop-filter: blur(16px);
+}
+
+.cg-priority-board > header::after {
+  content: '';
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: -1px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(34,211,238,.35), transparent);
+}
+
+.cg-priority-board > header h2 {
+  letter-spacing: -.025em !important;
+}
+
+.cg-priority-board > div.p-3 {
+  padding: 13px !important;
+}
+
+.cg-priority-board select {
+  min-height: 40px;
+  border-radius: 13px !important;
+  transition: border-color .18s ease, box-shadow .18s ease, background .18s ease;
+}
+
+.cg-priority-board select:focus {
+  border-color: rgba(34,211,238,.42) !important;
+  box-shadow: 0 0 0 3px rgba(34,211,238,.09) !important;
+}
+
+/* Priority rows */
+.cg-priority-board article {
+  margin-bottom: 5px;
+  border-radius: 14px !important;
+  transform: translateZ(0);
+  transition: transform .18s ease, border-color .18s ease, background .18s ease, box-shadow .18s ease !important;
+}
+
+.cg-priority-board article:hover {
+  transform: translateY(-1px);
+  border-color: rgba(34,211,238,.18) !important;
+  box-shadow: 0 10px 24px rgba(0,0,0,.14);
+}
+
+.cg-priority-board article > div.grid {
+  min-height: 54px !important;
+  grid-template-columns: 38px minmax(0,1fr) 76px 62px !important;
+  gap: 7px !important;
+  padding: 6px 8px !important;
+}
+
+/* Rank chip. */
+.cg-priority-board article > div.grid > div:first-child {
+  width: 31px !important;
+  height: 31px !important;
+  border-radius: 10px !important;
+  font-size: 10px !important;
+  letter-spacing: .02em;
+  background: rgba(255,255,255,.035) !important;
+  border-color: rgba(255,255,255,.08) !important;
+  color: #8fa3b5 !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.035);
+}
+
+.cg-priority-board article:nth-child(1) > div.grid > div:first-child {
+  color: #9ff4ff !important;
+  border-color: rgba(34,211,238,.34) !important;
+  background: linear-gradient(145deg, rgba(34,211,238,.18), rgba(34,211,238,.06)) !important;
+  box-shadow: 0 0 0 1px rgba(34,211,238,.05), 0 0 18px rgba(34,211,238,.10) !important;
+}
+
+.cg-priority-board article:nth-child(2) > div.grid > div:first-child {
+  color: #bfdbfe !important;
+  border-color: rgba(96,165,250,.25) !important;
+  background: rgba(59,130,246,.08) !important;
+}
+
+.cg-priority-board article:nth-child(3) > div.grid > div:first-child {
+  color: #ddd6fe !important;
+  border-color: rgba(167,139,250,.23) !important;
+  background: rgba(139,92,246,.07) !important;
+}
+
+/* Driver / mobile identity area. */
+.cg-priority-board article > div.grid > button:nth-child(2) {
+  min-height: 38px;
+  border-radius: 10px !important;
+  padding: 4px 6px !important;
+}
+
+.cg-priority-board article > div.grid > button:nth-child(2):hover {
+  background: rgba(34,211,238,.055) !important;
+}
+
+.cg-priority-board article > div.grid > button:nth-child(2) span:first-child {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 7px;
+  background: rgba(34,211,238,.075);
+  padding: 2px 5px;
+}
+
+.cg-priority-board article > div.grid > button:nth-child(2) strong {
+  font-size: 11px !important;
+  line-height: 1.15;
+}
+
+/* Operational state reads as a pill instead of floating text. */
+.cg-priority-board article > div.grid > div:nth-child(3) > div:first-child {
+  min-width: 66px;
+  justify-content: center;
+  border: 1px solid rgba(255,255,255,.055);
+  border-radius: 999px;
+  background: rgba(255,255,255,.028);
+  padding: 4px 6px;
+}
+
+.cg-priority-board article > div.grid > div:nth-child(3) button {
+  min-width: 66px;
+  border-radius: 7px !important;
+}
+
+/* Move-priority controls become compact tactile buttons. */
+.cg-priority-board article > div.grid > div:last-child button {
+  width: 28px !important;
+  height: 28px !important;
+  border-radius: 9px !important;
+  background: rgba(255,255,255,.025) !important;
+}
+
+.cg-priority-board article > div.grid > div:last-child button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: rgba(34,211,238,.26) !important;
+  background: rgba(34,211,238,.08) !important;
+}
+
+/* Rules at the bottom become small explanatory cards. */
+.cg-priority-board > div > div:last-child {
+  gap: 6px !important;
+}
+
+.cg-priority-board > div > div:last-child > div {
+  border-radius: 10px !important;
+  background: rgba(255,255,255,.018) !important;
+  line-height: 1.45;
+}
+
+/* Light mode: clean white cards with a subtle blue operational accent. */
+[data-theme='light'] .cg-priority-board {
+  background:
+    radial-gradient(circle at 88% -8%, rgba(8,118,186,.10), transparent 34%),
+    linear-gradient(160deg, #ffffff 0%, #f3f8fc 58%, #e7f1f8 100%) !important;
+  border-color: rgba(31,78,113,.22) !important;
+  box-shadow: 0 24px 58px rgba(18,54,83,.15), 0 4px 12px rgba(18,54,83,.07), inset 0 1px 0 rgba(255,255,255,.98) !important;
+}
+
+[data-theme='light'] .cg-priority-board::before {
+  background: linear-gradient(115deg, rgba(255,255,255,.7), transparent 32%, transparent 72%, rgba(8,118,186,.035));
+}
+
+[data-theme='light'] .cg-priority-board > header {
+  background: linear-gradient(180deg, rgba(255,255,255,.98), rgba(239,246,251,.96)) !important;
+  border-color: rgba(31,78,113,.16) !important;
+}
+
+[data-theme='light'] .cg-priority-board article {
+  background: linear-gradient(145deg,#ffffff 0%,#f5f9fc 100%) !important;
+  border-color: rgba(35,81,116,.17) !important;
+  box-shadow: 0 5px 14px rgba(19,58,88,.055) !important;
+}
+
+[data-theme='light'] .cg-priority-board article:hover {
+  background: linear-gradient(145deg,#ffffff 0%,#edf6fc 100%) !important;
+  border-color: rgba(8,118,186,.30) !important;
+  box-shadow: 0 10px 24px rgba(19,58,88,.10) !important;
+}
+
+[data-theme='light'] .cg-priority-board article:nth-child(1) {
+  background: linear-gradient(90deg, rgba(34,211,238,.12), #f8fcff 34%, #ffffff 100%) !important;
+  border-color: rgba(8,118,186,.28) !important;
+}
+
+[data-theme='light'] .cg-priority-board article > div.grid > div:first-child {
+  background: #edf4f9 !important;
+  border-color: rgba(35,81,116,.18) !important;
+  color: #4d6c82 !important;
+}
+
+[data-theme='light'] .cg-priority-board article:nth-child(1) > div.grid > div:first-child {
+  color: #075e70 !important;
+  border-color: rgba(8,118,186,.28) !important;
+  background: linear-gradient(145deg,#ddf5fa,#eefbfc) !important;
+}
+
+[data-theme='light'] .cg-priority-board article:nth-child(2) > div.grid > div:first-child {
+  color: #075383 !important;
+  border-color: rgba(59,130,246,.20) !important;
+  background: #e9f2fc !important;
+}
+
+[data-theme='light'] .cg-priority-board article:nth-child(3) > div.grid > div:first-child {
+  color: #673a93 !important;
+  border-color: rgba(139,92,246,.18) !important;
+  background: #f1ebfb !important;
+}
+
+[data-theme='light'] .cg-priority-board article > div.grid > button:nth-child(2) span:first-child {
+  background: rgba(8,118,186,.08);
+}
+
+[data-theme='light'] .cg-priority-board article > div.grid > div:nth-child(3) > div:first-child {
+  border-color: rgba(35,81,116,.13);
+  background: rgba(231,240,247,.76);
+}
+
+[data-theme='light'] .cg-priority-board article > div.grid > div:last-child button {
+  border-color: rgba(35,81,116,.18) !important;
+  background: #f4f8fb !important;
+  color: #526f84 !important;
+}
+
+[data-theme='light'] .cg-priority-board > div > div:last-child > div {
+  background: rgba(246,250,253,.94) !important;
+  border-color: rgba(35,81,116,.14) !important;
+}
+
+@media (max-width: 1280px) {
+  .cg-priority-board article > div.grid {
+    grid-template-columns: 34px minmax(0,1fr) 70px 58px !important;
+    gap: 5px !important;
+  }
+}
