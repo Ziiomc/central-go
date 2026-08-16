@@ -49,6 +49,17 @@ html[data-cg-font-size='xlarge'] .text-base { font-size: 19px !important; line-h
 html[data-cg-font-size='xlarge'] .field-label { font-size: 14px !important; }
 html[data-cg-font-size='xlarge'] .field-input { font-size: 16px !important; }
 
+/* Sidebar uses custom CSS font sizes, so it needs explicit accessibility scaling too. */
+html[data-cg-font-size='large'] .cg-sidebar { width:min(90vw,320px)!important; }
+html[data-cg-font-size='large'] .cg-sidebar .cg-nav-item { font-size:13px!important; line-height:1.25!important; }
+html[data-cg-font-size='large'] .cg-sidebar .cg-nav-item.is-compact { font-size:12px!important; }
+html[data-cg-font-size='large'] .cg-sidebar .cg-nav-icon { width:31px; height:31px; }
+
+html[data-cg-font-size='xlarge'] .cg-sidebar { width:min(92vw,344px)!important; }
+html[data-cg-font-size='xlarge'] .cg-sidebar .cg-nav-item { font-size:15px!important; line-height:1.3!important; padding-block:9px!important; }
+html[data-cg-font-size='xlarge'] .cg-sidebar .cg-nav-item.is-compact { font-size:14px!important; padding-block:8px!important; }
+html[data-cg-font-size='xlarge'] .cg-sidebar .cg-nav-icon { width:34px; height:34px; }
+
 /* Keep compact controls usable when labels grow. */
 html[data-cg-font-size='large'] button,
 html[data-cg-font-size='large'] select,
