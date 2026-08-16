@@ -1,13 +1,51 @@
+import { soundManager } from './audio';
+
 let installed = false;
 let scheduled = false;
+let incomingOfferRadarTimer: number | null = null;
 
 const setButtonLabel = (button: HTMLButtonElement, label: string) => {
   const textNode = [...button.childNodes].find((node) => node.nodeType === Node.TEXT_NODE && node.textContent?.trim());
   if (textNode && textNode.textContent?.trim() !== label) textNode.textContent = label;
 };
 
+const hasIncomingOffer = () => {
+  const app = document.querySelector('.cg-driver-app');
+  if (!app) return false;
+  return [...app.querySelectorAll('section')].some((section) => {
+    const text = section.textContent || '';
+    return text.includes('Nueva carrera') && text.includes('Aceptar carrera');
+  });
+};
+
+const stopIncomingOfferRadar = () => {
+  if (incomingOfferRadarTimer !== null) {
+    window.clearInterval(incomingOfferRadarTimer);
+    incomingOfferRadarTimer = null;
+  }
+};
+
+const syncIncomingOfferRadar = () => {
+  if (!hasIncomingOffer()) {
+    stopIncomingOfferRadar();
+    return;
+  }
+  if (incomingOfferRadarTimer !== null) return;
+
+  // DriverMobileView already plays the first pulse as soon as the offer arrives.
+  // Repeat it softly while the request remains unanswered so it feels like a radar sweep.
+  incomingOfferRadarTimer = window.setInterval(() => {
+    if (!hasIncomingOffer()) {
+      stopIncomingOfferRadar();
+      return;
+    }
+    soundManager.playDispatchChime();
+  }, 2600);
+};
+
 const syncDriverTripButtons = () => {
   scheduled = false;
+  syncIncomingOfferRadar();
   const app = document.querySelector('.cg-driver-app');
   if (!app) return;
 
@@ -49,6 +87,11 @@ export function installDriverTripButtonBehavior() {
   document.addEventListener('click', (event) => {
     const button = (event.target as HTMLElement | null)?.closest('button') as HTMLButtonElement | null;
     if (!button || !button.closest('.cg-driver-app')) return;
+
+    if (button.textContent?.includes('Aceptar carrera') || button.textContent?.includes('Rechazar')) {
+      stopIncomingOfferRadar();
+    }
+
     const section = button.closest('section');
     if (!section) return;
     const buttons = [...section.querySelectorAll('button')] as HTMLButtonElement[];
@@ -61,6 +104,7 @@ export function installDriverTripButtonBehavior() {
       if (finish) finish.style.display = 'none';
       window.setTimeout(scheduleSync, 1600);
     } else if (button.dataset.cgStartTrip === '1' || button.textContent?.includes('Iniciar viaje')) {
+      soundManager.playTripStartConfirmation();
       const finish = buttons.find((candidate) => candidate.textContent?.includes('Finalizar y cobrar'));
       button.style.display = 'none';
       if (finish) finish.style.display = '';
@@ -68,6 +112,7 @@ export function installDriverTripButtonBehavior() {
     }
   }, true);
 
+  window.addEventListener('pagehide', stopIncomingOfferRadar);
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', scheduleSync, { once: true });
   else scheduleSync();
 }
