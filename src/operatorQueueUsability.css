@@ -1,7 +1,8 @@
-/* Operator queue usability: keep the compact dispatch view genuinely compact. */
+/* Operator queue usability: a compact desk view must fit without horizontal scrolling. */
 .cg-operator-workspace .cg-compact-dispatch-scroll{
   overflow-x:hidden!important;
   overflow-y:auto!important;
+  scrollbar-gutter:stable;
 }
 
 .cg-operator-workspace .cg-compact-dispatch-table{
@@ -19,40 +20,68 @@
   width:100%!important;
 }
 
+.cg-operator-workspace .cg-compact-dispatch-table thead{
+  position:sticky;
+  top:0;
+  z-index:12;
+  border-bottom:1px solid rgba(255,255,255,.06);
+  background:rgba(8,9,12,.97)!important;
+  backdrop-filter:blur(14px);
+}
+
 .cg-operator-workspace .cg-compact-dispatch-table thead tr{
   display:grid!important;
-  grid-template-columns:46px minmax(0,1fr) 82px 88px;
+  grid-template-columns:54px minmax(0,1fr) 88px 74px;
   grid-template-areas:"time client driver actions";
   align-items:center;
-  column-gap:5px;
+  column-gap:6px;
   width:100%;
   min-width:0;
-  padding:0 5px;
+  padding:0 8px;
+}
+
+.cg-operator-workspace .cg-compact-dispatch-table tbody{
+  padding:5px;
 }
 
 .cg-operator-workspace .cg-compact-dispatch-table tbody tr{
   display:grid!important;
-  grid-template-columns:46px minmax(0,1fr) 82px 88px;
+  grid-template-columns:54px minmax(0,1fr) 88px 74px;
   grid-template-areas:
     "time client driver actions"
     "time origin status actions"
     "time destination fare actions";
   align-items:center;
-  column-gap:5px;
-  row-gap:0;
+  column-gap:6px;
+  row-gap:1px;
   width:100%;
   min-width:0;
-  min-height:58px;
-  padding:4px 5px;
+  min-height:72px;
+  margin-bottom:5px;
+  padding:6px 7px;
+  border:1px solid rgba(255,255,255,.055);
+  border-radius:12px;
+  background:linear-gradient(100deg,rgba(255,255,255,.025),rgba(255,255,255,.012));
+  box-shadow:0 8px 20px rgba(0,0,0,.08);
 }
+
+.cg-operator-workspace .cg-compact-dispatch-table tbody tr:last-child{margin-bottom:0;}
+.cg-operator-workspace .cg-compact-dispatch-table tbody tr:hover{border-color:rgba(96,165,250,.18);}
 
 .cg-operator-workspace .cg-compact-dispatch-table th,
 .cg-operator-workspace .cg-compact-dispatch-table td{
   width:auto!important;
   min-width:0!important;
   max-width:none!important;
-  padding:2px 3px!important;
+  padding:2px 2px!important;
   overflow:hidden;
+}
+
+.cg-operator-workspace .cg-compact-dispatch-table th{
+  color:#8d95a3!important;
+  font-size:9px!important;
+  line-height:1!important;
+  letter-spacing:.06em!important;
 }
 
 .cg-operator-workspace .cg-compact-dispatch-table th[data-cg-compact-role='time'],
@@ -72,7 +101,7 @@
 .cg-operator-workspace .cg-compact-dispatch-table th[data-cg-compact-role='actions'],
 .cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='actions']{grid-area:actions;}
 
-/* Secondary headers are represented inside each compact row instead of consuming width. */
+/* Only the four scan columns need headers. Route, state and fare live inside the row. */
 .cg-operator-workspace .cg-compact-dispatch-table thead th[data-cg-compact-role='origin'],
 .cg-operator-workspace .cg-compact-dispatch-table thead th[data-cg-compact-role='destination'],
 .cg-operator-workspace .cg-compact-dispatch-table thead th[data-cg-compact-role='status'],
@@ -80,6 +109,55 @@
   display:none!important;
 }
 
+/* Time becomes one clean 24h-style value plus elapsed minutes. */
+.cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='time']{
+  align-self:stretch;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  border-right:1px solid rgba(255,255,255,.055);
+  color:#e5e7eb!important;
+  white-space:nowrap!important;
+  font-size:11px!important;
+  line-height:1.05!important;
+  font-variant-numeric:tabular-nums;
+}
+.cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='time'] span{
+  margin-top:5px;
+  color:#77808e!important;
+  font-size:8px!important;
+  line-height:1!important;
+}
+
+/* Client information gets the largest share of the row. */
+.cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='client'] p:first-child{
+  max-width:100%!important;
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+  white-space:nowrap!important;
+  color:#f4f4f5!important;
+  font-size:12px!important;
+  line-height:1.15!important;
+}
+.cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='client'] p:nth-child(2){
+  max-width:100%!important;
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+  white-space:nowrap!important;
+  color:#7f8794!important;
+  font-size:8.5px!important;
+  line-height:1.15!important;
+}
+
+/* Route is shown as two single-line scan rows. */
+.cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='origin'],
+.cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='destination']{
+  min-width:0!important;
+  white-space:nowrap!important;
+  color:#aeb6c2;
+  font-size:9.5px!important;
+  line-height:1.2!important;
+}
 .cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='client'] p,
 .cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='origin'] p,
 .cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='destination'] p{
@@ -88,80 +166,136 @@
   overflow:hidden!important;
   text-overflow:ellipsis!important;
 }
-
 .cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='origin']::before{
   content:"Origen · ";
   color:#34d399;
-  font-size:9px;
-  font-weight:800;
+  font-size:8px;
+  font-weight:900;
 }
 .cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='destination']::before{
   content:"Destino · ";
-  color:#94a3b8;
-  font-size:9px;
-  font-weight:800;
+  color:#7dd3fc;
+  font-size:8px;
+  font-weight:900;
 }
 .cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='origin'] p:first-child,
 .cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='destination'] p:first-child{
   display:inline!important;
+  color:#d4d4d8!important;
+  font-size:9.5px!important;
 }
 .cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='origin'] p:nth-child(n+2),
-.cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='destination'] p:nth-child(n+2){
-  display:none!important;
-}
+.cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='destination'] p:nth-child(n+2){display:none!important;}
 
-.cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='driver']{
+/* Móvil / state / fare is a small vertical operational stack. */
+.cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='driver'],
+.cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='status'],
+.cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='fare']{
   align-self:center;
+  overflow:visible;
 }
 .cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='driver'] button{
   max-width:100%;
-  padding:4px 6px!important;
-  white-space:nowrap;
-  overflow:hidden;
-  text-overflow:ellipsis;
+  min-height:24px;
+  padding:3px 6px!important;
+  border-radius:7px!important;
+  white-space:nowrap!important;
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+  font-size:10px!important;
+  line-height:1!important;
 }
-
-.cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='status']{
-  align-self:center;
+.cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='status'] span{
+  display:inline-flex!important;
+  max-width:100%;
+  align-items:center;
+  padding:3px 5px!important;
+  white-space:nowrap!important;
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+  font-size:8px!important;
+  line-height:1!important;
+  letter-spacing:.015em!important;
 }
 .cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='fare']{
-  align-self:center;
   text-align:left!important;
+  color:#f4f4f5!important;
+  font-size:11px!important;
+  line-height:1!important;
 }
 
+/* Action buttons stay visible at all times and never force horizontal scroll. */
 .cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='actions']{
   align-self:stretch;
   display:flex;
   align-items:center;
   justify-content:flex-end;
+  border-left:1px solid rgba(255,255,255,.055);
 }
 .cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='actions']>div{
   display:grid!important;
-  grid-template-columns:repeat(2,30px);
+  grid-template-columns:repeat(2,29px);
   gap:4px!important;
   justify-content:end;
 }
 .cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='actions'] button{
-  width:30px;
-  height:28px;
-  display:grid;
-  place-items:center;
+  width:29px!important;
+  height:28px!important;
+  min-width:29px!important;
+  display:grid!important;
+  place-items:center!important;
   padding:0!important;
+  border-radius:7px!important;
 }
+
+/* Light mode keeps the same hierarchy instead of becoming a flat gray table. */
+[data-theme='light'] .cg-operator-workspace .cg-compact-dispatch-table thead{
+  border-color:rgba(15,67,106,.1);
+  background:rgba(239,246,252,.98)!important;
+}
+[data-theme='light'] .cg-operator-workspace .cg-compact-dispatch-table tbody tr{
+  border-color:rgba(15,67,106,.11);
+  background:linear-gradient(100deg,rgba(255,255,255,.98),rgba(242,248,253,.94));
+  box-shadow:0 7px 18px rgba(14,63,102,.07);
+}
+[data-theme='light'] .cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='time']{
+  border-color:rgba(15,67,106,.1);
+  color:#17324b!important;
+}
+[data-theme='light'] .cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='client'] p:first-child{color:#10283e!important;}
+[data-theme='light'] .cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='origin'] p:first-child,
+[data-theme='light'] .cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='destination'] p:first-child{color:#36556d!important;}
+[data-theme='light'] .cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='fare']{color:#17324b!important;}
+[data-theme='light'] .cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='actions']{border-color:rgba(15,67,106,.1);}
+
+/* Accessibility modes increase text modestly here so the compact grid still remains compact. */
+html[data-cg-font-size='large'] .cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='client'] p:first-child{font-size:13px!important;}
+html[data-cg-font-size='large'] .cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='origin'],
+html[data-cg-font-size='large'] .cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='destination']{font-size:10.5px!important;}
+html[data-cg-font-size='xlarge'] .cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='client'] p:first-child{font-size:14px!important;}
+html[data-cg-font-size='xlarge'] .cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='origin'],
+html[data-cg-font-size='xlarge'] .cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='destination']{font-size:11px!important;}
 
 @media (max-width:640px){
   .cg-operator-workspace .cg-compact-dispatch-table thead tr,
   .cg-operator-workspace .cg-compact-dispatch-table tbody tr{
-    grid-template-columns:42px minmax(0,1fr) 74px 70px;
-    column-gap:3px;
+    grid-template-columns:50px minmax(0,1fr) 82px 68px;
+    column-gap:4px;
   }
-  .cg-operator-workspace .cg-compact-dispatch-table tbody tr{padding-inline:3px;}
+  .cg-operator-workspace .cg-compact-dispatch-table thead tr{padding-inline:5px;}
+  .cg-operator-workspace .cg-compact-dispatch-table tbody{padding:3px;}
+  .cg-operator-workspace .cg-compact-dispatch-table tbody tr{
+    min-height:70px;
+    padding:5px 4px;
+    border-radius:10px;
+  }
   .cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='actions']>div{
-    grid-template-columns:repeat(2,28px);
+    grid-template-columns:repeat(2,27px);
     gap:3px!important;
   }
   .cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='actions'] button{
-    width:28px;
-    height:27px;
+    width:27px!important;
+    height:27px!important;
+    min-width:27px!important;
   }
 }
