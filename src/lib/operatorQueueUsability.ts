@@ -27,6 +27,44 @@ const compactRoleForHeader = (label: string) => {
   return '';
 };
 
+const compactStatusLabel = (value: string) => {
+  const text = normalize(value);
+  if (text === 'pasajero a bordo') return 'A bordo';
+  if (text === 'movil en camino') return 'En camino';
+  if (text === 'movil llego') return 'En origen';
+  if (text === 'asignado') return 'Asignado';
+  if (text === 'pendiente') return 'Pendiente';
+  if (text === 'finalizado') return 'Finalizado';
+  if (text === 'cancelado') return 'Cancelado';
+  return value.trim();
+};
+
+const firstTextNode = (element: HTMLElement) =>
+  Array.from(element.childNodes).find((node) => node.nodeType === Node.TEXT_NODE) as Text | undefined;
+
+const polishCompactRow = (row: HTMLTableRowElement) => {
+  const timeCell = row.querySelector<HTMLTableCellElement>("td[data-cg-compact-role='time']");
+  if (timeCell) {
+    const textNode = firstTextNode(timeCell);
+    const match = timeCell.textContent?.match(/\b(\d{1,2}:\d{2})\b/);
+    if (textNode && match && textNode.data.trim() !== match[1]) textNode.data = match[1];
+  }
+
+  const clientCell = row.querySelector<HTMLTableCellElement>("td[data-cg-compact-role='client']");
+  const phone = clientCell?.querySelectorAll('p')?.[1];
+  if (phone && normalize(phone.textContent) === 'sin telefono') phone.textContent = 'Sin número';
+
+  const statusCell = row.querySelector<HTMLTableCellElement>("td[data-cg-compact-role='status']");
+  const statusBadge = statusCell?.querySelector<HTMLElement>('span');
+  if (statusBadge) {
+    const fullLabel = statusBadge.dataset.cgFullStatus || statusBadge.textContent?.trim() || '';
+    if (!statusBadge.dataset.cgFullStatus) statusBadge.dataset.cgFullStatus = fullLabel;
+    const shortLabel = compactStatusLabel(fullLabel);
+    if (statusBadge.textContent?.trim() !== shortLabel) statusBadge.textContent = shortLabel;
+    if (fullLabel && statusBadge.title !== fullLabel) statusBadge.title = fullLabel;
+  }
+};
+
 const markCompactDispatchTables = () => {
   const tables = Array.from(document.querySelectorAll<HTMLTableElement>('.cg-operator-workspace table'));
 
@@ -58,6 +96,7 @@ const markCompactDispatchTables = () => {
         if (role) cell.dataset.cgCompactRole = role;
         else delete cell.dataset.cgCompactRole;
       });
+      polishCompactRow(row);
     });
   });
 };
