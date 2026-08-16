@@ -10,6 +10,7 @@ import './lightModePremium.css';
 import './premiumThemeModes.css';
 import './themeInteractionFixes.css';
 import './operatorQueueUsability.css';
+import './operatorPriorityLight.css';
 import {registerServiceWorker} from './lib/pwa';
 import {registerRegionalPartnerReferralBootstrap} from './lib/regionalPartnerReferralBootstrap';
 import {registerGoogleOnboardingRoleBootstrap} from './lib/googleOnboardingRoleBootstrap';
