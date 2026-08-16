@@ -1,0 +1,167 @@
+/* Operator queue usability: keep the compact dispatch view genuinely compact. */
+.cg-operator-workspace .cg-compact-dispatch-scroll{
+  overflow-x:hidden!important;
+  overflow-y:auto!important;
+}
+
+.cg-operator-workspace .cg-compact-dispatch-table{
+  display:block!important;
+  width:100%!important;
+  min-width:0!important;
+  table-layout:fixed!important;
+  border-collapse:separate!important;
+  border-spacing:0!important;
+}
+
+.cg-operator-workspace .cg-compact-dispatch-table thead,
+.cg-operator-workspace .cg-compact-dispatch-table tbody{
+  display:block!important;
+  width:100%!important;
+}
+
+.cg-operator-workspace .cg-compact-dispatch-table thead tr{
+  display:grid!important;
+  grid-template-columns:46px minmax(0,1fr) 82px 88px;
+  grid-template-areas:"time client driver actions";
+  align-items:center;
+  column-gap:5px;
+  width:100%;
+  min-width:0;
+  padding:0 5px;
+}
+
+.cg-operator-workspace .cg-compact-dispatch-table tbody tr{
+  display:grid!important;
+  grid-template-columns:46px minmax(0,1fr) 82px 88px;
+  grid-template-areas:
+    "time client driver actions"
+    "time origin status actions"
+    "time destination fare actions";
+  align-items:center;
+  column-gap:5px;
+  row-gap:0;
+  width:100%;
+  min-width:0;
+  min-height:58px;
+  padding:4px 5px;
+}
+
+.cg-operator-workspace .cg-compact-dispatch-table th,
+.cg-operator-workspace .cg-compact-dispatch-table td{
+  width:auto!important;
+  min-width:0!important;
+  max-width:none!important;
+  padding:2px 3px!important;
+  overflow:hidden;
+}
+
+.cg-operator-workspace .cg-compact-dispatch-table th[data-cg-compact-role='time'],
+.cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='time']{grid-area:time;}
+.cg-operator-workspace .cg-compact-dispatch-table th[data-cg-compact-role='client'],
+.cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='client']{grid-area:client;}
+.cg-operator-workspace .cg-compact-dispatch-table th[data-cg-compact-role='origin'],
+.cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='origin']{grid-area:origin;}
+.cg-operator-workspace .cg-compact-dispatch-table th[data-cg-compact-role='destination'],
+.cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='destination']{grid-area:destination;}
+.cg-operator-workspace .cg-compact-dispatch-table th[data-cg-compact-role='driver'],
+.cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='driver']{grid-area:driver;}
+.cg-operator-workspace .cg-compact-dispatch-table th[data-cg-compact-role='status'],
+.cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='status']{grid-area:status;}
+.cg-operator-workspace .cg-compact-dispatch-table th[data-cg-compact-role='fare'],
+.cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='fare']{grid-area:fare;}
+.cg-operator-workspace .cg-compact-dispatch-table th[data-cg-compact-role='actions'],
+.cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='actions']{grid-area:actions;}
+
+/* Secondary headers are represented inside each compact row instead of consuming width. */
+.cg-operator-workspace .cg-compact-dispatch-table thead th[data-cg-compact-role='origin'],
+.cg-operator-workspace .cg-compact-dispatch-table thead th[data-cg-compact-role='destination'],
+.cg-operator-workspace .cg-compact-dispatch-table thead th[data-cg-compact-role='status'],
+.cg-operator-workspace .cg-compact-dispatch-table thead th[data-cg-compact-role='fare']{
+  display:none!important;
+}
+
+.cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='client'] p,
+.cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='origin'] p,
+.cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='destination'] p{
+  max-width:100%!important;
+  white-space:nowrap!important;
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+}
+
+.cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='origin']::before{
+  content:"Origen · ";
+  color:#34d399;
+  font-size:9px;
+  font-weight:800;
+}
+.cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='destination']::before{
+  content:"Destino · ";
+  color:#94a3b8;
+  font-size:9px;
+  font-weight:800;
+}
+.cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='origin'] p:first-child,
+.cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='destination'] p:first-child{
+  display:inline!important;
+}
+.cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='origin'] p:nth-child(n+2),
+.cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='destination'] p:nth-child(n+2){
+  display:none!important;
+}
+
+.cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='driver']{
+  align-self:center;
+}
+.cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='driver'] button{
+  max-width:100%;
+  padding:4px 6px!important;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+.cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='status']{
+  align-self:center;
+}
+.cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='fare']{
+  align-self:center;
+  text-align:left!important;
+}
+
+.cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='actions']{
+  align-self:stretch;
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+}
+.cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='actions']>div{
+  display:grid!important;
+  grid-template-columns:repeat(2,30px);
+  gap:4px!important;
+  justify-content:end;
+}
+.cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='actions'] button{
+  width:30px;
+  height:28px;
+  display:grid;
+  place-items:center;
+  padding:0!important;
+}
+
+@media (max-width:640px){
+  .cg-operator-workspace .cg-compact-dispatch-table thead tr,
+  .cg-operator-workspace .cg-compact-dispatch-table tbody tr{
+    grid-template-columns:42px minmax(0,1fr) 74px 70px;
+    column-gap:3px;
+  }
+  .cg-operator-workspace .cg-compact-dispatch-table tbody tr{padding-inline:3px;}
+  .cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='actions']>div{
+    grid-template-columns:repeat(2,28px);
+    gap:3px!important;
+  }
+  .cg-operator-workspace .cg-compact-dispatch-table td[data-cg-compact-role='actions'] button{
+    width:28px;
+    height:27px;
+  }
+}
