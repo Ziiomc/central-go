@@ -3,6 +3,7 @@
   "framework": "vite",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
+  "ignoreCommand": "if [ \"$VERCEL_PROJECT_ID\" = \"prj_RWO8beNYgZbK3mOQy5J9CnFPmIDV\" ]; then exit 0; else exit 1; fi",
   "rewrites": [
     {
       "source": "/__supabase/:path*",
