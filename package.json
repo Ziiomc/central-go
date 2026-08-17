@@ -5,12 +5,13 @@
   "type": "module",
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
-    "build": "vite build",
+    "build": "node scripts/generate-central-manual.mjs && vite build",
     "preview": "vite preview --host=0.0.0.0",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
     "generate:locations": "node scripts/generate-world-location-data.mjs",
     "generate:partner-pdf": "python3 scripts/generate-partner-requirements.py",
+    "generate:central-manual": "node scripts/generate-central-manual.mjs",
     "check:commercial": "node scripts/commercial-check.mjs",
     "test": "npm run lint && npm run check:commercial && npm run build"
   },
