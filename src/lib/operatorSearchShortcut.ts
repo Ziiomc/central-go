@@ -23,10 +23,10 @@ const updateShortcutHint = () => {
     const text = kbd.textContent?.replace(/\s+/g, ' ').trim().toLowerCase();
     if (text !== 'ctrl k' && text !== 'alt k') return;
 
-    kbd.textContent = 'Alt K';
-    kbd.title = 'Buscar en Central GO · Alt + K o /';
-    kbd.setAttribute('aria-label', 'Atajo de búsqueda Alt K');
-    kbd.style.cursor = 'pointer';
+    if (text !== 'alt k') kbd.textContent = 'Alt K';
+    if (kbd.title !== 'Buscar en Central GO · Alt + K o /') kbd.title = 'Buscar en Central GO · Alt + K o /';
+    if (kbd.getAttribute('aria-label') !== 'Atajo de búsqueda Alt K') kbd.setAttribute('aria-label', 'Atajo de búsqueda Alt K');
+    if (kbd.style.cursor !== 'pointer') kbd.style.cursor = 'pointer';
   });
 };
 
@@ -42,7 +42,6 @@ export const registerOperatorSearchShortcut = () => {
 
     event.preventDefault();
     event.stopPropagation();
-    event.stopImmediatePropagation();
     focusOperatorSearch();
   };
 
@@ -59,13 +58,11 @@ export const registerOperatorSearchShortcut = () => {
     focusOperatorSearch();
   };
 
-  // Capture phase gives the app the first chance for shortcuts that are actually delivered by the browser.
+  // A single global capture listener is enough and avoids duplicate handling.
   window.addEventListener('keydown', handleKeyDown, true);
-  document.addEventListener('keydown', handleKeyDown, true);
   document.addEventListener('click', handleClick, true);
 
-  // React may mount/rerender the console after this bootstrap runs, so keep the visible hint synchronized.
-  const observer = new MutationObserver(() => updateShortcutHint());
-  observer.observe(document.documentElement, { childList: true, subtree: true });
-  window.setTimeout(updateShortcutHint, 0);
+  // React can mount the console after bootstrap. Use bounded retries instead of a MutationObserver
+  // so the shortcut hint can never create a self-triggering DOM mutation loop.
+  [0, 250, 1000, 2500].forEach(delay => window.setTimeout(updateShortcutHint, delay));
 };
