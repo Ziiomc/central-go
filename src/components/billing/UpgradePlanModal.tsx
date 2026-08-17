@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Check, Crown, Loader2, ShieldCheck, Sparkles, X, Zap } from 'lucide-react';
+import { Check, Crown, Loader2, ShieldCheck, Sparkles, WalletCards, X, Zap } from 'lucide-react';
 import { requireSupabase } from '../../lib/supabase';
 import { loadPlanCatalog, type CommercialPlanRecord } from '../../lib/planRepository';
+import { createRemitlyPaymentRequest, type RemitlyPaymentRequest } from '../../lib/remitlyPaymentRepository';
+import { RemitlyPaymentPanel } from './RemitlyPaymentPanel';
 
 const money = (value: number) => new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(value);
 
@@ -10,6 +12,7 @@ export const UpgradePlanModal: React.FC<{ companyId: string; onClose: () => void
   const [billing, setBilling] = useState<'monthly' | 'annual'>('monthly');
   const [loading, setLoading] = useState(true);
   const [paying, setPaying] = useState<string | null>(null);
+  const [remitlyRequest, setRemitlyRequest] = useState<RemitlyPaymentRequest | null>(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -24,7 +27,7 @@ export const UpgradePlanModal: React.FC<{ companyId: string; onClose: () => void
   const ordered = useMemo(() => [...plans].sort((a, b) => a.monthlyPrice - b.monthlyPrice), [plans]);
 
   const checkout = async (plan: CommercialPlanRecord) => {
-    setPaying(plan.code);
+    setPaying(`mp:${plan.code}`);
     setError('');
     try {
       const { data, error: invokeError } = await requireSupabase().functions.invoke('mercadopago-create-checkout', {
@@ -39,10 +42,21 @@ export const UpgradePlanModal: React.FC<{ companyId: string; onClose: () => void
     } catch (err) {
       const message = err instanceof Error ? err.message : 'No pudimos iniciar el pago.';
       setError(/edge function|non-2xx|503/i.test(message)
-        ? 'Mercado Pago está preparado. Falta cargar mañana el Access Token y la clave secreta Webhook de la cuenta que recibirá los pagos.'
+        ? 'Mercado Pago está preparado, pero la cuenta receptora todavía no está disponible para completar este cobro.'
         : message);
       setPaying(null);
     }
+  };
+
+  const openRemitly = async (plan: CommercialPlanRecord) => {
+    setPaying(`rm:${plan.code}`);
+    setError('');
+    try {
+      const request = await createRemitlyPaymentRequest({ companyId, planCode: plan.code, billingCycle: billing });
+      setRemitlyRequest(request);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No pudimos preparar el pago internacional.');
+    } finally { setPaying(null); }
   };
 
   return (
@@ -59,7 +73,7 @@ export const UpgradePlanModal: React.FC<{ companyId: string; onClose: () => void
 
         <div className="p-5 md:p-7">
           <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-            <div className="inline-flex items-center gap-2 text-[10px] font-bold text-emerald-300"><ShieldCheck className="h-4 w-4"/> Pago seguro preparado con Mercado Pago</div>
+            <div className="inline-flex items-center gap-2 text-[10px] font-bold text-emerald-300"><ShieldCheck className="h-4 w-4"/> Mercado Pago automático · Remitly internacional</div>
             <div className="flex rounded-xl border border-zinc-800 bg-zinc-950 p-1">
               <button onClick={() => setBilling('monthly')} className={`rounded-lg px-4 py-2 text-[10px] font-black ${billing === 'monthly' ? 'bg-zinc-800 text-white' : 'text-zinc-500'}`}>Mensual</button>
               <button onClick={() => setBilling('annual')} className={`rounded-lg px-4 py-2 text-[10px] font-black ${billing === 'annual' ? 'bg-emerald-400 text-zinc-950' : 'text-emerald-400'}`}>Anual · ahorra</button>
@@ -82,6 +96,8 @@ export const UpgradePlanModal: React.FC<{ companyId: string; onClose: () => void
                   plan.features.live_gps ? 'GPS en vivo' : `${plan.historyDays ?? 0} días de historial`,
                   plan.features.advanced_reports ? 'Analítica y reportes avanzados' : 'Operación esencial',
                 ];
+                const mpBusy = paying === `mp:${plan.code}`;
+                const rmBusy = paying === `rm:${plan.code}`;
                 return (
                   <article key={plan.id} className={`relative flex flex-col rounded-3xl border p-5 ${enterprise ? 'border-purple-400/50 bg-purple-500/[0.08] shadow-xl shadow-purple-950/20' : pro ? 'border-amber-400/50 bg-amber-500/[0.07] ring-1 ring-amber-500/10' : 'border-zinc-800 bg-[#111114]'}`}>
                     {pro && <span className="absolute -top-3 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-amber-400 px-3 py-1 text-[9px] font-black uppercase tracking-widest text-zinc-950">Modo Pro · recomendado para operar</span>}
@@ -90,15 +106,19 @@ export const UpgradePlanModal: React.FC<{ companyId: string; onClose: () => void
                     <p className="mt-1 min-h-10 text-[11px] leading-relaxed text-zinc-500">{plan.features.description}</p>
                     <div className="mt-4"><p className="text-3xl font-black text-white">{money(monthlyEquivalent)}<span className="text-[10px] text-zinc-500"> / mes</span></p>{billing === 'annual' && <p className="mt-1 text-[9px] font-bold text-emerald-400">Cobro anual: {money(amount)}</p>}</div>
                     <div className="my-5 space-y-2 border-t border-zinc-800 pt-4">{bullets.map((bullet) => <div key={bullet} className="flex items-center gap-2 text-[10px] font-semibold text-zinc-300"><span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-400"><Check className="h-3 w-3"/></span>{bullet}</div>)}</div>
-                    <button disabled={Boolean(paying)} onClick={() => void checkout(plan)} className={`mt-auto flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-xs font-black disabled:opacity-50 ${pro ? 'bg-amber-400 text-zinc-950' : enterprise ? 'bg-purple-500 text-white' : 'bg-blue-600 text-white'}`}>{paying === plan.code ? <Loader2 className="h-4 w-4 animate-spin"/> : null}{paying === plan.code ? 'Abriendo Mercado Pago…' : `Elegir ${plan.name}`}</button>
+                    <div className="mt-auto space-y-2">
+                      <button disabled={Boolean(paying)} onClick={() => void checkout(plan)} className={`flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-xs font-black disabled:opacity-50 ${pro ? 'bg-amber-400 text-zinc-950' : enterprise ? 'bg-purple-500 text-white' : 'bg-blue-600 text-white'}`}>{mpBusy ? <Loader2 className="h-4 w-4 animate-spin"/> : null}{mpBusy ? 'Abriendo Mercado Pago…' : 'Pagar con Mercado Pago'}</button>
+                      <button disabled={Boolean(paying)} onClick={() => void openRemitly(plan)} className="flex w-full items-center justify-center gap-2 rounded-xl border border-blue-500/30 bg-blue-500/10 px-4 py-3 text-[10px] font-black text-blue-200 disabled:opacity-50">{rmBusy ? <Loader2 className="h-4 w-4 animate-spin"/> : <WalletCards className="h-4 w-4"/>}{rmBusy ? 'Preparando factura…' : 'Pago internacional · Remitly'}</button>
+                    </div>
                   </article>
                 );
               })}
             </div>
           )}
-          <p className="mt-5 text-center text-[9px] leading-relaxed text-zinc-600">La activación automática queda condicionada a que Mercado Pago confirme el pago mediante Webhook. No se activa una central solo por volver desde la página de pago.</p>
+          <p className="mt-5 text-center text-[9px] leading-relaxed text-zinc-600">Mercado Pago activa mediante confirmación automática del proveedor. Los pagos Remitly requieren comprobante y confirmación manual del Administrador Global antes de habilitar la suscripción.</p>
         </div>
       </div>
+      {remitlyRequest && <RemitlyPaymentPanel request={remitlyRequest} onClose={() => setRemitlyRequest(null)} onSubmitted={() => setError('Pago Remitly enviado correctamente. Quedó pendiente de validación global.')} />}
     </div>
   );
 };
