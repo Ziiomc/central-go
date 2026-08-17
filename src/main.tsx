@@ -21,10 +21,12 @@ import {registerDriverWakeLock} from './lib/driverWakeLock';
 import {registerDriverStorageReliability} from './lib/driverStorageReliability';
 import {initializeFontSizePreference} from './lib/fontSizePreference';
 import {registerOperatorQueueUsability} from './lib/operatorQueueUsability';
+import {registerOperatorSearchShortcut} from './lib/operatorSearchShortcut';
 
 // Aplicar accesibilidad visual antes de montar React evita que el texto cambie de tamaño después de cargar.
 initializeFontSizePreference();
 registerOperatorQueueUsability();
+registerOperatorSearchShortcut();
 
 // Registrar PWA, atribuciones y protecciones de operación antes de montar React.
 registerServiceWorker();
