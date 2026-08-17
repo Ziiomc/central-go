@@ -22,6 +22,7 @@ import {
   startMercadoPagoConnection,
   type MercadoPagoPlatformStatus,
 } from '../../lib/mercadoPagoRepository';
+import { RemitlyPaymentsAdminPanel } from './RemitlyPaymentsAdminPanel';
 
 const emptyStatus: MercadoPagoPlatformStatus = {
   connected: false,
@@ -124,11 +125,11 @@ export const PlatformPaymentsModule: React.FC = () => {
           <div>
             <span className="cg-eyebrow"><Sparkles className="h-3.5 w-3.5" /> Centro financiero</span>
             <h1>Pagos simples, control total.</h1>
-            <p>Vincula la cuenta oficial de Mercado Pago una sola vez. Central Go utilizará esa conexión para cobrar planes, validar pagos y distribuir comisiones sin exponer credenciales en el navegador.</p>
+            <p>Mercado Pago se mantiene como cobro automático y Remitly queda disponible como alternativa internacional con comprobante y validación manual.</p>
             <div className="mt-6 flex flex-wrap gap-2">
               <span className="cg-trust-chip"><ShieldCheck className="h-4 w-4" /> Acceso Superadmin</span>
               <span className="cg-trust-chip"><KeyRound className="h-4 w-4" /> OAuth + PKCE</span>
-              <span className="cg-trust-chip"><RefreshCw className="h-4 w-4" /> Renovación automática</span>
+              <span className="cg-trust-chip"><WalletCards className="h-4 w-4" /> Remitly internacional</span>
             </div>
           </div>
           <div className={`cg-payment-status-card ${status.connected ? 'is-connected' : ''}`}>
@@ -195,9 +196,11 @@ export const PlatformPaymentsModule: React.FC = () => {
         </section>
       </div>
 
+      <RemitlyPaymentsAdminPanel />
+
       <section className="cg-info-strip">
         <div className="cg-connection-icon is-connected"><ShieldCheck className="h-6 w-6" /></div>
-        <div><p className="font-black text-[var(--cg-text)]">Conexión exclusiva de la plataforma</p><p className="mt-1 text-[11px] leading-relaxed text-[var(--cg-muted)]">Los administradores de centrales pueden pagar sus planes, pero solo un administrador global puede cambiar la cuenta que recibe el dinero.</p></div>
+        <div><p className="font-black text-[var(--cg-text)]">Dos circuitos, una sola administración</p><p className="mt-1 text-[11px] leading-relaxed text-[var(--cg-muted)]">Mercado Pago puede validar automáticamente mediante webhook. Remitly se valida manualmente desde este panel después de comprobar la recepción real del dinero.</p></div>
       </section>
     </div>
   );
