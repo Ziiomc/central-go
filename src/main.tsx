@@ -13,6 +13,7 @@ import './operatorQueueUsability.css';
 import './operatorPriorityLight.css';
 import './operatorPriorityPremium.css';
 import './designSystem.css';
+import './operatorPriorityStatusColors.css';
 import {registerServiceWorker} from './lib/pwa';
 import {registerRegionalPartnerReferralBootstrap} from './lib/regionalPartnerReferralBootstrap';
 import {registerGoogleOnboardingRoleBootstrap} from './lib/googleOnboardingRoleBootstrap';
