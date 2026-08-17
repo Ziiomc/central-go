@@ -38,6 +38,9 @@ export interface PartnerDirectoryItem {
   createdAt: string;
   parentPartnerId: string | null;
   parentName: string | null;
+  registrationCountryCode: string | null;
+  registrationRegion: string | null;
+  registrationCity: string | null;
   territories: PartnerTerritory[];
   centralCount: number;
   activeCentralCount: number;
@@ -82,27 +85,40 @@ export async function loadVisiblePartners(): Promise<PartnerDirectoryItem[]> {
   const { data, error } = await db.rpc('centralgo_visible_partners');
   if (error) throw error;
   const rows = Array.isArray(data) ? data : [];
-  return rows.map((row: any) => ({
-    id: String(row.id),
-    userId: String(row.userId),
-    name: row.name ?? 'Partner',
-    email: row.email ?? '',
-    phone: row.phone ?? '',
-    kind: row.kind,
-    code: row.code ?? '',
-    commissionPercent: Number(row.commissionPercent ?? 0),
-    active: Boolean(row.active),
-    createdAt: row.createdAt ?? '',
-    parentPartnerId: row.parentPartnerId ?? null,
-    parentName: row.parentName ?? null,
-    territories: Array.isArray(row.territories) ? row.territories : [],
-    centralCount: Number(row.centralCount ?? 0),
-    activeCentralCount: Number(row.activeCentralCount ?? 0),
-    monthlySales: Number(row.monthlySales ?? 0),
-    pendingCommission: Number(row.pendingCommission ?? 0),
-    availableCommission: Number(row.availableCommission ?? 0),
-    paidCommission: Number(row.paidCommission ?? 0),
-  }));
+  return rows.map((row: any) => {
+    const registrationCountryCode = row.registrationCountryCode ? String(row.registrationCountryCode) : null;
+    const registrationRegion = row.registrationRegion ? String(row.registrationRegion) : null;
+    const registrationCity = row.registrationCity ? String(row.registrationCity) : null;
+    const assignedTerritories: PartnerTerritory[] = Array.isArray(row.territories) ? row.territories : [];
+    const registrationFallback: PartnerTerritory[] = registrationCountryCode || registrationRegion || registrationCity
+      ? [{ countryCode: registrationCountryCode ?? '', region: registrationRegion, city: registrationCity, exclusive: false }]
+      : [];
+
+    return {
+      id: String(row.id),
+      userId: String(row.userId),
+      name: row.name ?? 'Partner',
+      email: row.email ?? '',
+      phone: row.phone ?? '',
+      kind: row.kind,
+      code: row.code ?? '',
+      commissionPercent: Number(row.commissionPercent ?? 0),
+      active: Boolean(row.active),
+      createdAt: row.createdAt ?? '',
+      parentPartnerId: row.parentPartnerId ?? null,
+      parentName: row.parentName ?? null,
+      registrationCountryCode,
+      registrationRegion,
+      registrationCity,
+      territories: assignedTerritories.length > 0 ? assignedTerritories : registrationFallback,
+      centralCount: Number(row.centralCount ?? 0),
+      activeCentralCount: Number(row.activeCentralCount ?? 0),
+      monthlySales: Number(row.monthlySales ?? 0),
+      pendingCommission: Number(row.pendingCommission ?? 0),
+      availableCommission: Number(row.availableCommission ?? 0),
+      paidCommission: Number(row.paidCommission ?? 0),
+    };
+  });
 }
 
 export async function inviteNetworkPartner(input: {
