@@ -1,6 +1,6 @@
 import { requireSupabase } from './supabase';
 
-export type PassengerTripStatus='pending'|'assigned'|'en_route'|'in_progress'|'completed'|'cancelled';
+export type PassengerTripStatus='pending'|'assigned'|'en_route'|'arrived'|'in_progress'|'completed'|'cancelled';
 export interface NearbyCentral{id:string;name:string;city:string;distanceKm:number;}
 export interface PassengerTripSnapshot{
   tripId:string;
