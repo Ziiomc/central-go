@@ -21,15 +21,25 @@ let deferredPrompt: BeforeInstallPromptEvent | null = null;
 let listenersRegistered = false;
 let serviceWorkerRegistrationStarted = false;
 let controllerListenerRegistered = false;
+let serviceWorkerMessageListenerRegistered = false;
 let driverReliabilityRegistered = false;
 let driverPushRegistered = false;
+let driverSessionReliabilityRegistered = false;
+let driverSessionRefreshPromise: Promise<void> | null = null;
+let driverSessionInterval: number | null = null;
+let driverSessionHiddenAt: number | null = null;
 let driverWakeLock: WakeLockSentinelLike | null = null;
 let driverWakeLockBusy = false;
 let driverHiddenAt: number | null = null;
-const FRESHNESS_KEY = 'centralgo-fresh-bundle-v8-push';
+const FRESHNESS_KEY = 'centralgo-fresh-bundle-v9-trip-lifecycle';
 const DRIVER_PUSH_PROMPTED_KEY = 'centralgo-driver-push-prompted';
 const DRIVER_RESUME_THRESHOLD_MS = 8000;
+const DRIVER_SESSION_FORCE_REFRESH_AFTER_MS = 60_000;
+const DRIVER_SESSION_REFRESH_MARGIN_MS = 12 * 60_000;
+const DRIVER_SESSION_CHECK_MS = 4 * 60_000;
 const VAPID_PUBLIC_KEY = 'BEN4b02sauQecZUH30sIRi_tubjuPEmL9sWmvFgmwgJLKIvEj1DtDdAfff4xbYi3nCvgfB0p40R-IIdE0aEGwys';
+
+const isDriverRoute = () => typeof window !== 'undefined' && location.pathname.startsWith('/driver');
 
 const vapidToUint8 = (value: string) => {
   const padding = '='.repeat((4 - value.length % 4) % 4);
@@ -38,8 +48,63 @@ const vapidToUint8 = (value: string) => {
   return Uint8Array.from([...raw].map((char) => char.charCodeAt(0)));
 };
 
+async function maintainDriverSession(forceRefresh = false) {
+  if (!isDriverRoute() || !navigator.onLine) return;
+  if (driverSessionRefreshPromise) return driverSessionRefreshPromise;
+
+  driverSessionRefreshPromise = (async () => {
+    try {
+      const db = requireSupabase();
+      const { data, error } = await db.auth.getSession();
+      if (error || !data.session) return;
+      const expiresAtMs = Number(data.session.expires_at ?? 0) * 1000;
+      const nearExpiry = !expiresAtMs || expiresAtMs - Date.now() <= DRIVER_SESSION_REFRESH_MARGIN_MS;
+      if (!forceRefresh && !nearExpiry) return;
+      const { error: refreshError } = await db.auth.refreshSession();
+      if (refreshError) console.warn('CentralGo driver session refresh deferred:', refreshError.message);
+    } catch (error) {
+      // Mobile networks frequently disappear for a few seconds after unlock.
+      // A temporary transport error must never force the driver out of the app.
+      console.warn('CentralGo driver session recovery pending:', error);
+    }
+  })().finally(() => { driverSessionRefreshPromise = null; });
+
+  return driverSessionRefreshPromise;
+}
+
+function registerDriverSessionReliability() {
+  if (typeof window === 'undefined' || driverSessionReliabilityRegistered || !isDriverRoute()) return;
+  driverSessionReliabilityRegistered = true;
+
+  const recover = (force = false) => {
+    if (!isDriverRoute() || document.visibilityState !== 'visible') return;
+    void maintainDriverSession(force).finally(() => {
+      window.dispatchEvent(new CustomEvent('centralgo:driver-resync', { detail: { reason: 'session-recovery' } }));
+    });
+  };
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      driverSessionHiddenAt = Date.now();
+      return;
+    }
+    const hiddenMs = driverSessionHiddenAt ? Date.now() - driverSessionHiddenAt : 0;
+    driverSessionHiddenAt = null;
+    recover(hiddenMs >= DRIVER_SESSION_FORCE_REFRESH_AFTER_MS);
+  });
+  window.addEventListener('pageshow', (event) => recover((event as PageTransitionEvent).persisted));
+  window.addEventListener('online', () => recover(true));
+  window.addEventListener('focus', () => recover(false));
+
+  driverSessionInterval = window.setInterval(() => {
+    if (document.visibilityState === 'visible') void maintainDriverSession(false);
+  }, DRIVER_SESSION_CHECK_MS);
+
+  void maintainDriverSession(false);
+}
+
 async function ensureDriverPushSubscription(requestPermission: boolean) {
-  if (!location.pathname.startsWith('/driver')) return false;
+  if (!isDriverRoute()) return false;
   if (!('serviceWorker' in navigator) || !('PushManager' in window) || typeof Notification === 'undefined') return false;
 
   let permission = Notification.permission;
@@ -49,6 +114,7 @@ async function ensureDriverPushSubscription(requestPermission: boolean) {
   }
   if (permission !== 'granted') return false;
 
+  await maintainDriverSession(false);
   const db = requireSupabase();
   const { data: authData } = await db.auth.getUser();
   if (!authData.user) return false;
@@ -109,8 +175,34 @@ function registerControllerListener() {
   });
 }
 
+function registerServiceWorkerMessageListener() {
+  if (typeof window === 'undefined' || !('serviceWorker' in navigator) || serviceWorkerMessageListenerRegistered) return;
+  serviceWorkerMessageListenerRegistered = true;
+
+  navigator.serviceWorker.addEventListener('message', (event: MessageEvent) => {
+    const data = event.data as { type?: string; tripId?: string | null; status?: string | null } | undefined;
+    if (!data?.type || !['centralgo:trip-cancelled', 'centralgo:trip-cleared'].includes(data.type)) return;
+
+    try { if ('vibrate' in navigator) navigator.vibrate(0); } catch {}
+    try { window.speechSynthesis?.cancel(); } catch {}
+    window.dispatchEvent(new CustomEvent('centralgo:driver-resync', { detail: { reason: data.type, tripId: data.tripId } }));
+
+    // React receives the normal Realtime update. A reload is only needed when an
+    // unanswered offer was withdrawn/cancelled, because the browser may have suspended
+    // the component while that offer was on screen. Accepting a trip (en_route) must not reload.
+    const shouldReload = isDriverRoute() && (data.type === 'centralgo:trip-cancelled' || data.status !== 'en_route');
+    if (!shouldReload) return;
+
+    const key = `centralgo:driver-trip-clear:${data.tripId || 'unknown'}`;
+    const previous = Number(sessionStorage.getItem(key) || 0);
+    if (Date.now() - previous < 5000) return;
+    sessionStorage.setItem(key, String(Date.now()));
+    window.setTimeout(() => window.location.reload(), 180);
+  });
+}
+
 function registerDriverPush() {
-  if (typeof window === 'undefined' || driverPushRegistered || !location.pathname.startsWith('/driver')) return;
+  if (typeof window === 'undefined' || driverPushRegistered || !isDriverRoute()) return;
   driverPushRegistered = true;
 
   // Si ya se concedió permiso, restauramos/renovamos la suscripción sin molestar al conductor.
@@ -137,7 +229,7 @@ async function releaseDriverWakeLock() {
 }
 
 async function requestDriverWakeLock() {
-  if (!location.pathname.startsWith('/driver')) return;
+  if (!isDriverRoute()) return;
   if (!/Android/i.test(navigator.userAgent || '')) return;
   if (document.visibilityState !== 'visible') return;
   if (localStorage.getItem('centralgo-driver-gps-wanted') === '0') return;
@@ -152,24 +244,28 @@ async function requestDriverWakeLock() {
 }
 
 function recoverDriverAfterAndroidSuspend(force = false) {
-  if (!location.pathname.startsWith('/driver') || !/Android/i.test(navigator.userAgent || '')) return;
+  if (!isDriverRoute() || !/Android/i.test(navigator.userAgent || '')) return;
   if (document.visibilityState !== 'visible') return;
   void requestDriverWakeLock();
-  void ensureDriverPushSubscription(false).catch(() => undefined);
 
   const hiddenAt = driverHiddenAt;
   driverHiddenAt = null;
   const suspendedMs = hiddenAt ? Date.now() - hiddenAt : 0;
-  if (!force && suspendedMs < DRIVER_RESUME_THRESHOLD_MS) return;
-  // No recargamos la página: una recarga puede borrar la pantalla de la carrera
-  // mientras la red móvil vuelve. El proveedor restaura la copia local y luego
-  // reconcilia el estado autoritativo con Supabase.
+  const needsStrongRecovery = force || suspendedMs >= DRIVER_RESUME_THRESHOLD_MS;
+
+  void maintainDriverSession(needsStrongRecovery).finally(() => {
+    void ensureDriverPushSubscription(false).catch(() => undefined);
+  });
+
+  if (!needsStrongRecovery) return;
+  // No recargamos la página al volver normalmente: el proveedor restaura la copia local
+  // y luego reconcilia el estado autoritativo con Supabase.
   window.dispatchEvent(new CustomEvent('centralgo:driver-resync',{detail:{suspendedMs}}));
 }
 
 function registerDriverAndroidReliability() {
   if (typeof window === 'undefined' || driverReliabilityRegistered) return;
-  if (!location.pathname.startsWith('/driver') || !/Android/i.test(navigator.userAgent || '')) return;
+  if (!isDriverRoute() || !/Android/i.test(navigator.userAgent || '')) return;
   driverReliabilityRegistered = true;
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') { driverHiddenAt = Date.now(); void releaseDriverWakeLock(); return; }
@@ -190,7 +286,7 @@ async function doRegisterServiceWorker() {
   try {
     await purgeLegacyFrontendCaches();
     const registration = await navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' });
-    // Pedimos comprobar la versión para que los dispositivos existentes reciban el worker con Push.
+    // Pedimos comprobar la versión para que los dispositivos existentes reciban el worker con el ciclo de vida de ofertas.
     void registration.update().catch(() => undefined);
     console.log('CentralGo ServiceWorker registered:', registration.scope);
     registerDriverPush();
@@ -204,6 +300,8 @@ export function registerServiceWorker() {
   if (typeof window === 'undefined') return;
   registerInstallListeners();
   registerControllerListener();
+  registerServiceWorkerMessageListener();
+  registerDriverSessionReliability();
   registerDriverAndroidReliability();
   if (!('serviceWorker' in navigator)) return;
   if (document.readyState === 'complete') void doRegisterServiceWorker();
