@@ -83,7 +83,7 @@ Deno.serve(async(req)=>{
    if(action==='cancel'){
     if(trip.status==='in_progress'||trip.status==='completed')return json({error:'La carrera ya comenzó y no puede cancelarse desde la app.'},409);
     if(trip.status!=='cancelled'){
-     const{data:cancelled,error:cancelError}=await db.from('trips').update({status:'cancelled',cancelled_at:new Date().toISOString(),cancel_reason:'Cancelada por pasajero desde la app',cancel_source:'passenger'}).eq('id',trip.id).in('status',['pending','assigned','en_route']).select('*').maybeSingle();
+     const{data:cancelled,error:cancelError}=await db.from('trips').update({status:'cancelled',cancelled_at:new Date().toISOString(),cancel_reason:'Cancelada por pasajero desde la app',cancel_source:'client'}).eq('id',trip.id).in('status',['pending','assigned','en_route','arrived']).select('*').maybeSingle();
      if(cancelError)return json({error:'No pudimos cancelar la carrera'},500);
      if(!cancelled)return json({error:'El estado de la carrera cambió. Actualiza el seguimiento.'},409);
      if(cancelled.driver_id)await db.from('drivers').update({status:'available'}).eq('id',cancelled.driver_id).eq('status','en_route');
