@@ -1,0 +1,123 @@
+/* Central GO · priority board harmony overrides.
+   Loaded after all theme files so hover never sacrifices readability. */
+.cg-priority-board .cg-priority-item {
+  transform: none !important;
+  transition: border-color .18s ease, background-color .18s ease, box-shadow .18s ease !important;
+}
+
+.cg-priority-board .cg-priority-item:hover {
+  transform: none !important;
+  border-color: rgba(34,211,238,.28) !important;
+  background: rgba(34,211,238,.045) !important;
+  box-shadow: inset 0 0 0 1px rgba(34,211,238,.025), 0 8px 22px rgba(0,0,0,.16) !important;
+}
+
+.cg-priority-board .cg-priority-driver,
+.cg-priority-board .cg-priority-primary-action,
+.cg-priority-board .cg-priority-move {
+  transition: border-color .16s ease, background-color .16s ease, color .16s ease, box-shadow .16s ease !important;
+}
+
+.cg-priority-board .cg-priority-driver:hover {
+  background: rgba(34,211,238,.055) !important;
+}
+
+.cg-priority-board .cg-priority-driver:hover span,
+.cg-priority-board .cg-priority-driver:hover p {
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+.cg-priority-board .cg-priority-primary-action:hover:not(:disabled) {
+  border-color: rgba(34,211,238,.34) !important;
+  background: rgba(34,211,238,.12) !important;
+  color: #bff7ff !important;
+}
+
+.cg-priority-board .cg-priority-primary-action[class*='rose']:hover:not(:disabled) {
+  border-color: rgba(251,113,133,.34) !important;
+  background: rgba(244,63,94,.12) !important;
+  color: #fecdd3 !important;
+}
+
+.cg-priority-board .cg-priority-move:hover:not(:disabled) {
+  border-color: rgba(34,211,238,.28) !important;
+  background: rgba(34,211,238,.09) !important;
+  color: #a5f3fc !important;
+}
+
+/* The previous premium file targets article > div.grid. The new semantic layout
+   deliberately resets those legacy dimensions. */
+.cg-priority-board .cg-priority-main {
+  min-height: 48px !important;
+}
+
+.cg-priority-board .cg-priority-rank {
+  width: 32px !important;
+  height: 32px !important;
+  color: #9fb0bf !important;
+  background: rgba(255,255,255,.035) !important;
+  border-color: rgba(255,255,255,.09) !important;
+}
+
+.cg-priority-board .cg-priority-item.is-first .cg-priority-rank {
+  color: #baf7ff !important;
+  border-color: rgba(34,211,238,.34) !important;
+  background: rgba(34,211,238,.12) !important;
+}
+
+.cg-priority-board .cg-priority-status {
+  max-width: 70px;
+  white-space: nowrap;
+}
+
+[data-theme='fire'] .cg-priority-board .cg-priority-item:hover {
+  border-color: rgba(255,151,53,.42) !important;
+  background: rgba(255,126,28,.07) !important;
+  box-shadow: inset 0 0 0 1px rgba(255,151,53,.025), 0 8px 22px rgba(10,3,0,.22) !important;
+}
+
+[data-theme='fire'] .cg-priority-board .cg-priority-driver:hover {
+  background: rgba(255,126,28,.08) !important;
+}
+
+[data-theme='fire'] .cg-priority-board .cg-priority-primary-action:hover:not(:disabled),
+[data-theme='fire'] .cg-priority-board .cg-priority-move:hover:not(:disabled) {
+  border-color: rgba(255,151,53,.42) !important;
+  background: rgba(255,126,28,.12) !important;
+  color: #ffd4aa !important;
+}
+
+[data-theme='fire'] .cg-priority-board .cg-priority-driver span {
+  color: #ffa34f !important;
+}
+
+[data-theme='light'] .cg-priority-board .cg-priority-item {
+  background: linear-gradient(145deg,#ffffff 0%,#f6fafc 100%) !important;
+  border-color: rgba(35,81,116,.16) !important;
+}
+
+[data-theme='light'] .cg-priority-board .cg-priority-item:hover {
+  border-color: rgba(8,118,186,.34) !important;
+  background: linear-gradient(145deg,#ffffff 0%,#edf7fd 100%) !important;
+  box-shadow: 0 8px 20px rgba(19,58,88,.09) !important;
+}
+
+[data-theme='light'] .cg-priority-board .cg-priority-driver p {
+  color: #36566d !important;
+}
+
+[data-theme='light'] .cg-priority-board .cg-priority-rank {
+  color: #4d6c82 !important;
+  background: #edf4f9 !important;
+  border-color: rgba(35,81,116,.18) !important;
+}
+
+@media (max-width: 1280px) {
+  .cg-priority-board .cg-priority-status {
+    max-width: 62px;
+    padding-left: 6px !important;
+    padding-right: 6px !important;
+    font-size: 7px !important;
+  }
+}
