@@ -1,4 +1,4 @@
-const CACHE_NAME = 'centralgo-official-v9-trip-lifecycle';
+const CACHE_NAME = 'centralgo-official-v10-stale-chunk-recovery';
 
 self.addEventListener('install', () => {});
 
