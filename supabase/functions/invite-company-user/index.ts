@@ -85,10 +85,55 @@ Deno.serve(async (req) => {
     const callerId = userData.user?.id;
     if (userError || !callerId) return json({ error: 'Sesión inválida' }, 401);
 
-    const { data: profile } = await service.from('profiles').select('global_role,active').eq('id', callerId).maybeSingle();
+    const { data: profile, error: profileError } = await service.from('profiles').select('global_role,active').eq('id', callerId).maybeSingle();
+    if (profileError) throw profileError;
     if (!profile?.active) return json({ error: 'Cuenta suspendida' }, 403);
+
+    const { data: company, error: companyError } = await service.from('companies').select('id,active').eq('id', companyId).maybeSingle();
+    if (companyError) throw companyError;
+    if (!company?.active) return json({ error: 'Central inexistente o suspendida' }, 403);
+
     const isSuper = profile.global_role === 'super_admin';
-    if (!isSuper) return json({ error: 'Usuarios y permisos se administran exclusivamente desde el Panel Global' }, 403);
+    let authorized = isSuper;
+
+    if (!authorized && role === 'driver') {
+      const { data: membership, error: membershipError } = await service
+        .from('company_memberships')
+        .select('user_id')
+        .eq('company_id', companyId)
+        .eq('user_id', callerId)
+        .eq('role', 'company_admin')
+        .eq('active', true)
+        .maybeSingle();
+      if (membershipError) throw membershipError;
+      authorized = Boolean(membership);
+    }
+
+    if (!authorized && profile.global_role === 'sales_partner' && role === 'company_admin' && !password) {
+      const { data: partner, error: partnerError } = await service
+        .from('partners')
+        .select('id')
+        .eq('user_id', callerId)
+        .eq('kind', 'sales')
+        .eq('active', true)
+        .maybeSingle();
+      if (partnerError) throw partnerError;
+      if (partner?.id) {
+        const { data: referral, error: referralError } = await service
+          .from('referrals')
+          .select('id')
+          .eq('partner_id', partner.id)
+          .eq('company_id', companyId)
+          .eq('active', true)
+          .maybeSingle();
+        if (referralError) throw referralError;
+        authorized = Boolean(referral);
+      }
+    }
+
+    if (!authorized) {
+      return json({ error: role === 'driver' ? 'Solo la administración de esta central puede registrar o reenviar acceso a sus conductores.' : 'Usuarios y permisos se administran exclusivamente desde el Panel Global.' }, 403);
+    }
     if (password && (!isSuper || role !== 'company_admin')) return json({ error: 'Solo Superadmin puede definir la contraseña inicial del administrador' }, 403);
 
     const findUser = async () => {
