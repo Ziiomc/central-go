@@ -2,10 +2,9 @@ import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import { useApp } from '../../context/AppContext';
 import { Driver, Trip, DriverStatus } from '../../types';
-import { speakVHFDispatch } from '../../lib/audioService';
 import { requestDrivingRoute, RoadPoint } from '../../lib/roadRouting';
 import { isFlexibleDestinationAddress, isValidMapCoordinate } from '../../lib/flexibleDestination';
-import { Radio, ShieldAlert, Navigation, Layers, Crosshair } from 'lucide-react';
+import { ShieldAlert, Navigation, Layers, Crosshair } from 'lucide-react';
 
 interface LiveMapProps {
   height?: string;
@@ -247,7 +246,6 @@ export const LiveMap: React.FC<LiveMapProps> = ({
       <div className="flex flex-wrap items-center gap-2 pointer-events-auto ml-auto">
         {gpsStatusMsg&&<div className="bg-blue-950/90 text-blue-200 border border-blue-500/40 px-3 py-1.5 rounded-xl text-xs shadow-xl flex items-center gap-1.5"><Navigation className={`w-3.5 h-3.5 text-blue-400 ${isLocatingGps?'animate-spin':''}`}/><span>{gpsStatusMsg}</span></div>}
         {activeSOSDriver&&<button onClick={focusOnSOS} className="px-3 py-1.5 bg-red-600 text-white font-bold text-xs rounded-xl shadow-lg flex items-center gap-1.5 animate-pulse border border-red-400"><ShieldAlert className="w-4 h-4"/>Centrar SOS ({activeSOSDriver.unitNumber})</button>}
-        <button onClick={() => speakVHFDispatch('Atención todas las unidades en Linares, mantener la frecuencia libre para despachos de la central.')} className="px-3 py-1.5 bg-amber-500/20 text-amber-300 font-bold text-xs rounded-xl shadow-lg flex items-center gap-1.5 border border-amber-500/40 uppercase tracking-wider"><Radio className="w-4 h-4 text-amber-400"/>VHF Voz</button>
         <button onClick={requestRealGPSLocation} className="p-2 bg-slate-900/90 hover:bg-slate-800 text-slate-200 rounded-xl border border-slate-700 shadow-md" title="Mi ubicación"><Navigation className="w-4 h-4"/></button>
         <button onClick={centerFleet} className="p-2 bg-slate-900/90 hover:bg-slate-800 text-slate-200 rounded-xl border border-slate-700 shadow-md" title="Centrar flota"><Crosshair className="w-4 h-4"/></button>
         <button onClick={() => setTileMode(tileMode==='dark'?'street':'dark')} className="p-2 bg-slate-900/90 hover:bg-slate-800 text-slate-200 rounded-xl border border-slate-700 shadow-md" title="Cambiar mapa"><Layers className="w-4 h-4"/></button>
