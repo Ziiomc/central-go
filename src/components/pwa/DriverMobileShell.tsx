@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
 import { DriverMobileView } from './DriverMobileView';
+import { DriverThemeCycleButton } from './DriverThemeCycleButton';
 
 const ACTIVE_TRIP_STATUSES = new Set(['assigned', 'en_route', 'arrived', 'in_progress']);
 
@@ -48,5 +49,5 @@ export const DriverMobileShell: React.FC = () => {
     };
   }, []);
 
-  return <DriverMobileView key={activeTripId ?? 'driver-idle'} />;
+  return <><DriverMobileView key={activeTripId ?? 'driver-idle'} /><DriverThemeCycleButton /></>;
 };
