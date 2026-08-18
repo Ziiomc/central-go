@@ -2,6 +2,7 @@ import {StrictMode} from 'react';
 import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import {PassengerRequestApp} from './components/passenger/PassengerRequestApp';
+import {CollectionViewModeControls} from './components/system/CollectionViewModeControls';
 import 'leaflet/dist/leaflet.css';
 import './index.css';
 import './driverReadability.css';
@@ -17,6 +18,7 @@ import './designSystem.css';
 import './operatorPriorityStatusColors.css';
 import './fireModePremium.css';
 import './operatorPriorityHarmony.css';
+import './collectionListViews.css';
 import {registerServiceWorker} from './lib/pwa';
 import {registerRegionalPartnerReferralBootstrap} from './lib/regionalPartnerReferralBootstrap';
 import {registerGoogleOnboardingRoleBootstrap} from './lib/googleOnboardingRoleBootstrap';
@@ -42,6 +44,6 @@ const isPassengerRoute=window.location.pathname==='/pedir'||window.location.path
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    {isPassengerRoute?<PassengerRequestApp/>:<App/>}
+    {isPassengerRoute?<PassengerRequestApp/>:<><App/><CollectionViewModeControls/></>}
   </StrictMode>,
 );
