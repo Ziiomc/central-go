@@ -4,7 +4,7 @@ import { DriverMobileView } from './DriverMobileView';
 import { DriverThemeCycleButton } from './DriverThemeCycleButton';
 
 const ACTIVE_TRIP_STATUSES = new Set(['assigned', 'en_route', 'arrived', 'in_progress']);
-const FOREGROUND_RESYNC_COOLDOWN_MS = 2500;
+const FOREGROUND_RESYNC_COOLDOWN_MS = 10000;
 
 /**
  * Keeps the driver's operational view aligned with the authoritative trip state.
@@ -15,8 +15,9 @@ const FOREGROUND_RESYNC_COOLDOWN_MS = 2500;
  * the driver's operational view, which immediately clears any stale offer/card.
  *
  * Mobile browsers commonly emit visibilitychange + focus + pageshow together
- * when the phone unlocks. Those three events used to trigger three full snapshot
- * requests at the same time. We now collapse them into a single reconciliation.
+ * when the phone unlocks. Those events are collapsed into one reconciliation,
+ * and short app-switch bursts reuse realtime instead of reloading a full
+ * operational snapshot repeatedly.
  */
 export const DriverMobileShell: React.FC = () => {
   const { currentUser, drivers, trips } = useApp();
