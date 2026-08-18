@@ -35,10 +35,6 @@ Deno.serve(async (req) => {
     const { data: userData, error: userError } = await userClient.auth.getUser();
     if (userError || !userData.user) return json({ error: "Sesión inválida" }, 401);
     const user = userData.user;
-    const accessToken = await resolveMercadoPagoAccessToken(service);
-    if (!accessToken) {
-      return json({ code: "MERCADOPAGO_ACCOUNT_NOT_CONNECTED", error: "La cuenta de Mercado Pago todavía no está vinculada o necesita renovarse." }, 503);
-    }
 
     const [{ data: profile }, { data: membership }, { data: plan, error: planError }] = await Promise.all([
       service.from("profiles").select("global_role").eq("id", user.id).maybeSingle(),
@@ -48,6 +44,21 @@ Deno.serve(async (req) => {
     const allowed = profile?.global_role === "super_admin" || membership?.role === "company_admin";
     if (!allowed) return json({ error: "Solo el administrador de la central puede contratar un plan" }, 403);
     if (planError || !plan) return json({ error: "Plan no disponible" }, 404);
+
+    // Validar antes de generar la preferencia evita cobrar un plan que no puede
+    // alojar la flota, operadoras o accesos de conductor actuales de la central.
+    const { error: fitError } = await service.rpc("centralgo_assert_plan_capacity", {
+      p_company_id: companyId,
+      p_plan_id: plan.id,
+    });
+    if (fitError) {
+      return json({ code: "PLAN_CAPACITY_MISMATCH", error: fitError.message }, 409);
+    }
+
+    const accessToken = await resolveMercadoPagoAccessToken(service);
+    if (!accessToken) {
+      return json({ code: "MERCADOPAGO_ACCOUNT_NOT_CONNECTED", error: "La cuenta de Mercado Pago todavía no está vinculada o necesita renovarse." }, 503);
+    }
 
     const amount = billingCycle === "annual" ? Number(plan.annual_price_clp) : Number(plan.monthly_price_clp);
     if (!Number.isFinite(amount) || amount <= 0) return json({ error: "Valor de plan inválido" }, 500);
