@@ -1,11 +1,19 @@
-const CACHE_NAME = 'centralgo-official-v10-stale-chunk-recovery';
+const CACHE_NAME = 'centralgo-official-v11-immediate-activation';
 
-self.addEventListener('install', () => {});
+self.addEventListener('install', (event) => {
+  event.waitUntil(self.skipWaiting());
+});
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys().then((names) => Promise.all(names.filter((name) => name.startsWith('centralgo-') && name !== CACHE_NAME).map((name) => caches.delete(name)))),
-  );
+  event.waitUntil((async () => {
+    const names = await caches.keys();
+    await Promise.all(names.filter((name) => name.startsWith('centralgo-') && name !== CACHE_NAME).map((name) => caches.delete(name)));
+    await self.clients.claim();
+    const windows = await clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const client of windows) {
+      try { client.postMessage({ type: 'centralgo:service-worker-ready', cache: CACHE_NAME }); } catch {}
+    }
+  })());
 });
 
 self.addEventListener('fetch', (event) => {
@@ -63,7 +71,6 @@ self.addEventListener('push', (event) => {
         body: payload.body || '',
       });
 
-      // Una cancelación debe informarse, pero jamás continuar sonando ni vibrando.
       if (kind === 'trip_cancelled') {
         await self.registration.showNotification(payload.title || 'Carrera cancelada · Central GO', {
           body: payload.body || 'La central canceló esta carrera.',
