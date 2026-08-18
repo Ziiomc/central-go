@@ -1,9 +1,10 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { useApp } from '../../context/AppContext';
 import { DriverMobileView } from './DriverMobileView';
 import { DriverThemeCycleButton } from './DriverThemeCycleButton';
 
 const ACTIVE_TRIP_STATUSES = new Set(['assigned', 'en_route', 'arrived', 'in_progress']);
+const FOREGROUND_RESYNC_COOLDOWN_MS = 2500;
 
 /**
  * Keeps the driver's operational view aligned with the authoritative trip state.
@@ -13,12 +14,13 @@ const ACTIVE_TRIP_STATUSES = new Set(['assigned', 'en_route', 'arrived', 'in_pro
  * removes that trip from the active set. Changing the key below remounts only
  * the driver's operational view, which immediately clears any stale offer/card.
  *
- * We also request a fresh snapshot whenever the PWA returns to the foreground,
- * covering mobile browsers that suspended the realtime socket while locked or
- * backgrounded.
+ * Mobile browsers commonly emit visibilitychange + focus + pageshow together
+ * when the phone unlocks. Those three events used to trigger three full snapshot
+ * requests at the same time. We now collapse them into a single reconciliation.
  */
 export const DriverMobileShell: React.FC = () => {
   const { currentUser, drivers, trips } = useApp();
+  const lastForegroundResyncAt = useRef(0);
 
   const driverId = useMemo(
     () => drivers.find((driver) => driver.userId === currentUser.id)?.id,
@@ -33,7 +35,15 @@ export const DriverMobileShell: React.FC = () => {
   );
 
   useEffect(() => {
-    const requestResync = () => window.dispatchEvent(new Event('centralgo:driver-resync'));
+    const requestResync = () => {
+      if (!navigator.onLine || document.visibilityState !== 'visible') return;
+      const now = Date.now();
+      if (now - lastForegroundResyncAt.current < FOREGROUND_RESYNC_COOLDOWN_MS) return;
+      lastForegroundResyncAt.current = now;
+      window.dispatchEvent(new CustomEvent('centralgo:driver-resync', {
+        detail: { reason: 'driver-foreground' },
+      }));
+    };
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') requestResync();
     };
