@@ -1,4 +1,33 @@
-const CACHE_NAME = 'centralgo-official-v11-immediate-activation';
+const CACHE_NAME = 'centralgo-official-v12-module-fallback';
+
+const staleModuleRecovery = () => new Response(`
+  const recover=()=>{try{sessionStorage.setItem('centralgo:stale-module-recovery',String(Date.now()));}catch{};setTimeout(()=>window.location.reload(),40)};
+  recover();
+  const Placeholder=()=>null;
+  export const DashboardModule=Placeholder;
+  export const OperatorWorkspace=Placeholder;
+  export const LiveMap=Placeholder;
+  export const TripsModule=Placeholder;
+  export const DriversModule=Placeholder;
+  export const VehiclesModule=Placeholder;
+  export const ClientsModule=Placeholder;
+  export const OperatorsModule=Placeholder;
+  export const CompaniesModule=Placeholder;
+  export const UsersModule=Placeholder;
+  export const ReportsModule=Placeholder;
+  export const HistoryModule=Placeholder;
+  export const SettingsModule=Placeholder;
+  export const ProfileModule=Placeholder;
+  export const HelpModule=Placeholder;
+  export const CommercialGlobalAdminDashboard=Placeholder;
+  export const PartnerDashboard=Placeholder;
+  export const CentralsNetworkModule=Placeholder;
+  export const PartnersNetworkModule=Placeholder;
+  export const CommissionsNetworkModule=Placeholder;
+  export const PlansNetworkModule=Placeholder;
+  export const NetworkSupportModule=Placeholder;
+  export const PlatformPaymentsModule=Placeholder;
+`, { status: 200, headers: { 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'no-store' } });
 
 self.addEventListener('install', (event) => {
   event.waitUntil(self.skipWaiting());
@@ -23,13 +52,21 @@ self.addEventListener('fetch', (event) => {
   if (requestUrl.pathname.startsWith('/__supabase')) return;
   event.respondWith((async () => {
     const cache = await caches.open(CACHE_NAME);
+    const hashedModule = requestUrl.pathname.startsWith('/assets/') && requestUrl.pathname.endsWith('.js');
     try {
       const response = await fetch(event.request, { cache: 'no-store' });
-      if (response.ok && response.type === 'basic') void cache.put(event.request, response.clone());
+      if (response.ok) {
+        if (response.type === 'basic') void cache.put(event.request, response.clone());
+        return response;
+      }
+      const cached = await cache.match(event.request);
+      if (cached) return cached;
+      if (hashedModule && response.status === 404) return staleModuleRecovery();
       return response;
     } catch {
       const cached = await cache.match(event.request);
       if (cached) return cached;
+      if (hashedModule) return staleModuleRecovery();
       if (event.request.mode === 'navigate') return (await cache.match('/driver')) || (await cache.match('/')) || Response.error();
       return Response.error();
     }
