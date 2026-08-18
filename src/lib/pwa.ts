@@ -31,7 +31,7 @@ let driverSessionHiddenAt: number | null = null;
 let driverWakeLock: WakeLockSentinelLike | null = null;
 let driverWakeLockBusy = false;
 let driverHiddenAt: number | null = null;
-const FRESHNESS_KEY = 'centralgo-fresh-bundle-v9-trip-lifecycle';
+const FRESHNESS_KEY = 'centralgo-fresh-bundle-v10-stale-chunk-recovery';
 const DRIVER_PUSH_PROMPTED_KEY = 'centralgo-driver-push-prompted';
 const DRIVER_RESUME_THRESHOLD_MS = 8000;
 const DRIVER_SESSION_FORCE_REFRESH_AFTER_MS = 60_000;
@@ -318,7 +318,3 @@ export async function promptPWAInstall(): Promise<boolean> {
 }
 
 export function isPWAInstallPromptAvailable(): boolean { return Boolean(deferredPrompt); }
-export function isPWAStandalone(): boolean {
-  if (typeof window === 'undefined') return false;
-  return window.matchMedia('(display-mode: standalone)').matches || (window.navigator as { standalone?: boolean }).standalone === true;
-}
