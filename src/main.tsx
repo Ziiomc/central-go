@@ -16,6 +16,7 @@ import './operatorPriorityPremium.css';
 import './designSystem.css';
 import './operatorPriorityStatusColors.css';
 import './fireModePremium.css';
+import './operatorPriorityHarmony.css';
 import {registerServiceWorker} from './lib/pwa';
 import {registerRegionalPartnerReferralBootstrap} from './lib/regionalPartnerReferralBootstrap';
 import {registerGoogleOnboardingRoleBootstrap} from './lib/googleOnboardingRoleBootstrap';
