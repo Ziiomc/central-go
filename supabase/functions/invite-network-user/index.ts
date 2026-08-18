@@ -77,8 +77,6 @@ Deno.serve(async (req) => {
     if (codeError) throw codeError;
     if (codeOwner && (!targetUser || codeOwner.user_id !== targetUser.id)) return json({ error: `El código ${code} ya pertenece a otro Partner.` }, 409);
 
-    // Fail before changing metadata or sending a recovery link when an existing
-    // address belongs to a company account or another Superadmin.
     if (targetUser) {
       const [{ data: targetProfile }, { data: membership }, { data: driver }, { data: saas }] = await Promise.all([
         service.from('profiles').select('global_role').eq('id', targetUser.id).maybeSingle(),
@@ -122,8 +120,6 @@ Deno.serve(async (req) => {
     }
     if (!targetUser) return json({ error: 'No fue posible crear el usuario del partner' }, 500);
 
-    // Ensure the profile exists, but never assign the global role with service
-    // role here. The authenticated RPC below is the single source of truth.
     const { error: profileBootstrapError } = await service.from('profiles').upsert({ id: targetUser.id, name, active: true }, { onConflict: 'id' });
     if (profileBootstrapError) throw profileBootstrapError;
 
@@ -154,11 +150,15 @@ Deno.serve(async (req) => {
         city: body.city?.trim() || null,
         exclusive: kind === 'regional',
       };
-      const territoryQuery = service.from('partner_territories').select('id').eq('partner_id', partner.id).eq('country_code', territory.country_code);
-      const { data: existingTerritories, error: territoryReadError } = await territoryQuery;
+      const { data: existingTerritories, error: territoryReadError } = await service.from('partner_territories')
+        .select('id,region,city')
+        .eq('partner_id', partner.id)
+        .eq('country_code', territory.country_code);
       if (territoryReadError) throw territoryReadError;
-      const existingTerritory = (existingTerritories ?? []).find((item: any) => true);
-      if (!existingTerritory) {
+      const exactTerritory = (existingTerritories ?? []).find((item: any) =>
+        (item.region ?? null) === territory.region && (item.city ?? null) === territory.city
+      );
+      if (!exactTerritory) {
         const { error: territoryError } = await service.from('partner_territories').insert(territory);
         if (territoryError) throw territoryError;
       }
