@@ -92,10 +92,38 @@ export interface CreateNetworkCentralInput {
   ownerEmail?: string;
 }
 
+type CreateResult={ companyId: string; ownerAssigned: boolean; attributedPartnerCode?: string };
+const normalized=(value?:string)=>value?.trim().toLocaleLowerCase('es')??'';
+const isUniqueConflict=(error:any)=>error?.code==='23505'||/duplicate|unique|ya existe|already exists/i.test(String(error?.message??''));
+
+/**
+ * A company row and its administrator account are created by different trusted
+ * backends. If the company commit succeeds but the administrator invitation is
+ * interrupted, retrying the wizard must resume that company instead of leaving
+ * the operator trapped behind a duplicate-code error.
+ */
+const recoverPartialCompany=async(input:CreateNetworkCentralInput):Promise<CreateResult|undefined>=>{
+  const db=requireSupabase();
+  const{data,error}=await db.from('companies').select('id,name,code').ilike('code',input.code.trim()).limit(1).maybeSingle();
+  if(error||!data)return undefined;
+  if(normalized(data.name)!==normalized(input.name))return undefined;
+
+  const visible=await loadNetworkCentrals();
+  const central=visible.find(item=>item.id===String(data.id));
+  if(!central)return undefined;
+
+  const requestedEmail=normalized(input.ownerEmail);
+  const existingEmail=normalized(central.email);
+  if(requestedEmail&&existingEmail&&requestedEmail!==existingEmail){
+    throw new Error(`El código ${input.code.trim()} ya pertenece a una central registrada con otro administrador.`);
+  }
+  return{companyId:String(data.id),ownerAssigned:Boolean(existingEmail)};
+};
+
 export async function createNetworkCentral(
   input: CreateNetworkCentralInput,
   actorRole: UserRole,
-): Promise<{ companyId: string; ownerAssigned: boolean; attributedPartnerCode?: string }> {
+): Promise<CreateResult> {
   const db = requireSupabase();
 
   if (actorRole === 'sales_partner') {
@@ -111,7 +139,13 @@ export async function createNetworkCentral(
       p_owner_email: input.ownerEmail?.trim() || null,
       p_trial_days: 5,
     });
-    if (error) throw error;
+    if (error) {
+      if(isUniqueConflict(error)){
+        const recovered=await recoverPartialCompany(input);
+        if(recovered)return recovered;
+      }
+      throw error;
+    }
     return {
       companyId: String((data as any)?.companyId ?? ''),
       ownerAssigned: Boolean((data as any)?.ownerAssigned),
@@ -136,7 +170,13 @@ export async function createNetworkCentral(
     p_center_lat: null,
     p_center_lng: null,
   });
-  if (error) throw error;
+  if (error) {
+    if(isUniqueConflict(error)){
+      const recovered=await recoverPartialCompany(input);
+      if(recovered)return recovered;
+    }
+    throw error;
+  }
   const companyId = String(data);
 
   let ownerAssigned = false;
