@@ -14,6 +14,7 @@ const mapSubscriptionStatus = (status?: string): NetworkCentral['status'] => {
 };
 
 export interface NetworkCentralRecord extends NetworkCentral {
+  code: string;
   planCode: 'start' | 'pro' | 'enterprise';
   billingCycle: 'monthly' | 'annual';
   paymentFrequency: 'monthly' | 'annual';
@@ -41,6 +42,7 @@ export const mapVisibleNetworkCentral = (row: any): NetworkCentralRecord => {
 
   return {
     id: String(row.id),
+    code: String(row.code ?? ''),
     name: row.name ?? 'Central sin nombre',
     country: countryNames[countryCode] ?? countryCode,
     countryCode,
@@ -101,23 +103,26 @@ const isUniqueConflict=(error:any)=>error?.code==='23505'||/duplicate|unique|ya 
  * backends. If the company commit succeeds but the administrator invitation is
  * interrupted, retrying the wizard must resume that company instead of leaving
  * the operator trapped behind a duplicate-code error.
+ *
+ * Recovery intentionally uses centralgo_visible_network_centrals rather than a
+ * direct companies query. A sales partner is not a company member, so RLS must
+ * not be widened just to support recovery; the network RPC already scopes the
+ * partner to the companies attributed to that partner.
  */
 const recoverPartialCompany=async(input:CreateNetworkCentralInput):Promise<CreateResult|undefined>=>{
-  const db=requireSupabase();
-  const{data,error}=await db.from('companies').select('id,name,code').ilike('code',input.code.trim()).limit(1).maybeSingle();
-  if(error||!data)return undefined;
-  if(normalized(data.name)!==normalized(input.name))return undefined;
-
   const visible=await loadNetworkCentrals();
-  const central=visible.find(item=>item.id===String(data.id));
+  const requestedCode=normalized(input.code);
+  const requestedName=normalized(input.name);
+  const central=visible.find(item=>normalized(item.code)===requestedCode);
   if(!central)return undefined;
+  if(normalized(central.name)!==requestedName)return undefined;
 
   const requestedEmail=normalized(input.ownerEmail);
   const existingEmail=normalized(central.email);
   if(requestedEmail&&existingEmail&&requestedEmail!==existingEmail){
     throw new Error(`El código ${input.code.trim()} ya pertenece a una central registrada con otro administrador.`);
   }
-  return{companyId:String(data.id),ownerAssigned:Boolean(existingEmail)};
+  return{companyId:central.id,ownerAssigned:Boolean(existingEmail)};
 };
 
 export async function createNetworkCentral(
