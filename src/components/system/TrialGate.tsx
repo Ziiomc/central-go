@@ -1,40 +1,107 @@
-import React, { useState } from 'react';
-import { Clock3, Crown, LockKeyhole, Sparkles } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Clock3, Crown, Loader2, LockKeyhole, Sparkles } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { useApp } from '../../context/AppContext';
+import { requireSupabase } from '../../lib/supabase';
 import { UpgradePlanModal } from '../billing/UpgradePlanModal';
 
-const daysLeft = (end: string) => Math.max(0, Math.ceil((new Date(end).getTime() - Date.now()) / 86400000));
+const daysLeft = (end?: string | null) => end ? Math.max(0, Math.ceil((new Date(end).getTime() - Date.now()) / 86400000)) : 0;
+
+type CompanySubscriptionState = {
+  status: string;
+  trialEndsAt: string | null;
+  currentPeriodEnd: string | null;
+};
 
 export const TrialGate: React.FC<React.PropsWithChildren> = ({ children }) => {
   const { saasAccount, profile } = useAuth();
+  const { currentCompany, currentRole } = useApp();
   const [plansOpen, setPlansOpen] = useState(false);
+  const [subscription, setSubscription] = useState<CompanySubscriptionState | null>(null);
+  const [checkingSubscription, setCheckingSubscription] = useState(false);
   const commercialRole = profile?.globalRole === 'sales_partner' || profile?.globalRole === 'regional_partner';
+  const companyUser = ['company_admin', 'operator'].includes(currentRole) && currentCompany.id !== 'network';
 
-  if (profile?.globalRole === 'super_admin' || commercialRole || saasAccount?.accountKind === 'sales_partner' || !saasAccount) return <>{children}</>;
+  useEffect(() => {
+    let alive = true;
+    if (!companyUser) {
+      setSubscription(null);
+      setCheckingSubscription(false);
+      return () => { alive = false; };
+    }
 
-  const trialing = saasAccount.status === 'trialing';
-  const active = saasAccount.status === 'active';
-  const days = trialing ? daysLeft(saasAccount.trialEndsAt) : 0;
-  const expired = trialing && new Date(saasAccount.trialEndsAt).getTime() <= Date.now();
-  const companyId = saasAccount.companyId;
+    setCheckingSubscription(true);
+    void requireSupabase()
+      .from('subscriptions')
+      .select('status,trial_ends_at,current_period_end')
+      .eq('company_id', currentCompany.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (!alive) return;
+        if (error) {
+          // The database write guards still fail closed. Keep a known SaaS state
+          // as fallback so a transient read error never locks out an active shift.
+          console.warn('[Central GO] subscription access check unavailable', error);
+          setSubscription(null);
+          return;
+        }
+        setSubscription(data ? {
+          status: String(data.status),
+          trialEndsAt: data.trial_ends_at ?? null,
+          currentPeriodEnd: data.current_period_end ?? null,
+        } : { status: 'legacy', trialEndsAt: null, currentPeriodEnd: null });
+      })
+      .finally(() => { if (alive) setCheckingSubscription(false); });
 
-  if (expired && !active) {
+    return () => { alive = false; };
+  }, [companyUser, currentCompany.id]);
+
+  const effective = useMemo<CompanySubscriptionState>(() => {
+    if (subscription) return subscription;
+    if (saasAccount?.accountKind === 'central' && (!saasAccount.companyId || saasAccount.companyId === currentCompany.id)) {
+      return {
+        status: saasAccount.status,
+        trialEndsAt: saasAccount.trialEndsAt ?? null,
+        currentPeriodEnd: saasAccount.currentPeriodEnd ?? null,
+      };
+    }
+    return { status: 'legacy', trialEndsAt: null, currentPeriodEnd: null };
+  }, [subscription, saasAccount, currentCompany.id]);
+
+  if (profile?.globalRole === 'super_admin' || commercialRole || saasAccount?.accountKind === 'sales_partner' || !companyUser) return <>{children}</>;
+
+  if (checkingSubscription && !subscription && !saasAccount) {
+    return <main className="flex min-h-[55vh] items-center justify-center"><div className="flex items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-950/70 px-4 py-3 text-xs font-bold text-zinc-400"><Loader2 className="h-4 w-4 animate-spin text-amber-300"/>Validando acceso de la central…</div></main>;
+  }
+
+  const now = Date.now();
+  const trialing = effective.status === 'trialing' && Boolean(effective.trialEndsAt) && new Date(effective.trialEndsAt!).getTime() > now;
+  const active = effective.status === 'active' && (!effective.currentPeriodEnd || new Date(effective.currentPeriodEnd).getTime() > now);
+  const legacy = effective.status === 'legacy';
+  const expiredTrial = effective.status === 'trialing' && (!effective.trialEndsAt || new Date(effective.trialEndsAt).getTime() <= now);
+  const inactive = ['expired', 'past_due', 'suspended', 'cancelled'].includes(effective.status) || expiredTrial || (effective.status === 'active' && !active);
+  const days = trialing ? daysLeft(effective.trialEndsAt) : 0;
+  const companyId = currentCompany.id !== 'network' ? currentCompany.id : saasAccount?.companyId;
+
+  if (inactive && !active) {
     return (
       <main className="min-h-screen bg-[#070709] text-white flex items-center justify-center p-5 relative overflow-hidden">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(245,158,11,0.15),transparent_48%)]" />
         <section className="relative max-w-lg rounded-3xl border border-amber-400/30 bg-[#0d0d0f] p-8 text-center shadow-2xl shadow-black/60">
           <LockKeyhole className="mx-auto h-10 w-10 text-amber-300" />
           <p className="mt-4 text-[10px] font-black uppercase tracking-[0.2em] text-amber-300">Tus datos siguen seguros</p>
-          <h1 className="mt-2 text-2xl font-black">Tus 5 días gratis terminaron</h1>
-          <p className="mt-3 text-sm leading-relaxed text-zinc-400">No eliminamos carreras, usuarios, clientes ni configuración. Activa un plan para continuar operando Central GO.</p>
-          <button disabled={!companyId} onClick={() => setPlansOpen(true)} className="mt-6 inline-flex items-center gap-2 rounded-xl bg-amber-400 px-5 py-3 font-black text-zinc-950 disabled:opacity-40"><Crown className="h-4 w-4"/> Activar modo Pro</button>
+          <h1 className="mt-2 text-2xl font-black">El acceso de la central requiere activación</h1>
+          <p className="mt-3 text-sm leading-relaxed text-zinc-400">La prueba o el período contratado terminó. No eliminamos carreras, usuarios, clientes ni configuración. Activa un plan para continuar operando Central GO.</p>
+          <button disabled={!companyId} onClick={() => setPlansOpen(true)} className="mt-6 inline-flex items-center gap-2 rounded-xl bg-amber-400 px-5 py-3 font-black text-zinc-950 disabled:opacity-40"><Crown className="h-4 w-4"/> Activar Central GO</button>
         </section>
         {plansOpen && companyId && <UpgradePlanModal companyId={companyId} onClose={() => setPlansOpen(false)} />}
       </main>
     );
   }
 
-  if (!trialing) return <>{children}</>;
+  if (!trialing || active || legacy) return <>{children}</>;
 
   return (
     <>
