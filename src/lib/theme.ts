@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 export type ColorTheme = 'light' | 'dark' | 'executive' | 'fire';
 
 const STORAGE_KEY = 'centralgo:color-theme';
+const THEME_EVENT = 'centralgo:theme-changed';
 const THEMES: ColorTheme[] = ['light', 'dark', 'executive', 'fire'];
 
 const isTheme = (value: string | null): value is ColorTheme => Boolean(value && THEMES.includes(value as ColorTheme));
@@ -29,7 +30,7 @@ const applyTheme = (theme: ColorTheme) => {
 };
 
 export const useColorTheme = () => {
-  const [theme, setTheme] = useState<ColorTheme>(preferredTheme);
+  const [theme, setThemeState] = useState<ColorTheme>(preferredTheme);
 
   useEffect(() => {
     applyTheme(theme);
@@ -37,10 +38,33 @@ export const useColorTheme = () => {
     catch { /* Theme remains active for the current session. */ }
   }, [theme]);
 
-  const selectTheme = useCallback((nextTheme: ColorTheme) => setTheme(nextTheme), []);
-  const toggleTheme = useCallback(() => {
-    setTheme((current) => THEMES[(THEMES.indexOf(current) + 1) % THEMES.length]);
+  useEffect(() => {
+    const syncTheme = (event: Event) => {
+      const next = (event as CustomEvent<ColorTheme>).detail;
+      if (isTheme(next)) setThemeState(next);
+    };
+    const syncStorage = (event: StorageEvent) => {
+      if (event.key === STORAGE_KEY && isTheme(event.newValue)) setThemeState(event.newValue);
+    };
+    window.addEventListener(THEME_EVENT, syncTheme);
+    window.addEventListener('storage', syncStorage);
+    return () => {
+      window.removeEventListener(THEME_EVENT, syncTheme);
+      window.removeEventListener('storage', syncStorage);
+    };
   }, []);
+
+  const selectTheme = useCallback((nextTheme: ColorTheme) => {
+    setThemeState(nextTheme);
+    applyTheme(nextTheme);
+    try { window.localStorage.setItem(STORAGE_KEY, nextTheme); } catch {}
+    window.dispatchEvent(new CustomEvent<ColorTheme>(THEME_EVENT, { detail: nextTheme }));
+  }, []);
+
+  const toggleTheme = useCallback(() => {
+    const current = isTheme(document.documentElement.dataset.theme ?? null) ? document.documentElement.dataset.theme as ColorTheme : preferredTheme();
+    selectTheme(THEMES[(THEMES.indexOf(current) + 1) % THEMES.length]);
+  }, [selectTheme]);
 
   return { theme, setTheme: selectTheme, toggleTheme, themes: THEMES };
 };
