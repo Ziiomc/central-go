@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef } from 'react';
 import { useApp } from '../../context/AppContext';
 import { DriverMobileView } from './DriverMobileView';
 import { DriverThemeCycleButton } from './DriverThemeCycleButton';
+import { DriverPushRegistration } from './DriverPushRegistration';
 
 const ACTIVE_TRIP_STATUSES = new Set(['assigned', 'en_route', 'arrived', 'in_progress']);
 const FOREGROUND_RESYNC_COOLDOWN_MS = 10000;
@@ -18,6 +19,10 @@ const FOREGROUND_RESYNC_COOLDOWN_MS = 10000;
  * when the phone unlocks. Those events are collapsed into one reconciliation,
  * and short app-switch bursts reuse realtime instead of reloading a full
  * operational snapshot repeatedly.
+ *
+ * DriverPushRegistration is mounted at this shell level so every authenticated
+ * driver gets the one-time Web Push activation flow required for reliable
+ * locked-screen trip alerts.
  */
 export const DriverMobileShell: React.FC = () => {
   const { currentUser, drivers, trips } = useApp();
@@ -60,5 +65,9 @@ export const DriverMobileShell: React.FC = () => {
     };
   }, []);
 
-  return <><DriverMobileView key={activeTripId ?? 'driver-idle'} /><DriverThemeCycleButton /></>;
+  return <>
+    <DriverMobileView key={activeTripId ?? 'driver-idle'} />
+    <DriverPushRegistration />
+    <DriverThemeCycleButton />
+  </>;
 };
