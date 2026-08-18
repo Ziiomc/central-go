@@ -1,0 +1,6 @@
+# Per-function settings for reproducible Supabase Edge Function deployments.
+# push-driver-trip accepts both authenticated operator calls and trusted pg_net
+# calls authenticated inside the handler with x-centralgo-push-secret, so the
+# platform JWT gateway must not reject the internal request before the handler.
+[functions.push-driver-trip]
+verify_jwt = false
