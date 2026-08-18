@@ -7,6 +7,7 @@ import{OperatorConsole}from'./OperatorConsole';
 import{OperatorSearchPalette}from'./OperatorSearchPalette';
 import{ScheduledTripsStrip}from'./ScheduledTripsStrip';
 import{DispatchPriorityBoard}from'./DispatchPriorityBoard';
+import{FleetRadioBroadcast}from'../radio/FleetRadioBroadcast';
 import'../../operatorWorkspaceClean.css';
 
 const ACTIVITY_COLLAPSED_KEY='centralgo:operator-activity-collapsed';
@@ -47,6 +48,7 @@ export const OperatorWorkspace:React.FC=()=>{
   {birthdays.length>0&&<div className="rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-2.5 text-xs text-amber-100"><Cake className="mr-2 inline h-4 w-4 text-amber-300"/><strong>Cumpleaños de hoy:</strong> {birthdays.map(driver=>`${driver.unitNumber} · ${driver.name}`).join(', ')}</div>}
   <OperationsOverview hourly={hourly} byDriver={byDriver} operators={operatorRanking} driverRanking={driverRanking} currentOperator={effectiveOperator} completed={completedToday.length} revenue={totalRevenue} effectiveness={effectiveness} activeDrivers={activeDrivers} collapsed={activityCollapsed} onToggle={()=>setActivityCollapsed(value=>!value)}/>
   <ScheduledTripsStrip/>
+  <FleetRadioBroadcast/>
   <div className="cg-operator-main-grid grid items-start gap-2.5 xl:grid-cols-[220px_minmax(0,1fr)]">
    <aside className="min-w-0 xl:sticky xl:top-2"><DispatchPriorityBoard/></aside>
    <div className="cg-console-clean min-w-0"><OperatorConsole/></div>
