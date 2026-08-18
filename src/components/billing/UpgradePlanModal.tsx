@@ -3,6 +3,7 @@ import { Check, Crown, Loader2, ShieldCheck, Sparkles, WalletCards, X, Zap } fro
 import { requireSupabase } from '../../lib/supabase';
 import { loadPlanCatalog, type CommercialPlanRecord } from '../../lib/planRepository';
 import { createRemitlyPaymentRequest, type RemitlyPaymentRequest } from '../../lib/remitlyPaymentRepository';
+import { readEdgeFunctionError } from '../../lib/edgeFunctionError';
 import { RemitlyPaymentPanel } from './RemitlyPaymentPanel';
 
 const money = (value: number) => new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(value);
@@ -40,10 +41,7 @@ export const UpgradePlanModal: React.FC<{ companyId: string; onClose: () => void
       }
       window.location.assign(String(data.checkoutUrl));
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'No pudimos iniciar el pago.';
-      setError(/edge function|non-2xx|503/i.test(message)
-        ? 'Mercado Pago está preparado, pero la cuenta receptora todavía no está disponible para completar este cobro.'
-        : message);
+      setError(await readEdgeFunctionError(err, 'No pudimos iniciar el pago.'));
       setPaying(null);
     }
   };
