@@ -33,13 +33,17 @@ Deno.serve(async(req:Request)=>{
 
   let points:DriverPoint[]=[];
   if(shouldDispatch){
-   const [{data:drivers,error:driversError},{data:locations,error:locationsError}]=await Promise.all([
+   const presenceCutoff=new Date(Date.now()-4*60*1000).toISOString();
+   const [{data:drivers,error:driversError},{data:locations,error:locationsError},{data:presence,error:presenceError}]=await Promise.all([
     db.from("drivers").select("id,status,sos_active").eq("company_id",trip.company_id).eq("status","available").eq("sos_active",false),
     db.from("driver_locations").select("driver_id,lat,lng,recorded_at").eq("company_id",trip.company_id),
+    db.from("driver_presence_sessions").select("driver_id,last_seen_at").eq("company_id",trip.company_id).is("ended_at",null).gte("last_seen_at",presenceCutoff),
    ]);
    if(driversError)throw driversError;
    if(locationsError)throw locationsError;
-   const allowed=new Set((drivers??[]).map((d:any)=>d.id));
+   if(presenceError)throw presenceError;
+   const connected=new Set((presence??[]).map((p:any)=>p.driver_id));
+   const allowed=new Set((drivers??[]).filter((d:any)=>connected.has(d.id)).map((d:any)=>d.id));
    const cutoff=Date.now()-5*60*1000;
    points=(locations??[])
     .filter((l:any)=>allowed.has(l.driver_id)&&validCoord(l.lat,l.lng)&&(!l.recorded_at||new Date(l.recorded_at).getTime()>=cutoff))
