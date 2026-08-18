@@ -63,8 +63,6 @@ async function maintainDriverSession(forceRefresh = false) {
       const { error: refreshError } = await db.auth.refreshSession();
       if (refreshError) console.warn('CentralGo driver session refresh deferred:', refreshError.message);
     } catch (error) {
-      // Mobile networks frequently disappear for a few seconds after unlock.
-      // A temporary transport error must never force the driver out of the app.
       console.warn('CentralGo driver session recovery pending:', error);
     }
   })().finally(() => { driverSessionRefreshPromise = null; });
@@ -187,9 +185,6 @@ function registerServiceWorkerMessageListener() {
     try { window.speechSynthesis?.cancel(); } catch {}
     window.dispatchEvent(new CustomEvent('centralgo:driver-resync', { detail: { reason: data.type, tripId: data.tripId } }));
 
-    // React receives the normal Realtime update. A reload is only needed when an
-    // unanswered offer was withdrawn/cancelled, because the browser may have suspended
-    // the component while that offer was on screen. Accepting a trip (en_route) must not reload.
     const shouldReload = isDriverRoute() && (data.type === 'centralgo:trip-cancelled' || data.status !== 'en_route');
     if (!shouldReload) return;
 
@@ -205,14 +200,11 @@ function registerDriverPush() {
   if (typeof window === 'undefined' || driverPushRegistered || !isDriverRoute()) return;
   driverPushRegistered = true;
 
-  // Si ya se concedió permiso, restauramos/renovamos la suscripción sin molestar al conductor.
   if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
     void ensureDriverPushSubscription(false).catch((error) => console.warn('CentralGo push restore failed:', error));
     return;
   }
 
-  // Android exige que el permiso se solicite desde una interacción del usuario.
-  // Aprovechamos la primera acción dentro de la app (estado, GPS, radio, etc.).
   const activateFromGesture = () => {
     window.removeEventListener('pointerdown', activateFromGesture, true);
     if (localStorage.getItem(DRIVER_PUSH_PROMPTED_KEY) === '1') return;
@@ -258,8 +250,6 @@ function recoverDriverAfterAndroidSuspend(force = false) {
   });
 
   if (!needsStrongRecovery) return;
-  // No recargamos la página al volver normalmente: el proveedor restaura la copia local
-  // y luego reconcilia el estado autoritativo con Supabase.
   window.dispatchEvent(new CustomEvent('centralgo:driver-resync',{detail:{suspendedMs}}));
 }
 
@@ -286,7 +276,6 @@ async function doRegisterServiceWorker() {
   try {
     await purgeLegacyFrontendCaches();
     const registration = await navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' });
-    // Pedimos comprobar la versión para que los dispositivos existentes reciban el worker con el ciclo de vida de ofertas.
     void registration.update().catch(() => undefined);
     console.log('CentralGo ServiceWorker registered:', registration.scope);
     registerDriverPush();
@@ -318,3 +307,7 @@ export async function promptPWAInstall(): Promise<boolean> {
 }
 
 export function isPWAInstallPromptAvailable(): boolean { return Boolean(deferredPrompt); }
+export function isPWAStandalone(): boolean {
+  if (typeof window === 'undefined') return false;
+  return window.matchMedia('(display-mode: standalone)').matches || (window.navigator as { standalone?: boolean }).standalone === true;
+}
