@@ -155,10 +155,15 @@ Deno.serve(async (req) => {
     let passwordReady = false;
     let passwordUpdated = false;
 
-    if (targetUser && role !== 'company_admin') {
+    if (targetUser) {
       const { data: targetProfile, error: targetProfileError } = await service.from('profiles').select('name,global_role').eq('id', targetUser.id).maybeSingle();
       if (targetProfileError) throw targetProfileError;
-      if (targetProfile?.global_role) return json({ error: `El correo ${email} ya pertenece a ${roleLabel(targetProfile.global_role)}${targetProfile.name ? ` (${targetProfile.name})` : ''}. Usa un correo personal distinto para el conductor para no alterar esa cuenta.`, code: 'EMAIL_RESERVED_GLOBAL_ROLE' }, 409);
+      if (targetProfile?.global_role) {
+        return json({
+          error: `El correo ${email} ya pertenece a ${roleLabel(targetProfile.global_role)}${targetProfile.name ? ` (${targetProfile.name})` : ''}. Usa un correo distinto para la cuenta de la empresa.`,
+          code: 'EMAIL_RESERVED_GLOBAL_ROLE',
+        }, 409);
+      }
       if (role === 'driver') {
         const { data: existingDriver, error: existingDriverError } = await service.from('drivers').select('id,company_id,display_name,unit_number').eq('user_id', targetUser.id).limit(1).maybeSingle();
         if (existingDriverError) throw existingDriverError;
