@@ -1,5 +1,5 @@
 import React,{useEffect,useState}from'react';
-import{BellRing,CheckCircle2}from'lucide-react';
+import{BellRing,CheckCircle2,ShieldAlert}from'lucide-react';
 import{useAuth}from'../../context/AuthContext';
 import{requireSupabase}from'../../lib/supabase';
 
@@ -36,11 +36,25 @@ export const DriverPushRegistration:React.FC=()=>{
  };
 
  useEffect(()=>{
-  const ok='serviceWorker'in navigator&&'PushManager'in window&&typeof Notification!=='undefined';setSupported(ok);if(ok&&Notification.permission==='granted')void subscribe(false);
+  const ok='serviceWorker'in navigator&&'PushManager'in window&&typeof Notification!=='undefined';
+  setSupported(ok);
+  if(ok){
+   setPermission(Notification.permission);
+   if(Notification.permission==='granted')void subscribe(false);
+  }
  },[authUser?.id]);
 
  if(!supported||ready)return null;
- return <div className="fixed bottom-3 left-1/2 z-[170] w-[min(420px,calc(100vw-1rem))] -translate-x-1/2 rounded-2xl border border-amber-400/40 bg-[#111114]/95 p-3 shadow-2xl backdrop-blur-xl">
-  <div className="flex items-start gap-3"><div className="rounded-xl bg-amber-400/10 p-2 text-amber-300">{permission==='granted'?<CheckCircle2 className="h-5 w-5"/>:<BellRing className="h-5 w-5"/>}</div><div className="min-w-0 flex-1"><p className="text-xs font-black text-white">Avisos de carreras con pantalla bloqueada</p><p className="mt-0.5 text-[10px] leading-relaxed text-zinc-400">Actívalos para que Android pueda avisarte aunque Central GO esté suspendido.</p>{error&&<p className="mt-1 text-[9px] text-rose-300">{error}</p>}</div><button disabled={busy||permission==='denied'} onClick={()=>void subscribe(true)} className="shrink-0 rounded-xl bg-amber-400 px-3 py-2 text-[9px] font-black text-zinc-950 disabled:opacity-40">{busy?'Activando…':permission==='denied'?'Bloqueado':'Activar'}</button></div>
+ const blocked=permission==='denied';
+ return <div className="fixed bottom-3 left-1/2 z-[170] w-[min(440px,calc(100vw-1rem))] -translate-x-1/2 rounded-2xl border border-amber-400/40 bg-[#111114]/95 p-3 shadow-2xl backdrop-blur-xl">
+  <div className="flex items-start gap-3">
+   <div className={`rounded-xl p-2 ${blocked?'bg-rose-500/10 text-rose-300':'bg-amber-400/10 text-amber-300'}`}>{blocked?<ShieldAlert className="h-5 w-5"/>:permission==='granted'?<CheckCircle2 className="h-5 w-5"/>:<BellRing className="h-5 w-5"/>}</div>
+   <div className="min-w-0 flex-1">
+    <p className="text-xs font-black text-white">Avisos de carreras con pantalla bloqueada</p>
+    {blocked?<p className="mt-1 text-[10px] leading-relaxed text-rose-200">Las notificaciones están bloqueadas para este sitio. En los ajustes del navegador de Central GO, cambia <strong>Notificaciones</strong> a <strong>Permitir</strong> y vuelve a abrir la app.</p>:<p className="mt-0.5 text-[10px] leading-relaxed text-zinc-400">Actívalos para que Android pueda avisarte aunque Central GO esté suspendido.</p>}
+    {error&&<p className="mt-1 text-[9px] text-rose-300">{error}</p>}
+   </div>
+   {!blocked&&<button disabled={busy} onClick={()=>void subscribe(true)} className="shrink-0 rounded-xl bg-amber-400 px-3 py-2 text-[9px] font-black text-zinc-950 disabled:opacity-40">{busy?'Activando…':'Activar'}</button>}
+  </div>
  </div>;
 };
