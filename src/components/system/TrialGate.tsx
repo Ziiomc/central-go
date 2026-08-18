@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Clock3, Crown, Loader2, LockKeyhole, Sparkles } from 'lucide-react';
+import { Clock3, Crown, Loader2, LockKeyhole, ShieldAlert, Sparkles } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
 import { requireSupabase } from '../../lib/supabase';
 import { UpgradePlanModal } from '../billing/UpgradePlanModal';
 
 const daysLeft = (end?: string | null) => end ? Math.max(0, Math.ceil((new Date(end).getTime() - Date.now()) / 86400000)) : 0;
+const ACTIVE_TRIP_STATUSES = new Set(['assigned', 'en_route', 'arrived', 'in_progress']);
 
 type CompanySubscriptionState = {
   status: string;
@@ -15,7 +16,7 @@ type CompanySubscriptionState = {
 
 export const TrialGate: React.FC<React.PropsWithChildren> = ({ children }) => {
   const { saasAccount, profile } = useAuth();
-  const { currentCompany, currentRole } = useApp();
+  const { currentCompany, currentRole, trips, drivers } = useApp();
   const [plansOpen, setPlansOpen] = useState(false);
   const [subscription, setSubscription] = useState<CompanySubscriptionState | null>(null);
   const [checkingSubscription, setCheckingSubscription] = useState(false);
@@ -41,8 +42,8 @@ export const TrialGate: React.FC<React.PropsWithChildren> = ({ children }) => {
       .then(({ data, error }) => {
         if (!alive) return;
         if (error) {
-          // The database write guards still fail closed. Keep a known SaaS state
-          // as fallback so a transient read error never locks out an active shift.
+          // Database write guards remain fail-closed. Keep a known SaaS state as
+          // fallback so a transient read error does not interrupt an active shift.
           console.warn('[Central GO] subscription access check unavailable', error);
           setSubscription(null);
           return;
@@ -70,6 +71,15 @@ export const TrialGate: React.FC<React.PropsWithChildren> = ({ children }) => {
     return { status: 'legacy', trialEndsAt: null, currentPeriodEnd: null };
   }, [subscription, saasAccount, currentCompany.id]);
 
+  const liveService = useMemo(
+    () => trips.some((trip) => trip.companyId === currentCompany.id && ACTIVE_TRIP_STATUSES.has(trip.status)),
+    [currentCompany.id, trips],
+  );
+  const openSOS = useMemo(
+    () => drivers.some((driver) => driver.companyId === currentCompany.id && driver.sosActive),
+    [currentCompany.id, drivers],
+  );
+
   if (profile?.globalRole === 'super_admin' || commercialRole || saasAccount?.accountKind === 'sales_partner' || !companyUser) return <>{children}</>;
 
   if (checkingSubscription && !subscription && !saasAccount) {
@@ -84,6 +94,23 @@ export const TrialGate: React.FC<React.PropsWithChildren> = ({ children }) => {
   const inactive = ['expired', 'past_due', 'suspended', 'cancelled'].includes(effective.status) || expiredTrial || (effective.status === 'active' && !active);
   const days = trialing ? daysLeft(effective.trialEndsAt) : 0;
   const companyId = currentCompany.id !== 'network' ? currentCompany.id : saasAccount?.companyId;
+  const safeCloseMode = inactive && !active && (liveService || openSOS);
+
+  if (safeCloseMode) {
+    return (
+      <>
+        <div className="sticky top-0 z-[90] border-b border-rose-400/35 bg-gradient-to-r from-rose-600 via-amber-500 to-rose-600 px-3 py-2.5 text-white shadow-xl shadow-black/20">
+          <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-center gap-x-3 gap-y-1 text-center text-[10px] font-black sm:text-xs">
+            <span className="inline-flex items-center gap-1.5 uppercase tracking-wider"><ShieldAlert className="h-4 w-4"/> Modo cierre seguro</span>
+            <span>{openSOS ? 'Hay una alerta SOS activa. La seguridad permanece disponible.' : 'El período terminó durante una carrera activa. Puedes supervisar y cerrar ese servicio; no se aceptan carreras nuevas.'}</span>
+            <button disabled={!companyId} onClick={() => setPlansOpen(true)} className="ml-1 rounded-lg bg-zinc-950 px-3 py-1.5 text-[10px] font-black text-white shadow-sm disabled:opacity-50">Activar Central GO</button>
+          </div>
+        </div>
+        {children}
+        {plansOpen && companyId && <UpgradePlanModal companyId={companyId} onClose={() => setPlansOpen(false)} />}
+      </>
+    );
+  }
 
   if (inactive && !active) {
     return (
