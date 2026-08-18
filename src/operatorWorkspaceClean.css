@@ -1,0 +1,39 @@
+.cg-operator-workspace{--cg-op-cyan:#38bdf8;--cg-op-blue:#2563eb}
+.cg-operator-workspace .cg-card,.cg-operator-workspace .cg-operator-panel{transition:transform .2s ease,border-color .2s ease,box-shadow .2s ease,background-color .2s ease}
+.cg-operator-workspace .cg-operator-panel:hover{border-color:rgba(56,189,248,.28);box-shadow:0 16px 45px rgba(2,8,23,.22)}
+.cg-search-result{display:flex;width:100%;align-items:center;gap:.7rem;border:1px solid transparent;border-radius:.85rem;padding:.65rem .7rem;color:#cbd5e1;transition:background-color .16s ease,border-color .16s ease,transform .16s ease}
+.cg-search-result:hover{background:rgba(56,189,248,.07);border-color:rgba(56,189,248,.18);transform:translateY(-1px)}
+.cg-search-result strong{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.72rem;color:#f8fafc}
+.cg-search-result small{display:block;margin-top:.12rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.61rem;color:#64748b}
+.cg-search-icon{display:grid;height:2rem;width:2rem;flex:0 0 auto;place-items:center;border:1px solid rgba(56,189,248,.18);border-radius:.65rem;background:rgba(14,165,233,.08);color:#7dd3fc}
+.cg-search-meta{flex:0 0 auto;border-radius:999px;background:rgba(15,23,42,.9);padding:.25rem .5rem;font-size:.55rem;font-weight:800;text-transform:uppercase;color:#94a3b8}
+
+/* Operator info and duplicated KPI row are consolidated in the top performance panel. */
+.cg-console-clean>div>section:nth-of-type(1),.cg-console-clean>div>section:nth-of-type(2){display:none!important}
+
+/* Give the live map clear visual priority over the dispatch queue. */
+@media (min-width:1280px){
+ .cg-console-clean>div>section:nth-of-type(3){grid-template-columns:minmax(330px,.62fr) minmax(640px,1.55fr)!important;min-height:590px}
+ .cg-operator-main-grid{grid-template-columns:220px minmax(0,1fr)!important}
+}
+@media (min-width:1536px){
+ .cg-console-clean>div>section:nth-of-type(3){grid-template-columns:minmax(350px,.58fr) minmax(760px,1.72fr)!important}
+}
+.cg-console-clean .leaflet-container{min-height:535px!important}
+
+/* Taxis use the Central GO blue identity while status remains encoded by badges/halos. */
+.custom-taxi-pin svg [fill="#eab308"],.custom-taxi-pin svg [fill="#facc15"]{fill:#38bdf8!important}
+.custom-taxi-pin svg [stroke="#27272a"]{stroke:#0284c7!important}
+.custom-taxi-pin{filter:drop-shadow(0 5px 12px rgba(14,165,233,.18))}
+.custom-taxi-pin:hover{filter:drop-shadow(0 7px 18px rgba(56,189,248,.38))}
+
+.cg-performance-pulse{position:relative;overflow:hidden}
+.cg-performance-pulse:after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(110deg,transparent 25%,rgba(56,189,248,.06) 45%,transparent 65%);transform:translateX(-120%);animation:cg-performance-sheen 7s ease-in-out infinite}
+@keyframes cg-performance-sheen{0%,70%{transform:translateX(-120%)}90%,100%{transform:translateX(120%)}}
+.cg-rank-bar{transition:width .45s cubic-bezier(.22,1,.36,1)}
+
+html[data-theme="light"] .cg-operator-workspace .cg-card,html[data-theme="light"] .cg-operator-workspace .cg-operator-panel,html[data-theme="light"] .cg-operator-workspace .cg-console-clean>div>section{background:linear-gradient(180deg,#f8fcff 0%,#edf8ff 100%)!important;border-color:#b9dcf2!important;box-shadow:0 12px 30px rgba(14,116,144,.08)!important}
+html[data-theme="light"] .cg-operator-workspace h1,html[data-theme="light"] .cg-operator-workspace h2,html[data-theme="light"] .cg-operator-workspace h3,html[data-theme="light"] .cg-operator-workspace strong{color:#0c2740!important}
+html[data-theme="light"] .cg-operator-workspace p,html[data-theme="light"] .cg-operator-workspace small{color:#52738d}
+html[data-theme="light"] .cg-operator-workspace .cg-op-accent{background:#e0f4ff!important;border-color:#8ed2f5!important;color:#075985!important}
+html[data-theme="light"] .cg-search-result:hover{background:#e4f6ff;border-color:#8bd4f5}
