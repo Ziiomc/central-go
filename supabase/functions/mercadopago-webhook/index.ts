@@ -95,6 +95,27 @@ Deno.serve(async (req) => {
     const paidAt = payment?.date_approved || null;
     const subscriptionId = subscription?.id ?? null;
 
+    // El checkout ya valida capacidad. Revalidamos aquí porque la flota puede
+    // cambiar entre abrir Mercado Pago y la aprobación definitiva del pago.
+    let activationPendingReason: string | null = null;
+    if (mpStatus === "approved" && !fullyRefunded) {
+      const { error: fitError } = await db.rpc("centralgo_assert_plan_capacity", {
+        p_company_id: companyId,
+        p_plan_id: planId,
+      });
+      if (fitError) activationPendingReason = fitError.message;
+    }
+
+    const paymentMetadata = {
+      mercado_pago_status: mpStatus,
+      status_detail: payment?.status_detail ?? null,
+      plan_id: planId,
+      plan_code: plan.code,
+      billing_cycle: billingCycle,
+      payer_id: payment?.payer?.id ?? null,
+      activation_pending_reason: activationPendingReason,
+    };
+
     const { data: savedPayment, error: paymentError } = await db.from("payments").upsert({
       company_id: companyId,
       subscription_id: subscriptionId,
@@ -108,18 +129,12 @@ Deno.serve(async (req) => {
       refunded_amount: refundedAmount,
       provider_net_received: Number.isFinite(providerNet) ? providerNet : null,
       provider_release_at: releaseAt,
-      metadata: {
-        mercado_pago_status: mpStatus,
-        status_detail: payment?.status_detail ?? null,
-        plan_id: planId,
-        plan_code: plan.code,
-        billing_cycle: billingCycle,
-        payer_id: payment?.payer?.id ?? null,
-      },
+      settlement_status: activationPendingReason ? "unallocated" : undefined,
+      metadata: paymentMetadata,
     }, { onConflict: "provider,external_payment_id" }).select("id").single();
     if (paymentError || !savedPayment) throw paymentError ?? new Error("No fue posible guardar el pago");
 
-    if (mpStatus === "approved" && !fullyRefunded) {
+    if (mpStatus === "approved" && !fullyRefunded && !activationPendingReason) {
       const now = new Date();
       const periodEnd = new Date(now);
       if (billingCycle === "annual") periodEnd.setUTCFullYear(periodEnd.getUTCFullYear() + 1);
@@ -136,11 +151,45 @@ Deno.serve(async (req) => {
         external_customer_id: payment?.payer?.id ? String(payment.payer.id) : null,
         updated_at: now.toISOString(),
       }, { onConflict: "company_id" }).select("id").single();
-      if (subscriptionError) throw subscriptionError;
 
-      await db.from("payments").update({ subscription_id: savedSubscription.id }).eq("id", savedPayment.id);
-      const { error: saasError } = await db.from("saas_accounts").update({ status: "active", activated_at: now.toISOString(), current_period_end: periodEnd.toISOString(), updated_at: now.toISOString() }).eq("company_id", companyId);
-      if (saasError) throw saasError;
+      if (subscriptionError) {
+        if (subscriptionError.code === "23514") {
+          activationPendingReason = subscriptionError.message;
+          await db.from("payments").update({
+            settlement_status: "unallocated",
+            metadata: { ...paymentMetadata, activation_pending_reason: activationPendingReason },
+          }).eq("id", savedPayment.id);
+        } else {
+          throw subscriptionError;
+        }
+      } else {
+        await db.from("payments").update({ subscription_id: savedSubscription.id }).eq("id", savedPayment.id);
+        const { error: saasError } = await db.from("saas_accounts").update({ status: "active", activated_at: now.toISOString(), current_period_end: periodEnd.toISOString(), updated_at: now.toISOString() }).eq("company_id", companyId);
+        if (saasError) throw saasError;
+      }
+    }
+
+    if (activationPendingReason) {
+      const { data: admins } = await db.from("company_memberships").select("user_id").eq("company_id", companyId).eq("role", "company_admin").eq("active", true);
+      const adminIds = [...new Set((admins ?? []).map((item: any) => String(item.user_id)).filter(Boolean))];
+      if (adminIds.length) {
+        const { data: existingNotice } = await db.from("notifications").select("id").eq("company_id", companyId).eq("related_id", savedPayment.id).eq("title", "Pago recibido · ajuste de plan requerido").limit(1).maybeSingle();
+        if (!existingNotice) {
+          await db.from("notifications").insert(adminIds.map((userId) => ({
+            company_id: companyId,
+            recipient_user_id: userId,
+            title: "Pago recibido · ajuste de plan requerido",
+            message: `Mercado Pago aprobó el pago, pero el plan no puede activarse todavía: ${activationPendingReason}`,
+            type: "warning",
+            read: false,
+            related_id: savedPayment.id,
+          })));
+        }
+      }
+      console.error("mercadopago activation pending", { companyId, planId, paymentId, activationPendingReason });
+      // Respondemos 200 para no provocar reintentos infinitos del proveedor. El
+      // pago queda registrado y sin comisiones hasta revisión/resolución.
+      return json({ ok: true, paymentId, status: mpStatus, localStatus: localPaymentStatus, activation: "manual_review", warning: activationPendingReason });
     }
 
     if (["paid", "partially_refunded", "refunded"].includes(localPaymentStatus)) {
