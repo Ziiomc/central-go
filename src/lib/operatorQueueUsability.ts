@@ -42,6 +42,49 @@ const compactStatusLabel = (value: string) => {
 const firstTextNode = (element: HTMLElement) =>
   Array.from(element.childNodes).find((node) => node.nodeType === Node.TEXT_NODE) as Text | undefined;
 
+const ensureCompactAddressSummary = (row: HTMLTableRowElement) => {
+  const clientCell = row.querySelector<HTMLTableCellElement>("td[data-cg-compact-role='client']");
+  const originCell = row.querySelector<HTMLTableCellElement>("td[data-cg-compact-role='origin']");
+  if (!clientCell || !originCell) return;
+
+  const originText = originCell.querySelector('p')?.textContent?.trim() || originCell.textContent?.trim() || '';
+  if (!originText) return;
+
+  let summary = clientCell.querySelector<HTMLElement>('[data-cg-primary-origin]');
+  if (!summary) {
+    summary = document.createElement('div');
+    summary.dataset.cgPrimaryOrigin = 'true';
+    summary.style.display = 'flex';
+    summary.style.alignItems = 'center';
+    summary.style.gap = '5px';
+    summary.style.minWidth = '0';
+    summary.style.marginBottom = '3px';
+    summary.style.color = '#f4f4f5';
+    summary.style.fontSize = '12px';
+    summary.style.fontWeight = '900';
+    summary.style.lineHeight = '1.15';
+    clientCell.prepend(summary);
+  }
+
+  summary.textContent = `📍 ${originText}`;
+  summary.title = originText;
+  summary.style.whiteSpace = 'nowrap';
+  summary.style.overflow = 'hidden';
+  summary.style.textOverflow = 'ellipsis';
+
+  const clientName = Array.from(clientCell.querySelectorAll('p')).find((node) => node !== summary);
+  if (clientName) {
+    clientName.style.fontSize = '9px';
+    clientName.style.fontWeight = '700';
+    clientName.style.color = '#a1a1aa';
+    clientName.style.lineHeight = '1.1';
+  }
+
+  // The address is now always visible in the main scan column. Keep the original
+  // origin cell as a semantic source but remove it from the compact visual grid.
+  originCell.style.display = 'none';
+};
+
 const polishCompactRow = (row: HTMLTableRowElement) => {
   const timeCell = row.querySelector<HTMLTableCellElement>("td[data-cg-compact-role='time']");
   if (timeCell) {
@@ -53,6 +96,8 @@ const polishCompactRow = (row: HTMLTableRowElement) => {
   const clientCell = row.querySelector<HTMLTableCellElement>("td[data-cg-compact-role='client']");
   const phone = clientCell?.querySelectorAll('p')?.[1];
   if (phone && normalize(phone.textContent) === 'sin telefono') phone.textContent = 'Sin número';
+
+  ensureCompactAddressSummary(row);
 
   const statusCell = row.querySelector<HTMLTableCellElement>("td[data-cg-compact-role='status']");
   const statusBadge = statusCell?.querySelector<HTMLElement>('span');
@@ -98,6 +143,44 @@ const markCompactDispatchTables = () => {
       });
       polishCompactRow(row);
     });
+  });
+};
+
+const polishVisualDispatchCards = () => {
+  const queueHeading = Array.from(document.querySelectorAll<HTMLHeadingElement>('.cg-operator-workspace h2'))
+    .find((element) => normalize(element.textContent) === 'cola de despacho');
+  const queuePanel = queueHeading?.closest('div.flex.min-h-0.flex-col');
+  if (!queuePanel) return;
+
+  queuePanel.querySelectorAll<HTMLElement>('article').forEach((article) => {
+    const mainButton = article.querySelector<HTMLButtonElement>(':scope > button:first-child');
+    if (!mainButton) return;
+
+    const directDivs = Array.from(mainButton.children).filter((element): element is HTMLElement => element instanceof HTMLElement && element.tagName === 'DIV');
+    const clientName = directDivs[1];
+    const routeBlock = directDivs[2];
+    const originRow = routeBlock?.querySelector<HTMLElement>('span:first-child');
+    const originText = originRow?.querySelector<HTMLElement>('span:last-child');
+
+    if (clientName) {
+      clientName.style.fontSize = '9px';
+      clientName.style.fontWeight = '700';
+      clientName.style.color = '#a1a1aa';
+      clientName.style.marginTop = '2px';
+    }
+    if (originRow) {
+      originRow.style.fontSize = '13px';
+      originRow.style.fontWeight = '900';
+      originRow.style.lineHeight = '1.2';
+      originRow.style.color = '#f4f4f5';
+      originRow.style.marginTop = '4px';
+      originRow.style.marginBottom = '3px';
+    }
+    if (originText) {
+      originText.style.overflow = 'hidden';
+      originText.style.textOverflow = 'ellipsis';
+      originText.style.whiteSpace = 'nowrap';
+    }
   });
 };
 
@@ -160,6 +243,7 @@ export const registerOperatorQueueUsability = () => {
     frame = window.requestAnimationFrame(() => {
       frame = 0;
       markCompactDispatchTables();
+      polishVisualDispatchCards();
     });
   };
 
