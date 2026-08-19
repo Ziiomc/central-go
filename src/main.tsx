@@ -3,6 +3,7 @@ import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import {PassengerRequestApp} from './components/passenger/PassengerRequestApp';
 import {CollectionViewModeControls} from './components/system/CollectionViewModeControls';
+import {DriverVehicleSelectionGate} from './components/driver/DriverVehicleSelectionGate';
 import 'leaflet/dist/leaflet.css';
 import './index.css';
 import './driverReadability.css';
@@ -46,6 +47,6 @@ const isPassengerRoute=window.location.pathname==='/pedir'||window.location.path
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    {isPassengerRoute?<PassengerRequestApp/>:<><App/><CollectionViewModeControls/></>}
+    {isPassengerRoute?<PassengerRequestApp/>:<><DriverVehicleSelectionGate><App/></DriverVehicleSelectionGate><CollectionViewModeControls/></>}
   </StrictMode>,
 );
