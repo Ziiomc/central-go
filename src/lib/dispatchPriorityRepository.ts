@@ -53,7 +53,7 @@ export async function loadDispatchQueue(companyId: string, tripId?: string): Pro
 
   const locations = new Map((locationsResult.data ?? []).map((row: any) => [row.driver_id, row]));
   const routes = new Map((routeResult.data ?? []).map((row: any) => [row.driver_id, row]));
-  return (driversResult.data ?? []).map((row: any) => {
+  const items = (driversResult.data ?? []).map((row: any) => {
     const location = locations.get(row.id) as any;
     const route = routes.get(row.id) as any;
     return {
@@ -76,6 +76,11 @@ export async function loadDispatchQueue(companyId: string, tripId?: string): Pro
       routeComputedAt: route?.computed_at ?? null,
     } satisfies DispatchQueueItem;
   });
+
+  // La fila de prioridad representa únicamente móviles que realmente pueden
+  // recibir una carrera ahora. Los conductores desconectados no conservan una
+  // posición visible ni pueden quedar por delante de un móvil conectado.
+  return items.filter(isQueueConnected);
 }
 
 export async function refreshDispatchRouteMatrix(tripId: string) {
