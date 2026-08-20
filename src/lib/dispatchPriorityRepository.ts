@@ -77,9 +77,6 @@ export async function loadDispatchQueue(companyId: string, tripId?: string): Pro
     } satisfies DispatchQueueItem;
   });
 
-  // La fila de prioridad representa únicamente móviles que realmente pueden
-  // recibir una carrera ahora. Los conductores desconectados no conservan una
-  // posición visible ni pueden quedar por delante de un móvil conectado.
   return items.filter(isQueueConnected);
 }
 
@@ -105,9 +102,10 @@ export async function setDriverOperationMode(driverId: string, mode: DriverOpera
 }
 
 export async function setTraditionalDriverAvailability(driverId: string, available: boolean) {
-  const { error } = await requireSupabase().rpc('centralgo_operator_set_driver_status', {
+  const { error } = await requireSupabase().rpc('centralgo_operator_set_driver_daily_service', {
     p_driver_id: driverId,
-    p_new_status: available ? 'available' : 'offline',
+    p_enabled: available,
+    p_mode: 'traditional',
   });
   if (error) throw error;
 }
