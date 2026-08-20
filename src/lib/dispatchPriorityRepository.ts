@@ -25,8 +25,8 @@ export interface DispatchQueueItem {
 
 export const isQueueConnected = (item: DispatchQueueItem) => {
   if (['offline', 'paused', 'sos'].includes(item.status)) return false;
-  if (item.operationMode === 'traditional') return true;
-  if (!item.locationUpdatedAt) return true;
+  if (item.operationMode === 'traditional') return item.status === 'available';
+  if (!item.locationUpdatedAt) return false;
   return Date.now() - new Date(item.locationUpdatedAt).getTime() <= 5 * 60 * 1000;
 };
 
