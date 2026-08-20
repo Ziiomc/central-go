@@ -1,6 +1,7 @@
 import { requireSupabase } from './supabase';
 
 export type DispatchQueueDirection = 'up' | 'down';
+export type DriverOperationMode = 'app' | 'traditional';
 
 export interface DispatchQueueItem {
   driverId: string;
@@ -9,6 +10,7 @@ export interface DispatchQueueItem {
   unitNumber: string;
   name: string;
   status: 'available' | 'en_route' | 'in_trip' | 'paused' | 'offline' | 'sos';
+  operationMode: DriverOperationMode;
   queueOrder: number;
   queueUpdatedAt: string;
   lat: number | null;
@@ -23,6 +25,7 @@ export interface DispatchQueueItem {
 
 export const isQueueConnected = (item: DispatchQueueItem) => {
   if (['offline', 'paused', 'sos'].includes(item.status)) return false;
+  if (item.operationMode === 'traditional') return true;
   if (!item.locationUpdatedAt) return true;
   return Date.now() - new Date(item.locationUpdatedAt).getTime() <= 5 * 60 * 1000;
 };
@@ -32,7 +35,7 @@ export async function loadDispatchQueue(companyId: string, tripId?: string): Pro
   const [driversResult, locationsResult, routeResult] = await Promise.all([
     db
       .from('drivers')
-      .select('id,company_id,user_id,unit_number,display_name,status,dispatch_queue_order,dispatch_queue_updated_at')
+      .select('id,company_id,user_id,unit_number,display_name,status,operation_mode,dispatch_queue_order,dispatch_queue_updated_at')
       .eq('company_id', companyId)
       .order('dispatch_queue_order', { ascending: true }),
     db
@@ -60,6 +63,7 @@ export async function loadDispatchQueue(companyId: string, tripId?: string): Pro
       unitNumber: row.unit_number,
       name: row.display_name,
       status: row.status,
+      operationMode: row.operation_mode === 'traditional' ? 'traditional' : 'app',
       queueOrder: Number(row.dispatch_queue_order ?? 0),
       queueUpdatedAt: row.dispatch_queue_updated_at ?? new Date().toISOString(),
       lat: location?.lat == null ? null : Number(location.lat),
@@ -83,6 +87,22 @@ export async function moveDispatchPriority(driverId: string, direction: Dispatch
   const { error } = await requireSupabase().rpc('centralgo_operator_move_driver_priority', {
     p_driver_id: driverId,
     p_direction: direction,
+  });
+  if (error) throw error;
+}
+
+export async function setDriverOperationMode(driverId: string, mode: DriverOperationMode) {
+  const { error } = await requireSupabase().rpc('centralgo_operator_set_driver_operation_mode', {
+    p_driver_id: driverId,
+    p_mode: mode,
+  });
+  if (error) throw error;
+}
+
+export async function setTraditionalDriverAvailability(driverId: string, available: boolean) {
+  const { error } = await requireSupabase().rpc('centralgo_operator_set_driver_status', {
+    p_driver_id: driverId,
+    p_new_status: available ? 'available' : 'offline',
   });
   if (error) throw error;
 }
