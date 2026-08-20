@@ -31,15 +31,28 @@ let driverSessionHiddenAt: number | null = null;
 let driverWakeLock: WakeLockSentinelLike | null = null;
 let driverWakeLockBusy = false;
 let driverHiddenAt: number | null = null;
+let lastDriverResyncKey = '';
+let lastDriverResyncAt = 0;
 const FRESHNESS_KEY = 'centralgo-fresh-bundle-v10-stale-chunk-recovery';
 const DRIVER_PUSH_PROMPTED_KEY = 'centralgo-driver-push-prompted';
 const DRIVER_RESUME_THRESHOLD_MS = 8000;
 const DRIVER_SESSION_FORCE_REFRESH_AFTER_MS = 60_000;
 const DRIVER_SESSION_REFRESH_MARGIN_MS = 12 * 60_000;
 const DRIVER_SESSION_CHECK_MS = 4 * 60_000;
+const DRIVER_RESYNC_DEDUPE_MS = 1500;
 const VAPID_PUBLIC_KEY = 'BEN4b02sauQecZUH30sIRi_tubjuPEmL9sWmvFgmwgJLKIvEj1DtDdAfff4xbYi3nCvgfB0p40R-IIdE0aEGwys';
 
 const isDriverRoute = () => typeof window !== 'undefined' && location.pathname.startsWith('/driver');
+
+const dispatchDriverResync = (detail: Record<string, unknown>) => {
+  if (typeof window === 'undefined' || !isDriverRoute()) return;
+  const key = `${String(detail.reason ?? 'resync')}:${String(detail.tripId ?? '')}`;
+  const now = Date.now();
+  if (key === lastDriverResyncKey && now - lastDriverResyncAt < DRIVER_RESYNC_DEDUPE_MS) return;
+  lastDriverResyncKey = key;
+  lastDriverResyncAt = now;
+  window.dispatchEvent(new CustomEvent('centralgo:driver-resync', { detail }));
+};
 
 const vapidToUint8 = (value: string) => {
   const padding = '='.repeat((4 - value.length % 4) % 4);
@@ -77,7 +90,7 @@ function registerDriverSessionReliability() {
   const recover = (force = false) => {
     if (!isDriverRoute() || document.visibilityState !== 'visible') return;
     void maintainDriverSession(force).finally(() => {
-      window.dispatchEvent(new CustomEvent('centralgo:driver-resync', { detail: { reason: 'session-recovery' } }));
+      dispatchDriverResync({ reason: 'session-recovery' });
     });
   };
 
@@ -183,16 +196,11 @@ function registerServiceWorkerMessageListener() {
 
     try { if ('vibrate' in navigator) navigator.vibrate(0); } catch {}
     try { window.speechSynthesis?.cancel(); } catch {}
-    window.dispatchEvent(new CustomEvent('centralgo:driver-resync', { detail: { reason: data.type, tripId: data.tripId } }));
 
-    const shouldReload = isDriverRoute() && (data.type === 'centralgo:trip-cancelled' || data.status !== 'en_route');
-    if (!shouldReload) return;
-
-    const key = `centralgo:driver-trip-clear:${data.tripId || 'unknown'}`;
-    const previous = Number(sessionStorage.getItem(key) || 0);
-    if (Date.now() - previous < 5000) return;
-    sessionStorage.setItem(key, String(Date.now()));
-    window.setTimeout(() => window.location.reload(), 180);
+    // Never hard-reload the driver application for operational changes. A reload can
+    // interrupt GPS, audio, an active trip or an interaction in progress. Realtime
+    // data and the resync event update the current screen in place instead.
+    dispatchDriverResync({ reason: data.type, tripId: data.tripId, status: data.status });
   });
 }
 
@@ -250,7 +258,7 @@ function recoverDriverAfterAndroidSuspend(force = false) {
   });
 
   if (!needsStrongRecovery) return;
-  window.dispatchEvent(new CustomEvent('centralgo:driver-resync',{detail:{suspendedMs}}));
+  dispatchDriverResync({ reason: 'android-resume', suspendedMs });
 }
 
 function registerDriverAndroidReliability() {
