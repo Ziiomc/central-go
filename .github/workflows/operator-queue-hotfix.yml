@@ -1,0 +1,42 @@
+name: Operator queue capture hotfix
+on:
+  push:
+    branches: [fix/operator-queue-capture]
+permissions:
+  contents: write
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/operator-queue-capture
+      - name: Patch NewTripModal
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('src/components/modals/NewTripModal.tsx')
+          s=p.read_text()
+          s=s.replace("[driverId,setDriverId]=useState(''),[km,setKm]", "[driverId,setDriverId]=useState(''),[queueOnly,setQueueOnly]=useState(false),[km,setKm]")
+          s=s.replace("setVehicleType('standard');setDriverId('');setKm(0)", "setVehicleType('standard');setDriverId('');setQueueOnly(false);setKm(0)")
+          s=s.replace("const selected=scheduled?undefined:available.find(d=>d.id===driverId);", "const selected=scheduled||queueOnly?undefined:available.find(d=>d.id===driverId);")
+          s=s.replace("dispatchMode:selected?'manual':'automatic',scheduledFor,", "dispatchMode:selected?'manual':queueOnly?'manual':'automatic',scheduledFor,")
+          s=s.replace("onClick={()=>setDriverId('')} className={`shrink-0", "onClick={()=>{setDriverId('');setQueueOnly(false);}} className={`shrink-0")
+          s=s.replace("onClick={()=>setDriverId(d.id)} className={`shrink-0", "onClick={()=>{setDriverId(d.id);setQueueOnly(false);}} className={`shrink-0")
+          old='{clientId&&blockedDriverIds.size>0&&<p className="mt-1.5 text-[9px] text-rose-300">{blockedDriverIds.size} móvil(es) excluido(s) por preferencia del cliente.</p>}'
+          new='<div className="mt-2 flex flex-wrap items-center gap-2"><button type="button" onClick={()=>{setQueueOnly(v=>!v);setDriverId(\'\');}} className={`rounded-lg border px-3 py-2 text-[11px] font-black ${queueOnly?\'border-cyan-300 bg-cyan-500 text-zinc-950\':\'border-cyan-700/60 bg-cyan-950/40 text-cyan-200\'}`}>Poner a la cola</button><span className="text-[9px] text-zinc-500">Guarda la llamada sin asignarla para seguir atendiendo. Después se despacha desde la cola respetando el orden.</span></div>{clientId&&blockedDriverIds.size>0&&<p className="mt-1.5 text-[9px] text-rose-300">{blockedDriverIds.size} móvil(es) excluido(s) por preferencia del cliente.</p>}'
+          if old not in s: raise SystemExit('queue insertion target not found')
+          s=s.replace(old,new)
+          s=s.replace("{submitting?'Guardando…':scheduled?'Agendar carrera':'Despachar carrera'}", "{submitting?'Guardando…':scheduled?'Agendar carrera':queueOnly?'Poner a la cola':'Despachar carrera'}")
+          p.write_text(s)
+          PY
+      - name: Validate build
+        run: npm ci && npm run build
+      - name: Commit patch
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add src/components/modals/NewTripModal.tsx
+          git commit -m "Allow operator to queue calls without dispatching"
+          git push origin fix/operator-queue-capture
