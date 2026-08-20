@@ -4,12 +4,16 @@ import{useApp}from'../../context/AppContext';
 import{isQueueConnected,loadDispatchQueue,subscribeDispatchQueue,type DispatchQueueItem}from'../../lib/dispatchPriorityRepository';
 import{DriverTripCancellationControl}from'./DriverTripCancellationControl';
 
+const ACTIVE_TRIP_STATUSES=new Set(['assigned','en_route','arrived','in_progress']);
+
 export const DriverPriorityCounter:React.FC=()=>{
- const{currentRole,currentCompany,currentUser}=useApp();
+ const{currentRole,currentCompany,currentUser,drivers,trips}=useApp();
  const[queue,setQueue]=useState<DispatchQueueItem[]>([]);
  const[error,setError]=useState(false);
  const load=async()=>{if(currentRole!=='driver'||currentCompany.id==='network')return;try{setQueue(await loadDispatchQueue(currentCompany.id));setError(false);}catch{setError(true);}};
- useEffect(()=>{void load();if(currentRole!=='driver'||currentCompany.id==='network')return;const unsubscribe=subscribeDispatchQueue(currentCompany.id,()=>void load());const timer=window.setInterval(()=>void load(),30000);return()=>{unsubscribe();window.clearInterval(timer);};},[currentRole,currentCompany.id,currentUser.id]);
+ useEffect(()=>{void load();if(currentRole!=='driver'||currentCompany.id==='network')return;const unsubscribe=subscribeDispatchQueue(currentCompany.id,()=>void load());const timer=window.setInterval(()=>void load(),60000);return()=>{unsubscribe();window.clearInterval(timer);};},[currentRole,currentCompany.id,currentUser.id]);
+ const driverId=drivers.find(item=>item.userId===currentUser.id)?.id;
+ const hasActiveTrip=Boolean(driverId&&trips.some(trip=>trip.driverId===driverId&&ACTIVE_TRIP_STATUSES.has(trip.status)));
  const own=queue.find(item=>item.userId===currentUser.id);
  const connected=useMemo(()=>queue.filter(isQueueConnected).sort((a,b)=>a.queueOrder-b.queueOrder||a.unitNumber.localeCompare(b.unitNumber,'es',{numeric:true})),[queue]);
  if(currentRole!=='driver'||currentCompany.id==='network')return null;
@@ -19,7 +23,7 @@ export const DriverPriorityCounter:React.FC=()=>{
  const driversLabel=error?'…':String(connected.length);
  return <>
   <DriverTripCancellationControl/>
-  {own&&<div className="pointer-events-none fixed left-1/2 top-[calc(env(safe-area-inset-top)+4.15rem)] z-[145] w-[min(27rem,calc(100vw-1.25rem))] -translate-x-1/2">
+  {!hasActiveTrip&&own&&<div className="pointer-events-none fixed left-1/2 top-[calc(env(safe-area-inset-top)+4.15rem)] z-[145] w-[min(27rem,calc(100vw-1.25rem))] -translate-x-1/2">
    <div className={`grid grid-cols-2 overflow-hidden rounded-2xl border shadow-xl backdrop-blur-xl ${error?'border-rose-400/35 bg-rose-950/95':'border-blue-400/20 bg-[var(--cg-surface-solid)]/95'}`}>
     <div className="flex items-center gap-2.5 border-r border-[var(--cg-border)] px-3 py-2.5">
      <div className={`grid h-8 w-8 shrink-0 place-items-center rounded-xl ${inQueue&&!error?'bg-blue-500/15 text-blue-300':'bg-zinc-800 text-zinc-400'}`}><Hash className="h-4 w-4"/></div>
