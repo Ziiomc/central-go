@@ -21,7 +21,7 @@ const applyTheme = (theme: ColorTheme) => {
   document.documentElement.dataset.theme = theme;
   document.documentElement.style.colorScheme = theme === 'light' ? 'light' : 'dark';
   const themeColors: Record<ColorTheme, string> = {
-    light: '#eef4f8',
+    light: '#dfe7ec',
     dark: '#071321',
     executive: '#292b2e',
     fire: '#090706',
