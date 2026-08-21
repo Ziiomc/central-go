@@ -97,7 +97,7 @@ export async function loadDispatchQueue(companyId: string, tripId?: string): Pro
     } satisfies DispatchQueueItem;
   });
 
-  return items.filter(isQueueConnected);
+  return items;
 }
 
 export async function refreshDispatchRouteMatrix(tripId: string) {
