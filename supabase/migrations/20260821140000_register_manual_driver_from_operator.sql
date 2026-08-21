@@ -2,6 +2,15 @@
 -- The operator can create the permanent driver record without creating an app account.
 -- The new driver starts in traditional mode and joins the end of today's priority queue.
 
+create policy drivers_operator_insert on public.drivers
+for insert to authenticated
+with check (
+  public.centralgo_has_company_role(
+    company_id,
+    array['company_admin','operator']::public.centralgo_company_role[]
+  )
+);
+
 create or replace function public.centralgo_operator_register_manual_driver(
   p_company_id uuid,
   p_vehicle_id uuid default null,
@@ -15,7 +24,7 @@ create or replace function public.centralgo_operator_register_manual_driver(
 )
 returns public.drivers
 language plpgsql
-security definer
+security invoker
 set search_path = public
 as $$
 declare
