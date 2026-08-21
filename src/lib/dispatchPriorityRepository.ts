@@ -21,18 +21,25 @@ export interface DispatchQueueItem {
   routeDurationSeconds: number | null;
   routeProvider: string | null;
   routeComputedAt: string | null;
+  presenceLastSeenAt: string | null;
 }
+
+const isFresh = (timestamp: string | null, maxAgeMs: number) => {
+  if (!timestamp) return false;
+  const ageMs = Date.now() - new Date(timestamp).getTime();
+  return Number.isFinite(ageMs) && ageMs >= -60 * 1000 && ageMs <= maxAgeMs;
+};
 
 export const isQueueConnected = (item: DispatchQueueItem) => {
   if (['offline', 'paused', 'sos'].includes(item.status)) return false;
   if (item.operationMode === 'traditional') return item.status === 'available';
-  if (!item.locationUpdatedAt) return false;
-  return Date.now() - new Date(item.locationUpdatedAt).getTime() <= 5 * 60 * 1000;
+  return isFresh(item.locationUpdatedAt, 5 * 60 * 1000)
+    && isFresh(item.presenceLastSeenAt, 4 * 60 * 1000);
 };
 
 export async function loadDispatchQueue(companyId: string, tripId?: string): Promise<DispatchQueueItem[]> {
   const db = requireSupabase();
-  const [driversResult, locationsResult, routeResult] = await Promise.all([
+  const [driversResult, locationsResult, presenceResult, routeResult] = await Promise.all([
     db
       .from('drivers')
       .select('id,company_id,user_id,unit_number,display_name,status,operation_mode,dispatch_queue_order,dispatch_queue_updated_at')
@@ -42,6 +49,12 @@ export async function loadDispatchQueue(companyId: string, tripId?: string): Pro
       .from('driver_locations')
       .select('driver_id,lat,lng,address,recorded_at')
       .eq('company_id', companyId),
+    db
+      .from('driver_presence_sessions')
+      .select('driver_id,last_seen_at,ended_at')
+      .eq('company_id', companyId)
+      .is('ended_at', null)
+      .order('last_seen_at', { ascending: false }),
     tripId
       ? db.rpc('centralgo_operator_route_metrics', { p_trip_id: tripId })
       : Promise.resolve({ data: [], error: null } as any),
@@ -49,12 +62,18 @@ export async function loadDispatchQueue(companyId: string, tripId?: string): Pro
 
   if (driversResult.error) throw driversResult.error;
   if (locationsResult.error) throw locationsResult.error;
+  if (presenceResult.error) throw presenceResult.error;
   if (routeResult.error) throw routeResult.error;
 
   const locations = new Map((locationsResult.data ?? []).map((row: any) => [row.driver_id, row]));
+  const presence = new Map<string, any>();
+  for (const row of presenceResult.data ?? []) {
+    if (!presence.has(row.driver_id)) presence.set(row.driver_id, row);
+  }
   const routes = new Map((routeResult.data ?? []).map((row: any) => [row.driver_id, row]));
   const items = (driversResult.data ?? []).map((row: any) => {
     const location = locations.get(row.id) as any;
+    const driverPresence = presence.get(row.id) as any;
     const route = routes.get(row.id) as any;
     return {
       driverId: row.id,
@@ -70,6 +89,7 @@ export async function loadDispatchQueue(companyId: string, tripId?: string): Pro
       lng: location?.lng == null ? null : Number(location.lng),
       locationUpdatedAt: location?.recorded_at ?? null,
       locationAddress: location?.address ?? 'Sin ubicación GPS reportada',
+      presenceLastSeenAt: driverPresence?.last_seen_at ?? null,
       routeDistanceKm: route?.distance_km == null ? null : Number(route.distance_km),
       routeDurationSeconds: route?.duration_seconds == null ? null : Number(route.duration_seconds),
       routeProvider: route?.provider ?? null,
@@ -77,7 +97,7 @@ export async function loadDispatchQueue(companyId: string, tripId?: string): Pro
     } satisfies DispatchQueueItem;
   });
 
-  return items.filter(isQueueConnected);
+  return items;
 }
 
 export async function refreshDispatchRouteMatrix(tripId: string) {
