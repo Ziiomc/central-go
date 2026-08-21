@@ -12,7 +12,7 @@ export interface Vehicle { id:string; companyId:string; unitNumber:string; licen
 
 export interface Driver {
   id:string; userId:string; companyId:string; vehicleId?:string; unitNumber:string; name:string; phone:string;
-  address?:string; birthDate?:string; licenseNumber:string; licenseExpiry:string; photoUrl:string; status:DriverStatus;
+  address?:string; birthDate?:string; licenseNumber:string; licenseExpiry:string; photoUrl:string; status:DriverStatus; operationMode?:'app'|'traditional';
   currentLocation:{lat:number;lng:number;address?:string;speed?:number;heading?:number;lastUpdated:string;};
   rating:number; complaintCount?:number; dispatchPriorityCredit?:number; totalTripsCompleted:number; todayEarnings:number;
   commissionBalance:number; sosActive:boolean; sosTimestamp?:string;

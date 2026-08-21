@@ -152,7 +152,7 @@ export const OperatorConsole:React.FC=()=>{
   const handleCancelTrip=async(trip:Trip)=>{const mobile=trip.driverUnitNumber?` del móvil ${trip.driverUnitNumber}`:'';const releaseMessage=trip.driverId?' El móvil quedará nuevamente disponible.':'';if(!window.confirm(`¿Cancelar la carrera ${trip.code}${mobile}?${releaseMessage}`))return;await cancelTrip(trip.id,'Cancelada por la central desde la cola de despacho');if(selectedTripId===trip.id)setSelectedTripId(null);};
   const requestDriverStatus=(driver:Driver,status:DriverStatus)=>{const risky=status==='offline'||(['en_route','in_trip'].includes(driver.status)&&status!==driver.status);if(risky)setStatusConfirmation({driver,status});else toggleDriverAvailability(driver.id,status);setDriverMenuId(null);};
   const confirmDriverStatus=()=>{if(!statusConfirmation)return;toggleDriverAvailability(statusConfirmation.driver.id,statusConfirmation.status);setStatusConfirmation(null);};
-  const handlePriorityDrop=(event:React.DragEvent<HTMLDivElement>)=>{
+  const handlePriorityDrop=async(event:React.DragEvent<HTMLDivElement>)=>{
     event.preventDefault();
     setPriorityDragActive(false);
     const driverId=event.dataTransfer.getData('application/x-centralgo-driver');
@@ -161,11 +161,17 @@ export const OperatorConsole:React.FC=()=>{
     const trip=activeTrips.find(item=>item.id===tripId);
     const driver=drivers.find(item=>item.id===driverId);
     if(!tripId||!trip||trip.status!=='pending'||trip.driverId||!driver||driver.status!=='available')return;
-    assignTrip(trip.id,driver.id);
-    setSelectedTripId(trip.id);
-    setFocusDriverPoint(null);
-    setFocusDriverId(driver.id);
-    setAssignmentToast({tripId:trip.id,tripCode:trip.code,driverUnitNumber:driver.unitNumber});
+    if(driver.operationMode==='traditional'&&!window.confirm(`¿El Móvil ${driver.unitNumber} confirmó la carrera por radio o teléfono?\\n\\nAl confirmar, Central GO registrará la asignación y la operadora deberá avisarle por radio.`))return;
+    try{
+      await assignTrip(trip.id,driver.id);
+      setSelectedTripId(trip.id);
+      setFocusDriverPoint(null);
+      setFocusDriverId(driver.id);
+      setAssignmentToast({tripId:trip.id,tripCode:trip.code,driverUnitNumber:driver.unitNumber});
+    }catch(error){
+      const message=error instanceof Error?error.message:'No fue posible enviar la carrera al conductor.';
+      window.alert(message);
+    }
   };
 
 
@@ -181,7 +187,7 @@ export const OperatorConsole:React.FC=()=>{
     <section className="grid grid-cols-2 gap-2 lg:grid-cols-4"><StatusCard label="Móviles libres" value={availableDrivers.length} detail={`de ${drivers.length} registrados`} icon={Car} tone="emerald"/><StatusCard label="En servicio" value={busyDrivers.length} detail="en camino o carrera" icon={Navigation} tone="blue"/><StatusCard label="Por asignar" value={pendingCount} detail={pendingCount?'requieren atención':'todo al día'} icon={AlertTriangle} tone={pendingCount?'amber':'zinc'}/><StatusCard label="Finalizadas" value={completedToday} detail="durante esta jornada" icon={CheckCircle2} tone="zinc"/></section>
 
     <section ref={mapSectionRef} className="grid min-h-[570px] gap-3 2xl:grid-cols-[minmax(520px,0.92fr)_minmax(620px,1.35fr)] xl:grid-cols-[minmax(470px,0.9fr)_minmax(560px,1.25fr)]">
-      <div onDragOver={event=>{if(event.dataTransfer.types.includes("application/x-centralgo-driver"))event.preventDefault();}} onDrop={handlePriorityDrop} className={"flex min-h-0 flex-col overflow-hidden rounded-2xl border border-zinc-800 bg-[#0d0d0f] shadow-2xl shadow-black/20 transition "+(priorityDragActive?"ring-2 ring-blue-400/35 bg-blue-500/[0.035]":"")}>
+      <div onDragOver={event=>{if(priorityDragActive)event.preventDefault();}} onDrop={handlePriorityDrop} className={"flex min-h-0 flex-col overflow-hidden rounded-2xl border border-zinc-800 bg-[#0d0d0f] shadow-2xl shadow-black/20 transition "+(priorityDragActive?"ring-2 ring-blue-400/35 bg-blue-500/[0.035]":"")}>
         <div className="border-b border-zinc-800 p-3"><div className="flex flex-wrap items-center justify-between gap-2"><div><div className="flex items-center gap-2"><h2 className="text-base font-extrabold text-white">Cola de despacho</h2><span className={`rounded-full px-2 py-0.5 text-xs font-black ${queueView==='history'?'bg-blue-500/15 text-blue-300':pendingCount?'bg-amber-500/15 text-amber-300':'bg-emerald-500/10 text-emerald-300'}`}>{queueView==='history'?`${completedTrips.length} realizadas`:`${pendingCount} por asignar`}</span></div><p className="mt-0.5 text-xs text-zinc-400">{queueView==='history'?`${completedTrips.length} carreras realizadas · puedes abrir el detalle completo`:`${activeTrips.length} carreras visibles · toca el móvil asignado para ubicarlo`}</p></div><div className="flex items-center gap-1.5"><div className="flex rounded-lg border border-zinc-800 bg-zinc-950 p-1"><button onClick={()=>setQueueView('compact')} className={`flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-black ${queueView==='compact'?'bg-blue-600 text-white':'text-zinc-400'}`}><List className="h-3.5 w-3.5"/>Compacta</button><button onClick={()=>setQueueView('cards')} className={`flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-black ${queueView==='cards'?'bg-blue-600 text-white':'text-zinc-400'}`}><LayoutList className="h-3.5 w-3.5"/>Visual</button><button onClick={()=>setQueueView('history')} className={`flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-black ${queueView==='history'?'bg-emerald-600 text-white':'text-zinc-400'}`}><History className="h-3.5 w-3.5"/>Realizadas</button></div>{queueView==='compact'&&<div className="relative"><button onClick={()=>setColumnsOpen(v=>!v)} className="rounded-lg border border-zinc-800 bg-zinc-950 p-2 text-zinc-400"><Columns3 className="h-4 w-4"/></button>{columnsOpen&&<div className="absolute right-0 top-full z-40 mt-2 w-48 rounded-xl border border-zinc-700 bg-[#111114] p-2 shadow-2xl">{(Object.keys(columnLabels) as ColumnKey[]).map(k=><label key={k} className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-zinc-300"><input type="checkbox" checked={visibleColumns[k]} onChange={()=>setVisibleColumns(c=>({...c,[k]:!c[k]}))} className="accent-blue-500"/>{columnLabels[k]}</label>)}</div>}</div>}</div></div></div>
         {queueView==='history'?<CompletedTripHistory trips={completedTrips} onDetail={setSelectedTripForDetail}/>:activeTrips.length===0?<EmptyQueue onCreate={()=>setNewTripModalOpen(true)}/>:queueView==='compact'?<CompactTripTable trips={activeTrips} selectedTripId={selectedTripId} visibleColumns={visibleColumns} availableDriversCount={availableDrivers.length} onSelect={setSelectedTripId} onDetail={setSelectedTripForDetail} onAssign={handleAutoAssign} onCancel={handleCancelTrip} onCall={phone=>{window.location.href=`tel:${phone}`;}} onLocateDriver={locateTripDriver}/>:<VisualTripQueue trips={activeTrips} selectedTripId={selectedTripId} availableDriversCount={availableDrivers.length} onSelect={setSelectedTripId} onDetail={setSelectedTripForDetail} onAssign={handleAutoAssign} onCancel={handleCancelTrip} onStart={id=>updateTripStatus(id,'in_progress')} onLocateDriver={locateTripDriver}/>} 
       </div>
