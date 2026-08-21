@@ -57,6 +57,7 @@ export const mapDriverRow = (row: any, location?: any): Driver => ({
   licenseExpiry: row.license_expiry ?? '',
   photoUrl: row.photo_url ?? '',
   status: row.status,
+  operationMode: row.operation_mode === 'traditional' ? 'traditional' : 'app',
   currentLocation: {
     lat: location?.lat ?? 0,
     lng: location?.lng ?? 0,
