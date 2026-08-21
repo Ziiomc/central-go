@@ -7,6 +7,7 @@ import {
 import { useApp } from '../../context/AppContext';
 import { DRIVER_STATUS_LABELS, TRIP_STATUS_LABELS } from '../../lib/labels';
 import { Driver, DriverStatus, Trip, TripStatus } from '../../types';
+import { isValidMapCoordinate } from '../../lib/flexibleDestination';
 import { LiveMap } from '../map/LiveMap';
 
 const activeStatusOrder: TripStatus[] = ['pending', 'assigned', 'en_route', 'arrived', 'in_progress'];
@@ -49,6 +50,7 @@ export const OperatorConsole:React.FC=()=>{
   const [driverTab,setDriverTab]=useState<DriverTab>('available');
   const [selectedTripId,setSelectedTripId]=useState<string|null>(null);
   const [focusDriverId,setFocusDriverId]=useState<string|null>(null);
+  const [focusDriverPoint,setFocusDriverPoint]=useState<{driverId:string;lat:number;lng:number}|null>(null);
   const [driverMenuId,setDriverMenuId]=useState<string|null>(null);
   const [columnsOpen,setColumnsOpen]=useState(false);
   const [now,setNow]=useState(new Date());
@@ -113,16 +115,33 @@ export const OperatorConsole:React.FC=()=>{
   const focusDriver=(driver:Driver,toggle=true)=>{
     const deselecting=toggle&&focusDriverId===driver.id;
     setFocusDriverId(deselecting?null:driver.id);
+    setFocusDriverPoint(null);
     if(!deselecting)mapSectionRef.current?.scrollIntoView({behavior:'smooth',block:'center'});
     setDriverMenuId(null);
   };
+  useEffect(()=>{
+    const handlePriorityLocate=(event:Event)=>{
+      const detail=(event as CustomEvent<{driverId?:string;lat?:number|null;lng?:number|null}>).detail;
+      const driverId=detail?.driverId;
+      const driver=drivers.find(item=>item.id===driverId);
+      if(!driver)return;
+      const lat=Number(detail?.lat);
+      const lng=Number(detail?.lng);
+      setSelectedTripId(null);
+      setFocusDriverId(driver.id);
+      setFocusDriverPoint(isValidMapCoordinate(lat,lng)?{driverId:driver.id,lat,lng}:null);
+      mapSectionRef.current?.scrollIntoView({behavior:'smooth',block:'center'});
+    };
+    window.addEventListener('centralgo:locate-driver',handlePriorityLocate);
+    return()=>window.removeEventListener('centralgo:locate-driver',handlePriorityLocate);
+  },[drivers]);
   const locateTripDriver=(trip:Trip)=>{
     if(!trip.driverId)return;
     const driver=drivers.find(d=>d.id===trip.driverId);if(!driver)return;
     setSelectedTripId(trip.id);
     focusDriver(driver,false);
   };
-  const handleAutoAssign=async(tripId:string,tripCode:string)=>{const d=await autoAssignClosestDriver(tripId);if(!d)return;setFocusDriverId(d.id);setAssignmentToast({tripId,tripCode,driverUnitNumber:d.unitNumber});};
+  const handleAutoAssign=async(tripId:string,tripCode:string)=>{const d=await autoAssignClosestDriver(tripId);if(!d)return;setFocusDriverPoint(null);setFocusDriverId(d.id);setAssignmentToast({tripId,tripCode,driverUnitNumber:d.unitNumber});};
   const handleCancelTrip=async(trip:Trip)=>{const mobile=trip.driverUnitNumber?` del móvil ${trip.driverUnitNumber}`:'';const releaseMessage=trip.driverId?' El móvil quedará nuevamente disponible.':'';if(!window.confirm(`¿Cancelar la carrera ${trip.code}${mobile}?${releaseMessage}`))return;await cancelTrip(trip.id,'Cancelada por la central desde la cola de despacho');if(selectedTripId===trip.id)setSelectedTripId(null);};
   const requestDriverStatus=(driver:Driver,status:DriverStatus)=>{const risky=status==='offline'||(['en_route','in_trip'].includes(driver.status)&&status!==driver.status);if(risky)setStatusConfirmation({driver,status});else toggleDriverAvailability(driver.id,status);setDriverMenuId(null);};
   const confirmDriverStatus=()=>{if(!statusConfirmation)return;toggleDriverAvailability(statusConfirmation.driver.id,statusConfirmation.status);setStatusConfirmation(null);};
@@ -143,7 +162,7 @@ export const OperatorConsole:React.FC=()=>{
         <div className="border-b border-zinc-800 p-3"><div className="flex flex-wrap items-center justify-between gap-2"><div><div className="flex items-center gap-2"><h2 className="text-base font-extrabold text-white">Cola de despacho</h2><span className={`rounded-full px-2 py-0.5 text-xs font-black ${queueView==='history'?'bg-blue-500/15 text-blue-300':pendingCount?'bg-amber-500/15 text-amber-300':'bg-emerald-500/10 text-emerald-300'}`}>{queueView==='history'?`${completedTrips.length} realizadas`:`${pendingCount} por asignar`}</span></div><p className="mt-0.5 text-xs text-zinc-400">{queueView==='history'?`${completedTrips.length} carreras realizadas · puedes abrir el detalle completo`:`${activeTrips.length} carreras visibles · toca el móvil asignado para ubicarlo`}</p></div><div className="flex items-center gap-1.5"><div className="flex rounded-lg border border-zinc-800 bg-zinc-950 p-1"><button onClick={()=>setQueueView('compact')} className={`flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-black ${queueView==='compact'?'bg-blue-600 text-white':'text-zinc-400'}`}><List className="h-3.5 w-3.5"/>Compacta</button><button onClick={()=>setQueueView('cards')} className={`flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-black ${queueView==='cards'?'bg-blue-600 text-white':'text-zinc-400'}`}><LayoutList className="h-3.5 w-3.5"/>Visual</button><button onClick={()=>setQueueView('history')} className={`flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-black ${queueView==='history'?'bg-emerald-600 text-white':'text-zinc-400'}`}><History className="h-3.5 w-3.5"/>Realizadas</button></div>{queueView==='compact'&&<div className="relative"><button onClick={()=>setColumnsOpen(v=>!v)} className="rounded-lg border border-zinc-800 bg-zinc-950 p-2 text-zinc-400"><Columns3 className="h-4 w-4"/></button>{columnsOpen&&<div className="absolute right-0 top-full z-40 mt-2 w-48 rounded-xl border border-zinc-700 bg-[#111114] p-2 shadow-2xl">{(Object.keys(columnLabels) as ColumnKey[]).map(k=><label key={k} className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-zinc-300"><input type="checkbox" checked={visibleColumns[k]} onChange={()=>setVisibleColumns(c=>({...c,[k]:!c[k]}))} className="accent-blue-500"/>{columnLabels[k]}</label>)}</div>}</div>}</div></div></div>
         {queueView==='history'?<CompletedTripHistory trips={completedTrips} onDetail={setSelectedTripForDetail}/>:activeTrips.length===0?<EmptyQueue onCreate={()=>setNewTripModalOpen(true)}/>:queueView==='compact'?<CompactTripTable trips={activeTrips} selectedTripId={selectedTripId} visibleColumns={visibleColumns} availableDriversCount={availableDrivers.length} onSelect={setSelectedTripId} onDetail={setSelectedTripForDetail} onAssign={handleAutoAssign} onCancel={handleCancelTrip} onCall={phone=>{window.location.href=`tel:${phone}`;}} onLocateDriver={locateTripDriver}/>:<VisualTripQueue trips={activeTrips} selectedTripId={selectedTripId} availableDriversCount={availableDrivers.length} onSelect={setSelectedTripId} onDetail={setSelectedTripForDetail} onAssign={handleAutoAssign} onCancel={handleCancelTrip} onStart={id=>updateTripStatus(id,'in_progress')} onLocateDriver={locateTripDriver}/>} 
       </div>
-      <div className="min-w-0 overflow-hidden rounded-2xl border border-zinc-800 bg-[#0d0d0f] shadow-2xl shadow-black/20"><div className="flex min-h-[62px] items-center justify-between gap-3 border-b border-zinc-800 px-4 py-2.5"><div className="min-w-0"><div className="flex items-center gap-2"><h2 className="text-base font-extrabold text-white">Mapa operativo</h2><span className="flex items-center gap-1 text-xs font-black uppercase text-emerald-400"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400"/>En línea</span></div>{selectedTrip?<p className="mt-0.5 truncate text-xs text-zinc-400"><strong className="text-blue-300">{selectedTrip.code}</strong> · {selectedTrip.origin.address} → {selectedTrip.destination.address}</p>:<p className="mt-0.5 text-xs text-zinc-400">Selecciona una carrera para ver su ruta.</p>}</div>{selectedDriver&&<button onClick={()=>setVHFModalDriver(selectedDriver)} className="flex shrink-0 items-center gap-1.5 rounded-lg border border-blue-500/25 bg-blue-500/10 px-2.5 py-2 text-xs font-black text-blue-200"><Radio className="h-3.5 w-3.5"/>VHF {selectedDriver.unitNumber}</button>}</div><LiveMap height="h-[507px]" selectedTrip={selectedTrip} focusDriverId={focusDriverId} onSelectDriver={driver=>setFocusDriverId(current=>driver?(current===driver.id?null:driver.id):null)}/></div>
+      <div className="min-w-0 overflow-hidden rounded-2xl border border-zinc-800 bg-[#0d0d0f] shadow-2xl shadow-black/20"><div className="flex min-h-[62px] items-center justify-between gap-3 border-b border-zinc-800 px-4 py-2.5"><div className="min-w-0"><div className="flex items-center gap-2"><h2 className="text-base font-extrabold text-white">Mapa operativo</h2><span className="flex items-center gap-1 text-xs font-black uppercase text-emerald-400"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400"/>En línea</span></div>{selectedTrip?<p className="mt-0.5 truncate text-xs text-zinc-400"><strong className="text-blue-300">{selectedTrip.code}</strong> · {selectedTrip.origin.address} → {selectedTrip.destination.address}</p>:<p className="mt-0.5 text-xs text-zinc-400">Selecciona una carrera para ver su ruta.</p>}</div>{selectedDriver&&<button onClick={()=>setVHFModalDriver(selectedDriver)} className="flex shrink-0 items-center gap-1.5 rounded-lg border border-blue-500/25 bg-blue-500/10 px-2.5 py-2 text-xs font-black text-blue-200"><Radio className="h-3.5 w-3.5"/>VHF {selectedDriver.unitNumber}</button>}</div><LiveMap height="h-[507px]" selectedTrip={selectedTrip} focusDriverId={focusDriverId} focusDriverPoint={focusDriverPoint} onSelectDriver={driver=>setFocusDriverId(current=>driver?(current===driver.id?null:driver.id):null)}/></div>
     </section>
 
     <section className="overflow-visible rounded-2xl border border-zinc-800 bg-[#0d0d0f] shadow-xl shadow-black/20"><div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-800 px-3 py-2.5"><div className="flex items-center gap-2"><PanelBottomOpen className="h-4 w-4 text-emerald-300"/><div><h2 className="text-base font-extrabold text-white">Control de móviles</h2><p className="text-xs text-zinc-400">Turno, conexión y cambio rápido de estado</p></div></div><div className="flex max-w-full gap-1 overflow-x-auto rounded-xl border border-zinc-800 bg-zinc-950 p-1">{([['available',`Libres ${availableDrivers.length}`],['en_route',`En camino ${drivers.filter(d=>d.status==='en_route').length}`],['in_trip',`En carrera ${drivers.filter(d=>d.status==='in_trip').length}`],['paused_offline',`Pausa / fuera ${drivers.filter(d=>['paused','offline'].includes(d.status)).length}`],['all',`Todos ${drivers.length}`]] as [DriverTab,string][]).map(([id,label])=><button key={id} onClick={()=>setDriverTab(id)} className={`whitespace-nowrap rounded-lg px-2.5 py-1.5 text-xs font-black ${driverTab===id?'bg-emerald-600 text-white':'text-zinc-400'}`}>{label}</button>)}</div></div>
