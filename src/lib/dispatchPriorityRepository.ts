@@ -10,6 +10,7 @@ export interface DispatchQueueItem {
   unitNumber: string;
   name: string;
   status: 'available' | 'en_route' | 'in_trip' | 'paused' | 'offline' | 'sos';
+  serviceEnabled: boolean;
   operationMode: DriverOperationMode;
   queueOrder: number;
   queueUpdatedAt: string;
@@ -42,7 +43,7 @@ export async function loadDispatchQueue(companyId: string, tripId?: string): Pro
   const [driversResult, locationsResult, presenceResult, routeResult] = await Promise.all([
     db
       .from('drivers')
-      .select('id,company_id,user_id,unit_number,display_name,status,operation_mode,dispatch_queue_order,dispatch_queue_updated_at')
+      .select('id,company_id,user_id,unit_number,display_name,status,service_enabled,operation_mode,dispatch_queue_order,dispatch_queue_updated_at')
       .eq('company_id', companyId)
       .order('dispatch_queue_order', { ascending: true }),
     db
@@ -82,6 +83,7 @@ export async function loadDispatchQueue(companyId: string, tripId?: string): Pro
       unitNumber: row.unit_number,
       name: row.display_name,
       status: row.status,
+      serviceEnabled: row.service_enabled ?? false,
       operationMode: row.operation_mode === 'traditional' ? 'traditional' : 'app',
       queueOrder: Number(row.dispatch_queue_order ?? 0),
       queueUpdatedAt: row.dispatch_queue_updated_at ?? new Date().toISOString(),
