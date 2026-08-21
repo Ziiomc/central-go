@@ -49,6 +49,9 @@ export const LiveMap: React.FC<LiveMapProps> = ({
       : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
     L.tileLayer(initialTileUrl, {
       attribution: tileMode === 'dark' ? '&copy; CARTO' : '&copy; OpenStreetMap',
+      maxZoom: 19,
+      subdomains: 'abcd',
+    }).addTo(map);
     mapInstanceRef.current = map;
     const clearDriverFocus = () => { map.closePopup(); onSelectDriver?.(null); };
     map.on('click', clearDriverFocus);
