@@ -169,33 +169,33 @@ export const LiveMap: React.FC<LiveMapProps> = ({
             ? new Date(driver.currentLocation.lastUpdated).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })
             : 'sin registro';
           popupContent.className = 'cg-map-popup';
-          popupContent.innerHTML = \`
+          popupContent.innerHTML = `
             <div class="cg-map-popup__head">
               <div class="cg-map-popup__identity">
-                <div class="cg-map-popup__unit">\${escapePopupText(driver.unitNumber)}</div>
-                <div class="cg-map-popup__person"><strong>\${safeName}</strong><span>Móvil conectado · \${safePhone}</span></div>
+                <div class="cg-map-popup__unit">${escapePopupText(driver.unitNumber)}</div>
+                <div class="cg-map-popup__person"><strong>${safeName}</strong><span>Móvil conectado · ${safePhone}</span></div>
               </div>
-              <span class="cg-map-popup__status cg-map-popup__status--\${statusTone}"><span></span>\${statusText}</span>
+              <span class="cg-map-popup__status cg-map-popup__status--${statusTone}"><span></span>${statusText}</span>
             </div>
             <div class="cg-map-popup__metrics">
-              <div><small>VELOCIDAD</small><strong>\${speed} km/h</strong></div>
-              <div><small>CALIFICACIÓN</small><strong>★ \${driver.rating.toFixed(1)}</strong></div>
-              <div><small>VIAJES</small><strong>\${driver.totalTripsCompleted}</strong></div>
+              <div><small>VELOCIDAD</small><strong>${speed} km/h</strong></div>
+              <div><small>CALIFICACIÓN</small><strong>★ ${driver.rating.toFixed(1)}</strong></div>
+              <div><small>VIAJES</small><strong>${driver.totalTripsCompleted}</strong></div>
             </div>
-            <div class="cg-map-popup__location"><span class="cg-map-popup__location-icon">⌖</span><div><small>UBICACIÓN ACTUAL · \${lastUpdate}</small><strong>\${safeAddress}</strong><span>GPS \${driver.currentLocation.lat.toFixed(5)}, \${driver.currentLocation.lng.toFixed(5)}</span></div></div>
-            \${activeTrip
-              ? \`<div class="cg-map-popup__trip"><small>EN OPERACIÓN · \${safeTripCode}</small><strong>\${safeClient}</strong><span>Destino: \${safeDestination}</span></div>\`
+            <div class="cg-map-popup__location"><span class="cg-map-popup__location-icon">⌖</span><div><small>UBICACIÓN ACTUAL · ${lastUpdate}</small><strong>${safeAddress}</strong><span>GPS ${driver.currentLocation.lat.toFixed(5)}, ${driver.currentLocation.lng.toFixed(5)}</span></div></div>
+            ${activeTrip
+              ? `<div class="cg-map-popup__trip"><small>EN OPERACIÓN · ${safeTripCode}</small><strong>${safeClient}</strong><span>Destino: ${safeDestination}</span></div>`
               : '<div class="cg-map-popup__trip cg-map-popup__trip--available"><small>OPERACIÓN</small><strong>Sin carrera activa</strong><span>Disponible para despacho</span></div>'}
-            <div class="cg-map-popup__actions"><button id="btn-dispatch-\${driver.id}" class="cg-map-popup__action cg-map-popup__action--dispatch">Despachar</button><button id="btn-vhf-\${driver.id}" class="cg-map-popup__action cg-map-popup__action--radio">Radio VHF</button></div>
-          \`;
+            <div class="cg-map-popup__actions"><button id="btn-dispatch-${driver.id}" class="cg-map-popup__action cg-map-popup__action--dispatch">Despachar</button><button id="btn-vhf-${driver.id}" class="cg-map-popup__action cg-map-popup__action--radio">Radio VHF</button></div>
+          `;
           return popupContent;
         };
         const popupContent = buildDriverPopup();
         marker.bindPopup(popupContent);
         marker.on('popupopen', () => {
-          const btnDispatch = document.getElementById(\`btn-dispatch-\${driver.id}\`);
+          const btnDispatch = document.getElementById(`btn-dispatch-${driver.id}`);
           if (btnDispatch) btnDispatch.onclick = () => { onSelectDriver?.(driver); setNewTripModalOpen(true); };
-          const btnVhf = document.getElementById(\`btn-vhf-\${driver.id}\`);
+          const btnVhf = document.getElementById(`btn-vhf-${driver.id}`);
           if (btnVhf) btnVhf.onclick = () => setVHFModalDriver(driver);
         });
         markersRef.current[driver.id] = marker;
