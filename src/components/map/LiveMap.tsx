@@ -35,6 +35,7 @@ export const LiveMap: React.FC<LiveMapProps> = ({
   const { drivers, trips, activeSOSDriver, setNewTripModalOpen, setVHFModalDriver } = useApp();
   const { theme } = useColorTheme();
   const [tileMode, setTileMode] = useState<'dark' | 'street'>(theme === 'light' ? 'street' : 'dark');
+  const [filterStatus, setFilterStatus] = useState<DriverStatus | 'all'>('all');
   const [gpsStatusMsg, setGpsStatusMsg] = useState<string | null>(null);
   const [isLocatingGps, setIsLocatingGps] = useState<boolean>(false);
 
@@ -135,7 +136,7 @@ export const LiveMap: React.FC<LiveMapProps> = ({
       let statusText = 'DISPONIBLE';
       let statusTone = 'available';
       if (driver.sosActive || driver.status === 'sos') {
-        statusColor = '#ef4444'; statusBadge = 'bg-red-600 text-white border-red-300 animate-bounce shadow-red-500/50'; haloGlow = 'rgba(239, 68, 68, 0.8)'; statusText = 'SOS ALERTA';
+        statusColor = '#ef4444'; statusBadge = 'bg-red-600 text-white border-red-300 animate-bounce shadow-red-500/50'; haloGlow = 'rgba(239, 68, 68, 0.8)'; statusText = 'SOS ALERTA'; statusTone = 'alert';
       } else if (driver.status === 'en_route') {
         statusColor = '#f59e0b'; statusBadge = 'bg-amber-500/95 text-slate-950 border-amber-200 font-extrabold shadow-amber-500/30'; haloGlow = 'rgba(245, 158, 11, 0.5)'; statusText = 'EN CAMINO'; statusTone = 'en-route';
       } else if (driver.status === 'in_trip') {
