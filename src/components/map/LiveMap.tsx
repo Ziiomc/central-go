@@ -11,6 +11,7 @@ interface LiveMapProps {
   onSelectDriver?: (driver: Driver | null) => void;
   selectedTrip?: Trip | null;
   focusDriverId?: string | null;
+  focusDriverPoint?: { driverId:string; lat:number; lng:number } | null;
 }
 
 export const LiveMap: React.FC<LiveMapProps> = ({
@@ -18,6 +19,7 @@ export const LiveMap: React.FC<LiveMapProps> = ({
   onSelectDriver,
   selectedTrip,
   focusDriverId,
+  focusDriverPoint,
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
@@ -165,10 +167,14 @@ export const LiveMap: React.FC<LiveMapProps> = ({
   useEffect(() => {
     if (!focusDriverId || !mapInstanceRef.current) return;
     const driver = drivers.find((item) => item.id === focusDriverId);
-    if (!driver || !isValidMapCoordinate(driver.currentLocation.lat,driver.currentLocation.lng)) return;
-    mapInstanceRef.current.setView([driver.currentLocation.lat, driver.currentLocation.lng], Math.max(mapInstanceRef.current.getZoom(), 16), { animate: true });
+    if (!driver) return;
+    const point = focusDriverPoint?.driverId === driver.id
+      ? focusDriverPoint
+      : driver.currentLocation;
+    if (!isValidMapCoordinate(point.lat,point.lng)) return;
+    mapInstanceRef.current.setView([point.lat, point.lng], Math.max(mapInstanceRef.current.getZoom(), 16), { animate: true });
     markersRef.current[driver.id]?.openPopup();
-  }, [focusDriverId, drivers]);
+  }, [focusDriverId, focusDriverPoint, drivers]);
 
   useEffect(() => {
     const map = mapInstanceRef.current;
