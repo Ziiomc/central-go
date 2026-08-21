@@ -150,7 +150,7 @@ export const LiveMap: React.FC<LiveMapProps> = ({
       });
       const existing = markersRef.current[driver.id];
       if (existing) {
-        existing.setIcon(customIcon); existing.setPopupContent(buildDriverPopup()); enableSmoothMarkerTransition(existing); existing.setLatLng([lat, lng]);
+        existing.setIcon(customIcon); enableSmoothMarkerTransition(existing); existing.setLatLng([lat, lng]);
       } else {
         const marker = L.marker([lat, lng], { icon: customIcon }).addTo(map);
         const activeTrip = trips.find((trip) => trip.driverId === driver.id && !['completed', 'cancelled'].includes(trip.status));
