@@ -296,7 +296,15 @@ export const DriverMobileView: React.FC = () => {
   }, [activeTrip?.id, activeTrip?.status, incomingOffer?.id]);
 
   useEffect(() => {
-    if (!incomingOffer || offerTimer <= 0) return;
+    if (!incomingOffer) return;
+    if (offerTimer <= 0) {
+      const expiredOffer = incomingOffer;
+      setIncomingOffer(null);
+      void Promise.resolve(
+        rejectTripOffer(expiredOffer.id, 'Oferta no aceptada dentro de 15 segundos')
+      ).catch(() => undefined);
+      return;
+    }
     const timer = window.setTimeout(() => setOfferTimer((value) => Math.max(0, value - 1)), 1000);
     return () => window.clearTimeout(timer);
   }, [incomingOffer?.id, offerTimer]);
