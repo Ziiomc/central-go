@@ -5,6 +5,9 @@ import { Driver, Trip, DriverStatus } from '../../types';
 import { requestDrivingRoute, RoadPoint } from '../../lib/roadRouting';
 import { isFlexibleDestinationAddress, isValidMapCoordinate } from '../../lib/flexibleDestination';
 import { ShieldAlert, Navigation, Layers, Crosshair } from 'lucide-react';
+import { useColorTheme } from '../../lib/theme';
+
+const escapePopupText = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, (character) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#039;' }[character] || character));
 
 interface LiveMapProps {
   height?: string;
@@ -29,9 +32,9 @@ export const LiveMap: React.FC<LiveMapProps> = ({
   const tripMarkersRef = useRef<L.Marker[]>([]);
   const userGpsMarkerRef = useRef<L.Marker | null>(null);
 
-  const { drivers, activeSOSDriver, setNewTripModalOpen, setVHFModalDriver } = useApp();
-  const [tileMode, setTileMode] = useState<'dark' | 'street'>('dark');
-  const [filterStatus, setFilterStatus] = useState<DriverStatus | 'all'>('all');
+  const { drivers, trips, activeSOSDriver, setNewTripModalOpen, setVHFModalDriver } = useApp();
+  const { theme } = useColorTheme();
+  const [tileMode, setTileMode] = useState<'dark' | 'street'>(theme === 'light' ? 'street' : 'dark');
   const [gpsStatusMsg, setGpsStatusMsg] = useState<string | null>(null);
   const [isLocatingGps, setIsLocatingGps] = useState<boolean>(false);
 
@@ -41,11 +44,11 @@ export const LiveMap: React.FC<LiveMapProps> = ({
     if (!mapContainerRef.current || mapInstanceRef.current) return;
     const map = L.map(mapContainerRef.current, { center: defaultCenter, zoom: 14, zoomControl: false });
     L.control.zoom({ position: 'bottomright' }).addTo(map);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      attribution: '&copy; OpenStreetMap &copy; CARTO',
-      maxZoom: 19,
-      subdomains: 'abcd',
-    }).addTo(map);
+    const initialTileUrl = tileMode === 'dark'
+      ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+      : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+    L.tileLayer(initialTileUrl, {
+      attribution: tileMode === 'dark' ? '&copy; CARTO' : '&copy; OpenStreetMap',
     mapInstanceRef.current = map;
     const clearDriverFocus = () => { map.closePopup(); onSelectDriver?.(null); };
     map.on('click', clearDriverFocus);
@@ -58,6 +61,10 @@ export const LiveMap: React.FC<LiveMapProps> = ({
       mapInstanceRef.current = null;
     };
   }, []);
+  useEffect(() => {
+    setTileMode(theme === 'light' ? 'street' : 'dark');
+  }, [theme]);
+
 
   const requestRealGPSLocation = () => {
     if (!navigator.geolocation) {
@@ -123,14 +130,17 @@ export const LiveMap: React.FC<LiveMapProps> = ({
       let statusBadge = 'bg-emerald-500/95 text-slate-950 border-emerald-300 font-extrabold shadow-emerald-500/30';
       let haloGlow = 'rgba(16, 185, 129, 0.4)';
       let statusText = 'DISPONIBLE';
+      let statusTone = 'available';
       if (driver.sosActive || driver.status === 'sos') {
         statusColor = '#ef4444'; statusBadge = 'bg-red-600 text-white border-red-300 animate-bounce shadow-red-500/50'; haloGlow = 'rgba(239, 68, 68, 0.8)'; statusText = 'SOS ALERTA';
       } else if (driver.status === 'en_route') {
-        statusColor = '#f59e0b'; statusBadge = 'bg-amber-500/95 text-slate-950 border-amber-200 font-extrabold shadow-amber-500/30'; haloGlow = 'rgba(245, 158, 11, 0.5)'; statusText = 'EN CAMINO';
+        statusColor = '#f59e0b'; statusBadge = 'bg-amber-500/95 text-slate-950 border-amber-200 font-extrabold shadow-amber-500/30'; haloGlow = 'rgba(245, 158, 11, 0.5)'; statusText = 'EN CAMINO'; statusTone = 'en-route';
       } else if (driver.status === 'in_trip') {
-        statusColor = '#3b82f6'; statusBadge = 'bg-blue-600 text-white border-blue-300 font-bold shadow-blue-500/30'; haloGlow = 'rgba(59, 130, 246, 0.5)'; statusText = 'EN VIAJE';
-      } else if (driver.status === 'paused' || driver.status === 'offline') {
-        statusColor = '#64748b'; statusBadge = 'bg-slate-700 text-slate-300 border-slate-600'; haloGlow = 'rgba(100, 116, 139, 0.2)'; statusText = 'PAUSADO';
+        statusColor = '#3b82f6'; statusBadge = 'bg-blue-600 text-white border-blue-300 font-bold shadow-blue-500/30'; haloGlow = 'rgba(59, 130, 246, 0.5)'; statusText = 'EN VIAJE'; statusTone = 'in-trip';
+      } else if (driver.status === 'paused') {
+        statusColor = '#64748b'; statusBadge = 'bg-slate-700 text-slate-300 border-slate-600'; haloGlow = 'rgba(100, 116, 139, 0.2)'; statusText = 'PAUSADO'; statusTone = 'paused';
+      } else if (driver.status === 'offline') {
+        statusColor = '#ef4444'; statusBadge = 'bg-red-600 text-white border-red-300'; haloGlow = 'rgba(239, 68, 68, 0.38)'; statusText = 'DESCONECTADO'; statusTone = 'offline';
       }
       const heading = driver.currentLocation.heading || 0;
       const speed = driver.currentLocation.speed || 0;
@@ -140,24 +150,56 @@ export const LiveMap: React.FC<LiveMapProps> = ({
       });
       const existing = markersRef.current[driver.id];
       if (existing) {
-        existing.setIcon(customIcon); enableSmoothMarkerTransition(existing); existing.setLatLng([lat, lng]);
+        existing.setIcon(customIcon); existing.setPopupContent(buildDriverPopup()); enableSmoothMarkerTransition(existing); existing.setLatLng([lat, lng]);
       } else {
         const marker = L.marker([lat, lng], { icon: customIcon }).addTo(map);
-        const popupContent = document.createElement('div');
-        popupContent.className = 'p-3 text-slate-100 bg-slate-900 rounded-lg min-w-[210px] border border-slate-700 font-sans';
-        popupContent.innerHTML = `<div class="font-bold text-sm">${driver.unitNumber} - ${driver.name}</div><div class="mt-1 text-xs text-amber-400">${statusText} · ${speed} km/h</div><div class="mt-1 text-xs text-slate-400">📍 ${driver.currentLocation.address || 'Ubicación GPS'}</div><div class="grid grid-cols-2 gap-1.5 mt-2"><button id="btn-dispatch-${driver.id}" class="py-1.5 bg-amber-500 text-slate-950 font-bold text-xs rounded">+ Despachar</button><button id="btn-vhf-${driver.id}" class="py-1.5 bg-blue-600 text-white font-bold text-xs rounded">📻 Radio VHF</button></div>`;
+        const activeTrip = trips.find((trip) => trip.driverId === driver.id && !['completed', 'cancelled'].includes(trip.status));
+        const buildDriverPopup = () => {
+          const popupContent = document.createElement('div');
+          const safeName = escapePopupText(driver.name);
+          const safePhone = escapePopupText(driver.phone || 'Sin teléfono');
+          const safeAddress = escapePopupText(driver.currentLocation.address || 'Ubicación GPS');
+          const safeTripCode = activeTrip ? escapePopupText(activeTrip.code) : '';
+          const safeClient = activeTrip ? escapePopupText(activeTrip.clientName) : '';
+          const safeDestination = activeTrip ? escapePopupText(activeTrip.destination.address) : '';
+          const lastUpdate = driver.currentLocation.lastUpdated
+            ? new Date(driver.currentLocation.lastUpdated).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })
+            : 'sin registro';
+          popupContent.className = 'cg-map-popup';
+          popupContent.innerHTML = \`
+            <div class="cg-map-popup__head">
+              <div class="cg-map-popup__identity">
+                <div class="cg-map-popup__unit">\${escapePopupText(driver.unitNumber)}</div>
+                <div class="cg-map-popup__person"><strong>\${safeName}</strong><span>Móvil conectado · \${safePhone}</span></div>
+              </div>
+              <span class="cg-map-popup__status cg-map-popup__status--\${statusTone}"><span></span>\${statusText}</span>
+            </div>
+            <div class="cg-map-popup__metrics">
+              <div><small>VELOCIDAD</small><strong>\${speed} km/h</strong></div>
+              <div><small>CALIFICACIÓN</small><strong>★ \${driver.rating.toFixed(1)}</strong></div>
+              <div><small>VIAJES</small><strong>\${driver.totalTripsCompleted}</strong></div>
+            </div>
+            <div class="cg-map-popup__location"><span class="cg-map-popup__location-icon">⌖</span><div><small>UBICACIÓN ACTUAL · \${lastUpdate}</small><strong>\${safeAddress}</strong><span>GPS \${driver.currentLocation.lat.toFixed(5)}, \${driver.currentLocation.lng.toFixed(5)}</span></div></div>
+            \${activeTrip
+              ? \`<div class="cg-map-popup__trip"><small>EN OPERACIÓN · \${safeTripCode}</small><strong>\${safeClient}</strong><span>Destino: \${safeDestination}</span></div>\`
+              : '<div class="cg-map-popup__trip cg-map-popup__trip--available"><small>OPERACIÓN</small><strong>Sin carrera activa</strong><span>Disponible para despacho</span></div>'}
+            <div class="cg-map-popup__actions"><button id="btn-dispatch-\${driver.id}" class="cg-map-popup__action cg-map-popup__action--dispatch">Despachar</button><button id="btn-vhf-\${driver.id}" class="cg-map-popup__action cg-map-popup__action--radio">Radio VHF</button></div>
+          \`;
+          return popupContent;
+        };
+        const popupContent = buildDriverPopup();
         marker.bindPopup(popupContent);
         marker.on('popupopen', () => {
-          const btnDispatch = document.getElementById(`btn-dispatch-${driver.id}`);
+          const btnDispatch = document.getElementById(\`btn-dispatch-\${driver.id}\`);
           if (btnDispatch) btnDispatch.onclick = () => { onSelectDriver?.(driver); setNewTripModalOpen(true); };
-          const btnVhf = document.getElementById(`btn-vhf-${driver.id}`);
+          const btnVhf = document.getElementById(\`btn-vhf-\${driver.id}\`);
           if (btnVhf) btnVhf.onclick = () => setVHFModalDriver(driver);
         });
         markersRef.current[driver.id] = marker;
         enableSmoothMarkerTransition(marker);
       }
     });
-  }, [drivers, filterStatus, tileMode]);
+  }, [drivers, trips, filterStatus, tileMode]);
 
   useEffect(() => {
     if (focusDriverId || !mapInstanceRef.current) return;
@@ -240,7 +282,7 @@ export const LiveMap: React.FC<LiveMapProps> = ({
     }
   };
 
-  return <div className={`relative w-full ${height} rounded-2xl overflow-hidden border border-slate-800 bg-slate-900 shadow-2xl`}>
+  return <div className={`cg-live-map relative w-full ${height} rounded-2xl overflow-hidden border border-slate-800 bg-slate-900 shadow-2xl`} data-map-theme={theme === 'light' ? 'light' : 'dark'}>
     <div ref={mapContainerRef} className="w-full h-full z-0"/>
     <div className="absolute top-3 inset-x-3 z-10 flex flex-wrap lg:flex-nowrap items-center justify-between gap-2.5 pointer-events-none">
       <div className="flex flex-wrap items-center gap-1 bg-slate-950/90 backdrop-blur-md p-1.5 rounded-xl border border-slate-800 shadow-xl pointer-events-auto">
