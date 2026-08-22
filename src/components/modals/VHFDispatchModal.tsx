@@ -1,8 +1,18 @@
 import React, { useState } from 'react';
+import { AlertTriangle, CheckCircle2, Loader2, Radio, RadioTower, Send, Volume2, X } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { playVHFRadioChirp, speakVHFDispatch } from '../../lib/audioService';
 import { sendDriverRadioMessage } from '../../lib/driverOperations';
-import { Radio, X, Send, Volume2, RadioTower, Sparkles, CheckCircle2, Loader2, AlertTriangle } from 'lucide-react';
+
+const VHF_PRESETS = [
+  { label: 'Actualice estado', icon: '↻', msg: (unit: string) => `Atento móvil ${unit}, favor actualice su estado de disponibilidad en la aplicación.` },
+  { label: 'Diríjase a central', icon: '⌂', msg: (unit: string) => `Atento móvil ${unit}, por favor diríjase a la central de radio taxis.` },
+  { label: 'Reporte ubicación', icon: '⌖', msg: (unit: string) => `Atento móvil ${unit}, reporte su posición GPS actual a la central.` },
+  { label: 'Tome siguiente carrera', icon: '↗', msg: (unit: string) => `Atento móvil ${unit}, tome la siguiente carrera disponible en su sector.` },
+  { label: '¿En colación?', icon: '☕', msg: (unit: string) => `Atento móvil ${unit}, ¿se encuentra libre o en tiempo de colación?` },
+  { label: 'Llamado de radio', icon: '!', msg: (unit: string) => `Atento móvil ${unit}, atento a la radio por llamado de seguridad de la central.` },
+  { label: '¿Finalizó carrera?', icon: '✓', msg: (unit: string) => `Atento móvil ${unit}, confirme si ya finalizó el viaje anterior.` },
+];
 
 export const VHFDispatchModal: React.FC = () => {
   const { vhfModalDriver, setVHFModalDriver, addAuditLog, soundMuted, currentCompany } = useApp();
@@ -13,16 +23,6 @@ export const VHFDispatchModal: React.FC = () => {
 
   if (!vhfModalDriver) return null;
 
-  const VHF_PRESETS = [
-    { label: '🔄 Actualice Estado', msg: `Atento móvil ${vhfModalDriver.unitNumber}, favor actualice su estado de disponibilidad en la aplicación.` },
-    { label: '🏢 Diríjase a Central', msg: `Atento móvil ${vhfModalDriver.unitNumber}, por favor diríjase a la central de radio taxis.` },
-    { label: '📍 Reporte Ubicación', msg: `Atento móvil ${vhfModalDriver.unitNumber}, reporte su posición GPS actual a la central.` },
-    { label: '⚡ Tome Siguiente Carrera', msg: `Atento móvil ${vhfModalDriver.unitNumber}, tome la siguiente carrera disponible en su sector.` },
-    { label: '☕ ¿En Colación / Libre?', msg: `Atento móvil ${vhfModalDriver.unitNumber}, ¿se encuentra libre o en tiempo de colación?` },
-    { label: '⚠️ Llamado de Radio', msg: `Atento móvil ${vhfModalDriver.unitNumber}, atento a la radio por llamado de seguridad de la central.` },
-    { label: '🏁 ¿Finalizó Carrera?', msg: `Atento móvil ${vhfModalDriver.unitNumber}, confirme si ya finalizó el viaje anterior.` },
-  ];
-
   const handleTransmit = async (textToSend: string) => {
     const message = textToSend.trim();
     if (!message || sending) return;
@@ -32,10 +32,7 @@ export const VHFDispatchModal: React.FC = () => {
       await sendDriverRadioMessage(currentCompany.id, vhfModalDriver, message);
       playVHFRadioChirp();
       if (!soundMuted) speakVHFDispatch(message);
-      addAuditLog(
-        'TRANSMISION_VHF',
-        `Radio digital enviada a Móvil ${vhfModalDriver.unitNumber} (${vhfModalDriver.name}): "${message}"`
-      );
+      addAuditLog('TRANSMISION_VHF', `Radio digital enviada a Móvil ${vhfModalDriver.unitNumber} (${vhfModalDriver.name}): "${message}"`);
       setLastSentMsg(message);
       setCustomText('');
       window.setTimeout(() => {
@@ -50,68 +47,40 @@ export const VHFDispatchModal: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-3 overflow-y-auto animate-fade-in font-sans">
-      <div className="bg-[#0d0d0f] border border-amber-500/40 rounded-2xl max-w-lg w-full p-5 space-y-4 shadow-2xl relative my-6">
-        <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400 flex items-center justify-center font-extrabold shadow-md">
-              <RadioTower className="w-5 h-5 animate-pulse" />
-            </div>
-            <div>
-              <h3 className="font-black text-white text-base tracking-tight flex items-center gap-2">
-                <span>Radio digital</span>
-                <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded font-mono font-bold">
-                  Móvil {vhfModalDriver.unitNumber}
-                </span>
-              </h3>
-              <p className="text-[11px] text-zinc-400 font-mono">
-                {vhfModalDriver.name} · entrega en tiempo real + lectura por voz
-              </p>
-            </div>
+    <div className="pointer-events-none fixed inset-0 z-50 p-3 sm:p-5">
+      <section className="pointer-events-auto absolute right-3 top-3 max-h-[calc(100dvh-1.5rem)] w-[min(390px,calc(100vw-1.5rem))] overflow-y-auto rounded-2xl border border-cyan-400/25 bg-[#091521]/95 p-3 text-slate-100 shadow-[0_20px_70px_rgba(0,0,0,.55)] backdrop-blur-2xl sm:right-5 sm:top-5">
+        <header className="flex items-center gap-2.5 border-b border-white/10 pb-2.5">
+          <div className="grid h-9 w-9 place-items-center rounded-xl border border-cyan-300/25 bg-cyan-400/10 text-cyan-300"><RadioTower className="h-4 w-4" /></div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2"><h3 className="text-sm font-black tracking-tight text-white">Radio digital</h3><span className="rounded-full border border-amber-300/30 bg-amber-400/10 px-1.5 py-0.5 text-[8px] font-black text-amber-200">Móvil {vhfModalDriver.unitNumber}</span></div>
+            <p className="mt-0.5 truncate text-[9px] text-slate-400">{vhfModalDriver.name} · entrega con lectura por voz</p>
           </div>
-          <button onClick={() => setVHFModalDriver(null)} className="p-1.5 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800 transition">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
+          <button type="button" onClick={() => setVHFModalDriver(null)} className="grid h-7 w-7 place-items-center rounded-lg border border-white/10 bg-white/[.04] text-slate-400 transition hover:bg-white/10 hover:text-white" aria-label="Cerrar radio"><X className="h-4 w-4" /></button>
+        </header>
 
-        {!vhfModalDriver.userId && (
-          <div className="flex gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200">
-            <AlertTriangle className="h-4 w-4 shrink-0" /> Este conductor aún no tiene una cuenta profesional vinculada; activa su acceso antes de usar la radio digital.
-          </div>
-        )}
-        {error && <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-xs font-semibold text-rose-200">{error}</div>}
+        {!vhfModalDriver.userId && <div className="mt-2 flex gap-1.5 rounded-xl border border-amber-400/25 bg-amber-400/10 p-2 text-[9px] leading-relaxed text-amber-100"><AlertTriangle className="h-3.5 w-3.5 shrink-0" />Este conductor aún no tiene una cuenta profesional vinculada.</div>}
+        {error && <div className="mt-2 rounded-xl border border-rose-400/25 bg-rose-400/10 p-2 text-[9px] font-semibold text-rose-100">{error}</div>}
 
         {lastSentMsg ? (
-          <div className="p-4 bg-emerald-500/15 border border-emerald-500/40 rounded-xl flex items-center gap-3 text-emerald-300 animate-pulse">
-            <CheckCircle2 className="w-6 h-6 shrink-0 text-emerald-400" />
-            <div><div className="font-bold text-xs uppercase tracking-wider">Mensaje entregado a la app</div><div className="text-xs text-emerald-200/90 italic font-mono mt-0.5">"{lastSentMsg}"</div></div>
-          </div>
+          <div className="mt-3 flex items-center gap-2 rounded-xl border border-emerald-400/25 bg-emerald-400/10 p-3 text-emerald-100"><CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-300" /><div><p className="text-[10px] font-black uppercase tracking-wide">Mensaje entregado</p><p className="mt-0.5 line-clamp-2 text-[9px] text-emerald-100/75">{lastSentMsg}</p></div></div>
         ) : (
           <>
-            <div className="space-y-2">
-              <div className="text-[10px] font-mono uppercase tracking-wider text-amber-400 font-bold flex items-center gap-1.5"><Sparkles className="w-3.5 h-3.5" /> Mensajes rápidos</div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {VHF_PRESETS.map((item, idx) => (
-                  <button key={idx} type="button" disabled={sending || !vhfModalDriver.userId} onClick={() => void handleTransmit(item.msg)} className="p-2.5 bg-[#121215] hover:bg-amber-500/15 border border-zinc-800 hover:border-amber-500/40 rounded-xl text-left transition group flex flex-col gap-0.5 disabled:opacity-40">
-                    <div className="text-xs font-bold text-zinc-200 group-hover:text-amber-300 flex items-center justify-between"><span>{item.label}</span><Volume2 className="w-3.5 h-3.5 text-zinc-500 group-hover:text-amber-400" /></div>
-                    <div className="text-[10px] text-zinc-400 line-clamp-1 font-mono">{item.msg}</div>
-                  </button>
-                ))}
-              </div>
+            <div className="mb-2 mt-3 flex items-center justify-between"><p className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-[.14em] text-cyan-200"><Radio className="h-3.5 w-3.5" />Mensajes rápidos</p><span className="text-[8px] text-slate-500">Un toque · lectura por voz</span></div>
+            <div className="grid grid-cols-2 gap-1.5">
+              {VHF_PRESETS.map((item) => (
+                <button key={item.label} type="button" disabled={sending || !vhfModalDriver.userId} title={item.msg(vhfModalDriver.unitNumber)} onClick={() => void handleTransmit(item.msg(vhfModalDriver.unitNumber))} className="group flex min-h-12 items-center gap-2 rounded-xl border border-white/10 bg-white/[.045] px-2.5 py-2 text-left transition hover:border-cyan-300/35 hover:bg-cyan-300/[.08] active:scale-[.98] disabled:opacity-40">
+                  <span className="grid h-6 w-6 shrink-0 place-items-center rounded-lg bg-cyan-400/10 text-xs font-black text-cyan-200 group-hover:bg-cyan-300/20">{item.icon}</span><span className="min-w-0 flex-1 truncate text-[10px] font-black text-slate-100">{item.label}</span><Volume2 className="h-3 w-3 shrink-0 text-slate-500 group-hover:text-cyan-200" />
+                </button>
+              ))}
             </div>
 
-            <form onSubmit={(e) => { e.preventDefault(); void handleTransmit(customText.trim() ? `Atento móvil ${vhfModalDriver.unitNumber}, ${customText}` : `Atento móvil ${vhfModalDriver.unitNumber}, atento a la central.`); }} className="space-y-2 pt-2 border-t border-zinc-800">
-              <label className="text-xs font-mono font-bold text-zinc-300 uppercase tracking-wider flex items-center gap-1.5"><Radio className="w-3.5 h-3.5 text-blue-400" /> Mensaje personalizado</label>
-              <div className="flex gap-2">
-                <input type="text" value={customText} onChange={(e) => setCustomText(e.target.value)} placeholder="Ej: cliente espera en portón negro..." className="flex-1 bg-[#121215] border border-zinc-800 focus:border-amber-500 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none transition shadow-inner" />
-                <button type="submit" disabled={sending || !vhfModalDriver.userId} className="px-4 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl shadow-lg shadow-amber-500/20 transition flex items-center gap-1.5 shrink-0 border border-amber-300 uppercase tracking-wider active:scale-95 disabled:opacity-40">
-                  {sending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}<span>{sending ? 'Enviando' : 'Emitir'}</span>
-                </button>
-              </div>
+            <form onSubmit={(event) => { event.preventDefault(); void handleTransmit(customText.trim() ? `Atento móvil ${vhfModalDriver.unitNumber}, ${customText}` : `Atento móvil ${vhfModalDriver.unitNumber}, atento a la central.`); }} className="mt-3 flex gap-1.5 border-t border-white/10 pt-2.5">
+              <input type="text" value={customText} onChange={(event) => setCustomText(event.target.value)} placeholder="Mensaje personalizado…" className="h-9 min-w-0 flex-1 rounded-lg border border-white/10 bg-black/20 px-2.5 text-[10px] text-white outline-none placeholder:text-slate-500 focus:border-cyan-300/40" />
+              <button type="submit" disabled={sending || !vhfModalDriver.userId} className="flex h-9 shrink-0 items-center gap-1 rounded-lg bg-cyan-300 px-2.5 text-[9px] font-black text-slate-950 transition hover:bg-cyan-200 disabled:opacity-40">{sending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}Enviar</button>
             </form>
           </>
         )}
-      </div>
+      </section>
     </div>
   );
 };

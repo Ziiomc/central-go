@@ -35,11 +35,24 @@ export const LiveMap: React.FC<LiveMapProps> = ({
   const { drivers, trips, activeSOSDriver, setNewTripModalOpen, setVHFModalDriver } = useApp();
   const { theme } = useColorTheme();
   const [tileMode, setTileMode] = useState<'dark' | 'street'>(theme === 'light' ? 'street' : 'dark');
-  const [filterStatus, setFilterStatus] = useState<DriverStatus | 'all'>('all');
+  type MapFilterStatus = DriverStatus | 'assigned' | 'arrived' | 'all';
+  const [filterStatus, setFilterStatus] = useState<MapFilterStatus>('all');
   const [gpsStatusMsg, setGpsStatusMsg] = useState<string | null>(null);
   const [isLocatingGps, setIsLocatingGps] = useState<boolean>(false);
 
   const defaultCenter: [number, number] = [-35.8454, -71.5979];
+
+  type MapDriverStatus = DriverStatus | 'assigned' | 'arrived';
+  const getMapDriverStatus = (driver: Driver, activeTrip?: Trip): MapDriverStatus => {
+    if (driver.sosActive || driver.status === 'sos') return 'sos';
+    if (activeTrip?.status === 'in_progress') return 'in_trip';
+    if (activeTrip?.status === 'en_route') return 'en_route';
+    if (activeTrip?.status === 'arrived') return 'arrived';
+    if (activeTrip?.status === 'assigned') return 'assigned';
+    if (driver.status === 'paused' || driver.status === 'offline' || driver.status === 'available') return driver.status;
+    // A stale driver status must not present an unassigned/idle mobile as “En camino”.
+    return 'available';
+  };
 
   useEffect(() => {
     if (!mapContainerRef.current || mapInstanceRef.current) return;
@@ -121,7 +134,10 @@ export const LiveMap: React.FC<LiveMapProps> = ({
   useEffect(() => {
     const map = mapInstanceRef.current;
     if (!map) return;
-    const filteredDrivers = drivers.filter((d) => filterStatus === 'all' || d.status === filterStatus);
+    const filteredDrivers = drivers.filter((d) => {
+      const activeTrip = trips.find((trip) => trip.driverId === d.id && !['completed', 'cancelled'].includes(trip.status));
+      return filterStatus === 'all' || getMapDriverStatus(d, activeTrip) === filterStatus;
+    });
     const activeIds = new Set(filteredDrivers.map((d) => d.id));
     Object.keys(markersRef.current).forEach((id) => {
       if (!activeIds.has(id)) { markersRef.current[id].remove(); delete markersRef.current[id]; }
@@ -130,20 +146,26 @@ export const LiveMap: React.FC<LiveMapProps> = ({
     filteredDrivers.forEach((driver) => {
       const { lat, lng } = driver.currentLocation;
       if (!isValidMapCoordinate(lat,lng)) return;
+      const activeTrip = trips.find((trip) => trip.driverId === driver.id && !['completed', 'cancelled'].includes(trip.status));
+      const mapStatus = getMapDriverStatus(driver, activeTrip);
       let statusColor = '#10b981';
       let statusBadge = 'bg-emerald-500/95 text-slate-950 border-emerald-300 font-extrabold shadow-emerald-500/30';
       let haloGlow = 'rgba(16, 185, 129, 0.4)';
       let statusText = 'DISPONIBLE';
       let statusTone = 'available';
-      if (driver.sosActive || driver.status === 'sos') {
+      if (mapStatus === 'sos') {
         statusColor = '#ef4444'; statusBadge = 'bg-red-600 text-white border-red-300 animate-bounce shadow-red-500/50'; haloGlow = 'rgba(239, 68, 68, 0.8)'; statusText = 'SOS ALERTA'; statusTone = 'alert';
-      } else if (driver.status === 'en_route') {
+      } else if (mapStatus === 'assigned') {
+        statusColor = '#8b5cf6'; statusBadge = 'bg-violet-500/95 text-white border-violet-300 font-extrabold shadow-violet-500/30'; haloGlow = 'rgba(139, 92, 246, 0.38)'; statusText = 'ASIGNADO'; statusTone = 'assigned';
+      } else if (mapStatus === 'en_route') {
         statusColor = '#f59e0b'; statusBadge = 'bg-amber-500/95 text-slate-950 border-amber-200 font-extrabold shadow-amber-500/30'; haloGlow = 'rgba(245, 158, 11, 0.5)'; statusText = 'EN CAMINO'; statusTone = 'en-route';
-      } else if (driver.status === 'in_trip') {
+      } else if (mapStatus === 'arrived') {
+        statusColor = '#06b6d4'; statusBadge = 'bg-cyan-500/95 text-slate-950 border-cyan-200 font-extrabold shadow-cyan-500/30'; haloGlow = 'rgba(6, 182, 212, 0.42)'; statusText = 'EN DOMICILIO'; statusTone = 'arrived';
+      } else if (mapStatus === 'in_trip') {
         statusColor = '#3b82f6'; statusBadge = 'bg-blue-600 text-white border-blue-300 font-bold shadow-blue-500/30'; haloGlow = 'rgba(59, 130, 246, 0.5)'; statusText = 'EN VIAJE'; statusTone = 'in-trip';
-      } else if (driver.status === 'paused') {
+      } else if (mapStatus === 'paused') {
         statusColor = '#64748b'; statusBadge = 'bg-slate-700 text-slate-300 border-slate-600'; haloGlow = 'rgba(100, 116, 139, 0.2)'; statusText = 'PAUSADO'; statusTone = 'paused';
-      } else if (driver.status === 'offline') {
+      } else if (mapStatus === 'offline') {
         statusColor = '#ef4444'; statusBadge = 'bg-red-600 text-white border-red-300'; haloGlow = 'rgba(239, 68, 68, 0.38)'; statusText = 'DESCONECTADO'; statusTone = 'offline';
       }
       const heading = driver.currentLocation.heading || 0;
@@ -152,25 +174,15 @@ export const LiveMap: React.FC<LiveMapProps> = ({
         html: `<div class="relative flex flex-col items-center justify-center group cursor-pointer pointer-events-auto" style="width:70px;height:70px"><div class="absolute -top-3 z-20 flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono border shadow-lg whitespace-nowrap ${statusBadge}"><span class="w-1.5 h-1.5 rounded-full" style="background-color:${statusColor}"></span><span>${driver.unitNumber}</span></div><div class="absolute inset-0 m-auto w-10 h-10 rounded-full" style="background:radial-gradient(circle,${haloGlow} 0%,transparent 70%)"></div><div class="relative z-10 w-10 h-10 flex items-center justify-center" style="transform:rotate(${heading}deg)"><svg viewBox="0 0 40 56" class="w-8 h-11 drop-shadow-[0_4px_8px_rgba(0,0,0,0.85)]"><rect x="5" y="8" width="4" height="9" rx="2" fill="#09090b"/><rect x="31" y="8" width="4" height="9" rx="2" fill="#09090b"/><rect x="5" y="38" width="4" height="9" rx="2" fill="#09090b"/><rect x="31" y="38" width="4" height="9" rx="2" fill="#09090b"/><rect x="8" y="4" width="24" height="48" rx="7" fill="#18181b" stroke="#27272a"/><path d="M 10 14 Q 20 12 30 14 L 29 42 Q 20 44 11 42 Z" fill="#eab308"/><path d="M 12 14 L 28 14 L 26 21 L 14 21 Z" fill="#0f172a"/><rect x="13" y="21" width="14" height="15" rx="2" fill="#facc15"/><rect x="14" y="26" width="12" height="5" rx="1" fill="#fff" stroke="#18181b"/><text x="20" y="29.8" font-size="3" font-weight="900" fill="#000" text-anchor="middle">TAXI</text><circle cx="11" cy="4" r="2" fill="#fef08a"/><circle cx="29" cy="4" r="2" fill="#fef08a"/><circle cx="11" cy="51" r="1.5" fill="#ef4444"/><circle cx="29" cy="51" r="1.5" fill="#ef4444"/></svg></div><div class="absolute top-12 z-30 hidden group-hover:flex flex-col items-center bg-slate-900/95 text-white border border-slate-700 px-2.5 py-1 rounded-lg text-[10px] font-mono shadow-2xl pointer-events-none whitespace-nowrap"><span class="font-bold text-amber-400">${driver.unitNumber} - ${driver.name}</span><span class="text-slate-300">${speed} km/h • ${statusText}</span></div></div>`,
         className: 'custom-taxi-pin', iconSize: [70, 70], iconAnchor: [35, 35],
       });
-      const existing = markersRef.current[driver.id];
-      if (existing) {
-        existing.setIcon(customIcon); enableSmoothMarkerTransition(existing); existing.setLatLng([lat, lng]);
-      } else {
-        const marker = L.marker([lat, lng], { icon: customIcon }).addTo(map);
-        const activeTrip = trips.find((trip) => trip.driverId === driver.id && !['completed', 'cancelled'].includes(trip.status));
-        const buildDriverPopup = () => {
-          const popupContent = document.createElement('div');
-          const safeName = escapePopupText(driver.name);
-          const safePhone = escapePopupText(driver.phone || 'Sin teléfono');
-          const safeAddress = escapePopupText(driver.currentLocation.address || 'Ubicación GPS');
-          const safeTripCode = activeTrip ? escapePopupText(activeTrip.code) : '';
-          const safeClient = activeTrip ? escapePopupText(activeTrip.clientName) : '';
-          const safeDestination = activeTrip ? escapePopupText(activeTrip.destination.address) : '';
-          const lastUpdate = driver.currentLocation.lastUpdated
-            ? new Date(driver.currentLocation.lastUpdated).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })
-            : 'sin registro';
-          popupContent.className = 'cg-map-popup';
-          popupContent.innerHTML = `
+      const buildDriverPopup = () => {
+        const popupContent = document.createElement('div');
+        const safeName = escapePopupText(driver.name);
+        const safePhone = escapePopupText(driver.phone || 'Sin teléfono');
+        const safeTripCode = activeTrip ? escapePopupText(activeTrip.code) : '';
+        const safeClient = activeTrip ? escapePopupText(activeTrip.clientName) : '';
+        const safeDestination = activeTrip ? escapePopupText(activeTrip.destination.address) : '';
+        popupContent.className = 'cg-map-popup';
+        popupContent.innerHTML = `
             <div class="cg-map-popup__head">
               <div class="cg-map-popup__identity">
                 <div class="cg-map-popup__unit">${escapePopupText(driver.unitNumber)}</div>
@@ -183,14 +195,18 @@ export const LiveMap: React.FC<LiveMapProps> = ({
               <div><small>CALIFICACIÓN</small><strong>★ ${driver.rating.toFixed(1)}</strong></div>
               <div><small>VIAJES</small><strong>${driver.totalTripsCompleted}</strong></div>
             </div>
-            <div class="cg-map-popup__location"><span class="cg-map-popup__location-icon">⌖</span><div><small>UBICACIÓN ACTUAL · ${lastUpdate}</small><strong>${safeAddress}</strong><span>GPS ${driver.currentLocation.lat.toFixed(5)}, ${driver.currentLocation.lng.toFixed(5)}</span></div></div>
             ${activeTrip
               ? `<div class="cg-map-popup__trip"><small>EN OPERACIÓN · ${safeTripCode}</small><strong>${safeClient}</strong><span>Destino: ${safeDestination}</span></div>`
               : '<div class="cg-map-popup__trip cg-map-popup__trip--available"><small>OPERACIÓN</small><strong>Sin carrera activa</strong><span>Disponible para despacho</span></div>'}
             <div class="cg-map-popup__actions"><button id="btn-dispatch-${driver.id}" class="cg-map-popup__action cg-map-popup__action--dispatch">Despachar</button><button id="btn-vhf-${driver.id}" class="cg-map-popup__action cg-map-popup__action--radio">Radio VHF</button></div>
-          `;
-          return popupContent;
-        };
+        `;
+        return popupContent;
+      };
+      const existing = markersRef.current[driver.id];
+      if (existing) {
+        existing.setIcon(customIcon); existing.setLatLng([lat, lng]); existing.bindPopup(buildDriverPopup()); enableSmoothMarkerTransition(existing);
+      } else {
+        const marker = L.marker([lat, lng], { icon: customIcon }).addTo(map);
         const popupContent = buildDriverPopup();
         marker.bindPopup(popupContent);
         marker.on('popupopen', () => {
@@ -291,9 +307,10 @@ export const LiveMap: React.FC<LiveMapProps> = ({
     <div className="absolute top-3 inset-x-3 z-10 flex flex-wrap lg:flex-nowrap items-center justify-between gap-2.5 pointer-events-none">
       <div className="flex flex-wrap items-center gap-1 bg-slate-950/90 backdrop-blur-md p-1.5 rounded-xl border border-slate-800 shadow-xl pointer-events-auto">
         <button onClick={() => setFilterStatus('all')} className={`px-3 py-1.5 text-xs font-semibold rounded-lg ${filterStatus==='all'?'bg-amber-500 text-slate-950 font-bold':'text-slate-300 hover:bg-slate-800'}`}>Todos ({drivers.length})</button>
-        <button onClick={() => setFilterStatus('available')} className={`px-3 py-1.5 text-xs font-semibold rounded-lg flex items-center gap-1.5 ${filterStatus==='available'?'bg-emerald-500 text-slate-950 font-bold':'text-slate-300 hover:bg-slate-800'}`}><span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"/>Libres ({drivers.filter((d) => d.status==='available').length})</button>
-        <button onClick={() => setFilterStatus('en_route')} className={`px-3 py-1.5 text-xs font-semibold rounded-lg ${filterStatus==='en_route'?'bg-amber-500 text-slate-950 font-bold':'text-slate-300 hover:bg-slate-800'}`}>En Camino ({drivers.filter((d) => d.status==='en_route').length})</button>
-        <button onClick={() => setFilterStatus('in_trip')} className={`px-3 py-1.5 text-xs font-semibold rounded-lg ${filterStatus==='in_trip'?'bg-blue-500 text-white font-bold':'text-slate-300 hover:bg-slate-800'}`}>En Viaje ({drivers.filter((d) => d.status==='in_trip').length})</button>
+        <button onClick={() => setFilterStatus('available')} className={`px-3 py-1.5 text-xs font-semibold rounded-lg flex items-center gap-1.5 ${filterStatus==='available'?'bg-emerald-500 text-slate-950 font-bold':'text-slate-300 hover:bg-slate-800'}`}><span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"/>Libres ({drivers.filter((d) => getMapDriverStatus(d, trips.find((trip) => trip.driverId === d.id && !['completed', 'cancelled'].includes(trip.status)))==='available').length})</button>
+        <button onClick={() => setFilterStatus('assigned')} className={`px-3 py-1.5 text-xs font-semibold rounded-lg ${filterStatus==='assigned'?'bg-violet-500 text-white font-bold':'text-slate-300 hover:bg-slate-800'}`}>Asignados ({drivers.filter((d) => getMapDriverStatus(d, trips.find((trip) => trip.driverId === d.id && !['completed', 'cancelled'].includes(trip.status)))==='assigned').length})</button>
+        <button onClick={() => setFilterStatus('en_route')} className={`px-3 py-1.5 text-xs font-semibold rounded-lg ${filterStatus==='en_route'?'bg-amber-500 text-slate-950 font-bold':'text-slate-300 hover:bg-slate-800'}`}>En Camino ({drivers.filter((d) => getMapDriverStatus(d, trips.find((trip) => trip.driverId === d.id && !['completed', 'cancelled'].includes(trip.status)))==='en_route').length})</button>
+        <button onClick={() => setFilterStatus('in_trip')} className={`px-3 py-1.5 text-xs font-semibold rounded-lg ${filterStatus==='in_trip'?'bg-blue-500 text-white font-bold':'text-slate-300 hover:bg-slate-800'}`}>En Viaje ({drivers.filter((d) => getMapDriverStatus(d, trips.find((trip) => trip.driverId === d.id && !['completed', 'cancelled'].includes(trip.status)))==='in_trip').length})</button>
       </div>
       <div className="flex flex-wrap items-center gap-2 pointer-events-auto ml-auto">
         {gpsStatusMsg&&<div className="bg-blue-950/90 text-blue-200 border border-blue-500/40 px-3 py-1.5 rounded-xl text-xs shadow-xl flex items-center gap-1.5"><Navigation className={`w-3.5 h-3.5 text-blue-400 ${isLocatingGps?'animate-spin':''}`}/><span>{gpsStatusMsg}</span></div>}
