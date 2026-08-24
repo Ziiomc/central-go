@@ -258,12 +258,15 @@ jobs:
           CENTRAL_OWNER='a1000000-0000-4000-8000-000000000001'
           DRIVER_APPLICANT='a1000000-0000-4000-8000-000000000002'
           NEW_PARTNER='a1000000-0000-4000-8000-000000000003'
+          PRIMARY_SUPER='a1000000-0000-4000-8000-000000000004'
 
           psql -v ON_ERROR_STOP=1 <<SQL
           insert into auth.users(id,email,email_confirmed_at,raw_user_meta_data) values
             ('$CENTRAL_OWNER','self-central@centralgo.test',now(),'{"name":"Dueña Central"}'),
             ('$DRIVER_APPLICANT','self-driver@centralgo.test',now(),'{"name":"Conductor Solicitante"}'),
-            ('$NEW_PARTNER','self-partner@centralgo.test',now(),'{"name":"Socio Comercial"}');
+            ('$NEW_PARTNER','self-partner@centralgo.test',now(),'{"name":"Socio Comercial"}'),
+            ('$PRIMARY_SUPER','ziiomc3@gmail.com',now(),'{"name":"Superadmin Principal"}');
+          update public.profiles set global_role='super_admin' where id='$PRIMARY_SUPER';
           SQL
 
           psql -v ON_ERROR_STOP=1 <<SQL
@@ -295,20 +298,21 @@ jobs:
           select public.centralgo_superadmin_review_partner_application('$PARTNER_APPLICATION',true,null);
           SQL
           then
-            echo 'SECURITY FAIL: socio aprobado antes de cumplir 3 horas.'
+            echo 'SECURITY FAIL: un Superadmin secundario revisó socios comerciales.'
             exit 1
           else
-            echo 'Espera comercial mínima de 3 horas: OK'
+            echo 'Revisión comercial reservada al Superadmin principal: OK'
           fi
 
-          psql -v ON_ERROR_STOP=1 -c "update public.partner_applications set eligible_review_at=now()-interval '1 second' where id='$PARTNER_APPLICATION';"
           psql -v ON_ERROR_STOP=1 <<SQL
           set role authenticated;
-          set request.jwt.claim.sub='22222222-2222-4222-8222-222222222222';
+          set request.jwt.claim.sub='$PRIMARY_SUPER';
           select public.centralgo_superadmin_review_partner_application('$PARTNER_APPLICATION',true,null);
           SQL
+          EARLY_APPROVAL=$(psql -qAt -v ON_ERROR_STOP=1 -c "select count(*) from public.partner_applications where id='$PARTNER_APPLICATION' and status='approved' and reviewed_at<eligible_review_at;")
+          test "$EARLY_APPROVAL" = "1" || { echo 'ONBOARDING FAIL: el Superadmin principal no pudo aprobar anticipadamente'; exit 1; }
           PARTNER_RATE=$(psql -qAt -v ON_ERROR_STOP=1 -c "select commission_percent from public.partners where user_id='$NEW_PARTNER' and active;")
-          test "$PARTNER_RATE" = "25.000" || { echo "ONBOARDING FAIL: comisión=$PARTNER_RATE"; exit 1; }
+          test "$PARTNER_RATE" = "20.000" || { echo "ONBOARDING FAIL: comisión=$PARTNER_RATE"; exit 1; }
 
           psql -v ON_ERROR_STOP=1 <<SQL
           set role authenticated;
