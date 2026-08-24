@@ -53,7 +53,7 @@ begin
   end if;
 
   -- Stage 1: <= 1.5 km. Queue order is the deciding factor inside the radius.
-  select d.*, candidate.distance_km, candidate.provider
+  select d, candidate.distance_km, candidate.provider
     into selected_driver, selected_distance, selected_provider
   from public.drivers d
   join lateral (
@@ -116,7 +116,7 @@ begin
     selected_band := '1,5 km';
   else
     -- Stage 2: no one qualified in 1.5 km. Expand to 5 km and start queue priority again.
-    select d.*, candidate.distance_km, candidate.provider
+    select d, candidate.distance_km, candidate.provider
       into selected_driver, selected_distance, selected_provider
     from public.drivers d
     join lateral (
