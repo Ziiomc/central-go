@@ -22,6 +22,9 @@ let listenersRegistered = false;
 let serviceWorkerRegistrationStarted = false;
 let controllerListenerRegistered = false;
 let serviceWorkerMessageListenerRegistered = false;
+let frontendVersionListenersRegistered = false;
+let centralRefreshStarted = false;
+let lastFrontendVersionCheckAt = 0;
 let driverReliabilityRegistered = false;
 let driverPushRegistered = false;
 let driverSessionReliabilityRegistered = false;
@@ -33,7 +36,8 @@ let driverWakeLockBusy = false;
 let driverHiddenAt: number | null = null;
 let lastDriverResyncKey = '';
 let lastDriverResyncAt = 0;
-const FRESHNESS_KEY = 'centralgo-fresh-bundle-v10-stale-chunk-recovery';
+const FRESHNESS_KEY = 'centralgo-fresh-bundle-v13-auto-update';
+const FRONTEND_VERSION_CHECK_MS = 60_000;
 const DRIVER_PUSH_PROMPTED_KEY = 'centralgo-driver-push-prompted';
 const DRIVER_RESUME_THRESHOLD_MS = 8000;
 const DRIVER_SESSION_FORCE_REFRESH_AFTER_MS = 60_000;
@@ -181,9 +185,55 @@ function registerInstallListeners() {
 function registerControllerListener() {
   if (typeof window === 'undefined' || !('serviceWorker' in navigator) || controllerListenerRegistered) return;
   controllerListenerRegistered = true;
+  const wasControlled = Boolean(navigator.serviceWorker.controller);
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     window.dispatchEvent(new CustomEvent('centralgo-sw-updated'));
+    if (wasControlled && !isDriverRoute()) void reloadCentralForUpdate();
   });
+}
+
+const currentFrontendAsset = () => {
+  const script = document.querySelector<HTMLScriptElement>('script[type="module"][src]');
+  if (!script?.src) return '';
+  try { return new URL(script.src, location.href).pathname; } catch { return script.src; }
+};
+
+async function reloadCentralForUpdate() {
+  if (centralRefreshStarted || isDriverRoute()) return;
+  centralRefreshStarted = true;
+  try {
+    if ('caches' in window) {
+      const names = await caches.keys();
+      await Promise.all(names.filter((name) => name.startsWith('centralgo-')).map((name) => caches.delete(name)));
+    }
+  } catch {}
+  window.location.reload();
+}
+
+async function checkFrontendVersion() {
+  if (isDriverRoute() || centralRefreshStarted || document.visibilityState !== 'visible' || !navigator.onLine) return;
+  const now = Date.now();
+  if (now - lastFrontendVersionCheckAt < FRONTEND_VERSION_CHECK_MS) return;
+  lastFrontendVersionCheckAt = now;
+  try {
+    const response = await fetch(`/?centralgo-version=${now}`, { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } });
+    if (!response.ok) return;
+    const html = await response.text();
+    const deployedAsset = html.match(/<script[^>]+type=["']module["'][^>]+src=["']([^"']+)["']/i)?.[1] ?? '';
+    const currentAsset = currentFrontendAsset();
+    if (deployedAsset && currentAsset && new URL(deployedAsset, location.origin).pathname !== currentAsset) await reloadCentralForUpdate();
+  } catch {}
+}
+
+function registerFrontendVersionChecks() {
+  if (typeof window === 'undefined' || frontendVersionListenersRegistered || isDriverRoute()) return;
+  frontendVersionListenersRegistered = true;
+  const check = () => { if (document.visibilityState === 'visible') void checkFrontendVersion(); };
+  window.addEventListener('focus', check);
+  window.addEventListener('pageshow', check);
+  document.addEventListener('visibilitychange', check);
+  window.setInterval(check, 5 * 60_000);
+  window.setTimeout(check, 1500);
 }
 
 function registerServiceWorkerMessageListener() {
@@ -298,6 +348,7 @@ export function registerServiceWorker() {
   registerInstallListeners();
   registerControllerListener();
   registerServiceWorkerMessageListener();
+  registerFrontendVersionChecks();
   registerDriverSessionReliability();
   registerDriverAndroidReliability();
   if (!('serviceWorker' in navigator)) return;

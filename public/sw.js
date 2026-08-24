@@ -1,4 +1,4 @@
-const CACHE_NAME = 'centralgo-official-v12-module-fallback';
+const CACHE_NAME = 'centralgo-official-v13-auto-update';
 
 const staleModuleRecovery = () => new Response(`
   const recover=()=>{try{sessionStorage.setItem('centralgo:stale-module-recovery',String(Date.now()));}catch{};setTimeout(()=>window.location.reload(),40)};
