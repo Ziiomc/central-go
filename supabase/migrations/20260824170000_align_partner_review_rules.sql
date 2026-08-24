@@ -1,6 +1,13 @@
 -- Preserve the production rule in source control: 20% commission and a
 -- suggested (not blocking) three-hour review window for the primary admin.
 
+alter table public.partner_applications
+  add column if not exists referred_by_partner_id uuid
+  references public.partners(id) on delete set null;
+
+create index if not exists partner_applications_referred_by_partner_idx
+  on public.partner_applications(referred_by_partner_id);
+
 create or replace function public.centralgo_superadmin_review_partner_application(
   p_application_id uuid,
   p_approve boolean,
