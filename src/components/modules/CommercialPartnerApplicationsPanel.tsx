@@ -60,7 +60,7 @@ export const CommercialPartnerApplicationsPanel: React.FC<{ onApproved?: () => v
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="flex items-center gap-2 text-xs font-black text-amber-300"><UserRoundCheck className="h-4 w-4" /> Postulaciones de socios comerciales / regionales</p>
-          <p className="mt-1 text-[10px] leading-relaxed text-zinc-500">Solo el superadministrador puede aprobar. Las 3 horas son un plazo estimado para el postulante; puedes aprobar o rechazar antes si ya tienes antecedentes suficientes.</p>
+          <p className="mt-1 text-[10px] leading-relaxed text-zinc-500">Solo el superadministrador principal puede aprobar. Las 3 horas son una espera sugerida; puede resolver antes cuando ya cuenta con antecedentes suficientes.</p>
         </div>
         <div className="flex gap-2">
           <a href="/docs/requisitos-socio-comercial-central-go.pdf" target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-[10px] font-black text-zinc-300"><FileDown className="h-3.5 w-3.5" />Ver requisitos</a>
@@ -87,7 +87,7 @@ export const CommercialPartnerApplicationsPanel: React.FC<{ onApproved?: () => v
                 <p className="mt-3 flex items-center gap-1.5 text-[10px] text-zinc-400"><MapPin className="h-3.5 w-3.5 text-blue-300" />{[application.city, application.region, application.countryCode].filter(Boolean).join(', ')}</p>
                 {application.referredByPartnerId && <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-cyan-500/20 bg-cyan-500/10 px-2.5 py-1 text-[9px] font-black text-cyan-200"><UsersRound className="h-3.5 w-3.5" />Captado mediante enlace de Partner Regional</div>}
                 <div className="mt-3 rounded-lg border border-zinc-800 bg-zinc-950/60 p-3 text-[9px] leading-relaxed text-zinc-500">Aceptó la versión {application.requirementsVersion}: cierre de ventas, soporte personalizado regional y comisión comercial del 20% sobre inscripciones pagadas y confirmadas.</div>
-                {!suggestedWaitComplete && <div className="mt-2 rounded-lg border border-blue-500/20 bg-blue-500/[0.06] px-3 py-2 text-[9px] leading-relaxed text-blue-200">El postulante sigue dentro del plazo estimado de 3 horas, pero el superadministrador puede resolver ahora mismo.</div>}
+                {!suggestedWaitComplete && <div className="mt-2 rounded-lg border border-blue-500/20 bg-blue-500/[0.06] px-3 py-2 text-[9px] leading-relaxed text-blue-200">El postulante sigue dentro de la espera sugerida de 3 horas, pero el superadministrador principal puede resolver ahora.</div>}
                 <div className="mt-3 grid grid-cols-2 gap-2">
                   <button type="button" disabled={busyId === application.id} onClick={() => void review(application, false)} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-rose-500/25 bg-rose-500/10 px-3 py-2 text-[10px] font-black text-rose-300 disabled:opacity-50"><X className="h-3.5 w-3.5" />Rechazar</button>
                   <button type="button" disabled={busyId === application.id} onClick={() => void review(application, true)} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-emerald-400/25 bg-emerald-500 px-3 py-2 text-[10px] font-black text-white disabled:opacity-40">{busyId === application.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}Aprobar 20%</button>

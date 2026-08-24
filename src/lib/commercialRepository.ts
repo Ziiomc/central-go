@@ -7,6 +7,7 @@ import type {
   Driver,
   DriverStatus,
   FareConfig,
+  PaymentMethod,
   Trip,
   TripStatus,
   User,
@@ -78,6 +79,7 @@ export const mapTripRow = (row: any): Trip => ({
   id: row.id,
   companyId: row.company_id,
   code: row.code,
+  operatorRequestId: row.operator_request_id ?? undefined,
   clientId: row.client_id ?? undefined,
   clientName: row.client_name,
   clientPhone: row.client_phone,
@@ -235,42 +237,36 @@ export async function loadCommercialSnapshot(companyId: string, canSeeAllCompani
 }
 
 export async function insertTrip(company: Company, user: User, data: Partial<Trip>): Promise<Trip> {
-  const db = requireSupabase();
-  const code = `${company.code}-${Date.now().toString().slice(-7)}`;
-  const payload = {
-    company_id: company.id,
-    code,
-    client_id: data.clientId ?? null,
-    client_name: data.clientName || 'Cliente Particular',
-    client_phone: data.clientPhone || 'Sin teléfono',
-    origin_address: data.origin?.address || 'Origen sin dirección',
-    origin_lat: data.origin?.lat ?? 0,
-    origin_lng: data.origin?.lng ?? 0,
-    origin_notes: data.origin?.notes ?? null,
-    destination_address: data.destination?.address || 'A convenir',
-    destination_lat: data.destination?.lat ?? data.origin?.lat ?? 0,
-    destination_lng: data.destination?.lng ?? data.origin?.lng ?? 0,
-    destination_notes: data.destination?.notes ?? null,
-    status: 'pending',
-    operator_user_id: user.id,
-    operator_name: user.name,
-    vehicle_type_requested: data.vehicleTypeRequested ?? 'standard',
-    estimated_distance_km: data.estimatedDistanceKm ?? 0,
-    estimated_duration_mins: data.estimatedDurationMins ?? 0,
-    estimated_fare: data.isFixedFare && data.fixedFareAmount != null ? data.fixedFareAmount : (data.estimatedFare ?? 0),
-    final_fare: data.finalFare ?? null,
-    is_fixed_fare: Boolean(data.isFixedFare),
-    fixed_fare_amount: data.fixedFareAmount ?? null,
-    payment_method: data.paymentMethod ?? 'efectivo',
-    notes: data.notes ?? null,
-    scheduled_for: data.scheduledFor ?? null,
-    dispatch_mode: data.driverId ? 'manual' : (data.dispatchMode ?? 'automatic'),
-  };
-  const { data: row, error } = await db.from('trips').insert(payload).select('*').single();
+  void user;
+  const requestId = data.operatorRequestId ?? crypto.randomUUID();
+  const { data: row, error } = await requireSupabase().rpc('centralgo_operator_create_trip', {
+    p_company_id: company.id,
+    p_operator_request_id: requestId,
+    p_client_id: data.clientId ?? null,
+    p_client_name: data.clientName || 'Cliente Particular',
+    p_client_phone: data.clientPhone || 'Sin teléfono',
+    p_origin_address: data.origin?.address || 'Origen sin dirección',
+    p_origin_lat: data.origin?.lat ?? 0,
+    p_origin_lng: data.origin?.lng ?? 0,
+    p_origin_notes: data.origin?.notes ?? null,
+    p_destination_address: data.destination?.address || 'A convenir',
+    p_destination_lat: data.destination?.lat ?? data.origin?.lat ?? 0,
+    p_destination_lng: data.destination?.lng ?? data.origin?.lng ?? 0,
+    p_destination_notes: data.destination?.notes ?? null,
+    p_driver_id: data.driverId ?? null,
+    p_vehicle_type_requested: data.vehicleTypeRequested ?? 'standard',
+    p_estimated_distance_km: data.estimatedDistanceKm ?? 0,
+    p_estimated_duration_mins: data.estimatedDurationMins ?? 0,
+    p_estimated_fare: data.isFixedFare && data.fixedFareAmount != null ? data.fixedFareAmount : (data.estimatedFare ?? 0),
+    p_is_fixed_fare: Boolean(data.isFixedFare),
+    p_fixed_fare_amount: data.fixedFareAmount ?? null,
+    p_payment_method: data.paymentMethod ?? 'efectivo',
+    p_notes: data.notes ?? null,
+    p_scheduled_for: data.scheduledFor ?? null,
+    p_dispatch_mode: data.driverId ? 'manual' : (data.dispatchMode ?? 'automatic'),
+  });
   if (error) throw error;
-  let trip = mapTripRow(row);
-  if (data.driverId) trip = await assignTripAtomic(trip.id, data.driverId);
-  return trip;
+  return mapTripRow(row);
 }
 
 export async function assignTripAtomic(tripId: string, driverId: string): Promise<Trip> {
@@ -300,6 +296,16 @@ export async function cancelTripAtomic(tripId: string, reason: string): Promise<
 export async function setTripStatusAtomic(tripId: string, status: TripStatus, asDriver: boolean): Promise<Trip> {
   const rpc = asDriver ? 'centralgo_driver_transition_trip' : 'centralgo_operator_set_trip_status';
   const { data, error } = await requireSupabase().rpc(rpc, { p_trip_id: tripId, p_new_status: status });
+  if (error) throw error;
+  return mapTripRow(data);
+}
+
+export async function completeTripAtomic(tripId: string, finalFare: number, paymentMethod: PaymentMethod): Promise<Trip> {
+  const { data, error } = await requireSupabase().rpc('centralgo_complete_trip', {
+    p_trip_id: tripId,
+    p_final_fare: finalFare,
+    p_payment_method: paymentMethod,
+  });
   if (error) throw error;
   return mapTripRow(data);
 }

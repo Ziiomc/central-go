@@ -8,7 +8,7 @@ Una persona puede crear su cuenta con correo y contraseña o continuar con Googl
 
 - **Central:** crea su espacio de trabajo y recibe 5 días del plan Enterprise completo, sin tarjeta.
 - **Conductor:** solicita acceso mediante el código de una central. La administración debe aprobar la solicitud antes de habilitar viajes, GPS o radio.
-- **Socio comercial:** obtiene un panel gratuito para atención, registro de centrales y seguimiento de una comisión comercial base de 25%.
+- **Socio comercial:** obtiene un panel gratuito para atención, registro de centrales y seguimiento de una comisión comercial base de 20%.
 
 Las cuentas existentes conservan sus permisos. Los roles operativos se asignan en PostgreSQL mediante funciones autenticadas; los metadatos editables del usuario nunca se usan como autorización.
 

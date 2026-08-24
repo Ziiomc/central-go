@@ -1,11 +1,13 @@
 import React,{useEffect,useMemo,useState}from'react';
 import{createPortal}from'react-dom';
-import{Car,Loader2,LocateFixed,ShieldCheck,XCircle,Zap,Radio,Smartphone,Power,Search,GripVertical}from'lucide-react';
+import{Car,Loader2,LocateFixed,ShieldCheck,XCircle,Zap,Radio as RadioIcon,Smartphone as SmartphoneIcon,Power,Search,GripVertical}from'lucide-react';
 import{useApp}from'../../context/AppContext';
 import{isQueueConnected,loadDispatchQueue,setDriverOperationMode,setTraditionalDriverAvailability,subscribeDispatchQueue,type DispatchQueueItem}from'../../lib/dispatchPriorityRepository';
 import type{Trip}from'../../types';
 import{ManualQueueControl}from'./ManualQueueControl';
 const activeStatuses=['assigned','en_route','arrived','in_progress'] as const;
+const Radio=RadioIcon as React.ComponentType<React.SVGProps<SVGSVGElement>&{title?:string}>;
+const Smartphone=SmartphoneIcon as React.ComponentType<React.SVGProps<SVGSVGElement>&{title?:string}>;
 export const DispatchPriorityBoard:React.FC=()=>{
  const{currentCompany,trips,assignTrip,setActiveModule}=useApp();const[queue,setQueue]=useState<DispatchQueueItem[]>([]);const[busy,setBusy]=useState('');const[error,setError]=useState('');const[assignmentTripId,setAssignmentTripId]=useState('');const[mobileQuery,setMobileQuery]=useState('');const[dragPreview,setDragPreview]=useState<{x:number;y:number}|null>(null);
  const load=async()=>{if(currentCompany.id==='network')return;try{setQueue(await loadDispatchQueue(currentCompany.id));setError('');}catch(err){setError(err instanceof Error?err.message:'No fue posible cargar la fila de prioridad.');}};

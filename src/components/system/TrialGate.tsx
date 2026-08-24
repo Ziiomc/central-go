@@ -32,13 +32,13 @@ export const TrialGate: React.FC<React.PropsWithChildren> = ({ children }) => {
     }
 
     setCheckingSubscription(true);
-    void requireSupabase()
+    void Promise.resolve(requireSupabase()
       .from('subscriptions')
       .select('status,trial_ends_at,current_period_end')
       .eq('company_id', currentCompany.id)
       .order('created_at', { ascending: false })
       .limit(1)
-      .maybeSingle()
+      .maybeSingle())
       .then(({ data, error }) => {
         if (!alive) return;
         if (error) {

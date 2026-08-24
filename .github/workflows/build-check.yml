@@ -89,6 +89,9 @@ jobs:
             psql -v ON_ERROR_STOP=1 -f "$migration"
           done
 
+      - name: Probar operaciones críticas de carreras
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/critical-trip-operations.sql
+
       - name: Probar aislamiento RLS y anti-escalación
         shell: bash
         run: |

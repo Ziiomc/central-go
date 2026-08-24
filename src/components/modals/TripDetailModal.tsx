@@ -3,18 +3,28 @@ import { useApp } from '../../context/AppContext';
 import { X, MapPin, User, Phone, DollarSign, Printer, Zap, Route } from 'lucide-react';
 
 export const TripDetailModal: React.FC = () => {
-  const { selectedTripForDetail, setSelectedTripForDetail, drivers, reassignTrip, cancelTrip } = useApp();
+  const { selectedTripForDetail, setSelectedTripForDetail, drivers, reassignTrip } = useApp();
   const [newDriverId, setNewDriverId] = useState('');
+  const [reassigning, setReassigning] = useState(false);
+  const [operationError, setOperationError] = useState('');
 
   if (!selectedTripForDetail) return null;
 
   const trip = selectedTripForDetail;
   const availableDrivers = drivers.filter((d) => d.status === 'available');
 
-  const handleReassign = () => {
-    if (newDriverId) {
-      reassignTrip(trip.id, newDriverId);
-      setSelectedTripForDetail(null);
+  const handleReassign = async () => {
+    if (newDriverId && !reassigning) {
+      setReassigning(true);
+      setOperationError('');
+      try {
+        await Promise.resolve(reassignTrip(trip.id, newDriverId));
+        setSelectedTripForDetail(null);
+      } catch (error) {
+        setOperationError(error instanceof Error ? error.message : 'No fue posible confirmar la reasignación.');
+      } finally {
+        setReassigning(false);
+      }
     }
   };
 
@@ -87,7 +97,7 @@ export const TripDetailModal: React.FC = () => {
             <span className="text-zinc-400 uppercase text-[10px] block tracking-wider">
               {trip.isFixedFare ? 'Monto Acordado' : 'Tarifa Final'}
             </span>
-            <span className="font-extrabold text-amber-400 text-lg">${trip.estimatedFare.toLocaleString()}</span>
+            <span className="font-extrabold text-amber-400 text-lg">${(trip.finalFare ?? trip.estimatedFare).toLocaleString()}</span>
           </div>
         </div>
 
@@ -110,12 +120,13 @@ export const TripDetailModal: React.FC = () => {
               </select>
               <button
                 onClick={handleReassign}
-                disabled={!newDriverId}
+                disabled={!newDriverId || reassigning}
                 className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-xs rounded-lg transition shrink-0 uppercase tracking-wider"
               >
-                Reasignar
+                {reassigning ? 'Confirmando…' : 'Reasignar'}
               </button>
             </div>
+            {operationError && <p role="alert" className="rounded-lg border border-rose-500/25 bg-rose-500/10 px-3 py-2 text-xs font-bold text-rose-200">{operationError}</p>}
           </div>
         )}
 

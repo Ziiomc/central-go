@@ -76,6 +76,7 @@ export interface AppContextType {
   assignTrip: (tripId: string, driverId: string) => MaybePromise<void>;
   reassignTrip: (tripId: string, newDriverId: string) => MaybePromise<void>;
   updateTripStatus: (tripId: string, status: TripStatus, notes?: string) => MaybePromise<void>;
+  completeTrip: (tripId: string, finalFare: number, paymentMethod: PaymentMethod) => MaybePromise<void>;
   cancelTrip: (tripId: string, reason: string) => MaybePromise<void>;
   rejectTripOffer: (tripId: string, reason: string) => MaybePromise<void>;
   toggleDriverAvailability: (driverId: string, status: DriverStatus) => MaybePromise<void>;
@@ -666,6 +667,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addNotification('Estado de Viaje', `Viaje ${trip.code} cambió a ${status}`, 'info', tripId);
   };
 
+  const completeTrip = (tripId: string, finalFare: number, paymentMethod: PaymentMethod) => {
+    const trip = trips.find((item) => item.id === tripId);
+    if (!trip || trip.status !== 'in_progress') return;
+    const safeFare = Math.max(0, finalFare);
+    const now = new Date().toISOString();
+    setTrips((items) => items.map((item) => item.id === tripId ? {
+      ...item,
+      status: 'completed',
+      completedAt: now,
+      finalFare: safeFare,
+      paymentMethod,
+    } : item));
+    if (trip.driverId) {
+      setDrivers((items) => items.map((driver) => driver.id === trip.driverId ? {
+        ...driver,
+        status: 'available',
+        todayEarnings: driver.todayEarnings + safeFare,
+        totalTripsCompleted: driver.totalTripsCompleted + 1,
+      } : driver));
+    }
+    addAuditLog('FINALIZAR_VIAJE', `Finalizó ${trip.code} por $${safeFare} mediante ${paymentMethod}`);
+    addNotification('Carrera completada', `${trip.code} fue cobrada y completada.`, 'success', tripId);
+  };
+
   const cancelTrip = (tripId: string, reason: string) => {
     const trip = trips.find((t) => t.id === tripId);
     if (!trip || ['completed', 'cancelled'].includes(trip.status)) return;
@@ -954,7 +979,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         createTrip,
         assignTrip,
         reassignTrip,
-        updateTripStatus,
+    updateTripStatus,
+    completeTrip,
         cancelTrip,
         rejectTripOffer,
         toggleDriverAvailability,

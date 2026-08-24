@@ -10,6 +10,7 @@ import type {
   DriverStatus,
   FareConfig,
   Operator,
+  PaymentMethod,
   Trip,
   TripStatus,
   User,
@@ -23,6 +24,7 @@ import {
   assignCompanyUserByEmail,
   assignTripAtomic,
   cancelTripAtomic,
+  completeTripAtomic,
   insertClient,
   insertDriver,
   insertNotification,
@@ -67,8 +69,9 @@ const upsertById = <T extends { id: string }>(items: T[], item: T) => {
 };
 
 const snapshotKey=(companyId:string)=>`centralgo:operational-snapshot:v1:${companyId}`;
+const SNAPSHOT_TTL_MS=12*60*60*1000;
 type CachedSnapshot={savedAt:number;companyId:string;vehicles:Vehicle[];drivers:Driver[];clients:Client[];trips:Trip[];notifications:AppNotification[];auditLogs:AuditLog[];fareConfig:FareConfig};
-const readCachedSnapshot=(companyId:string):CachedSnapshot|undefined=>{try{const raw=localStorage.getItem(snapshotKey(companyId));if(!raw)return;const value=JSON.parse(raw) as CachedSnapshot;if(value.companyId!==companyId||Date.now()-value.savedAt>72*60*60*1000)return;return value;}catch{return undefined;}};
+const readCachedSnapshot=(companyId:string):CachedSnapshot|undefined=>{try{const key=snapshotKey(companyId);const raw=localStorage.getItem(key);if(!raw)return;const value=JSON.parse(raw) as CachedSnapshot;if(value.companyId!==companyId||Date.now()-value.savedAt>SNAPSHOT_TTL_MS){localStorage.removeItem(key);return;}return value;}catch{return undefined;}};
 
 export const CommercialAppProvider: React.FC<React.PropsWithChildren> = ({ children }) => {
   const { authUser, profile, memberships, companies: authorizedCompanies, effectiveRole } = useAuth();
@@ -298,6 +301,20 @@ export const CommercialAppProvider: React.FC<React.PropsWithChildren> = ({ child
     addAuditLog('ESTADO_VIAJE', `Actualizó ${trip.code} a ${status}`);
   };
 
+  const completeTrip = async (tripId: string, finalFare: number, paymentMethod: PaymentMethod) => {
+    const before = trips.find((item) => item.id === tripId);
+    const trip = await completeTripAtomic(tripId, finalFare, paymentMethod);
+    setTrips((items) => upsertById(items, trip));
+    if (trip.driverId && before?.status !== 'completed') {
+      setDrivers((items) => items.map((driver) => driver.id === trip.driverId ? {
+        ...driver,
+        status: 'available',
+        todayEarnings: driver.todayEarnings + (trip.finalFare ?? 0),
+        totalTripsCompleted: driver.totalTripsCompleted + 1,
+      } : driver));
+    }
+  };
+
   const cancelTrip = async (tripId: string, reason: string) => {
     const before = trips.find((trip) => trip.id === tripId);
     const trip = await cancelTripAtomic(tripId, reason);
@@ -450,6 +467,7 @@ export const CommercialAppProvider: React.FC<React.PropsWithChildren> = ({ child
     assignTrip,
     reassignTrip,
     updateTripStatus,
+    completeTrip,
     cancelTrip,
     rejectTripOffer,
     toggleDriverAvailability,

@@ -26,6 +26,7 @@ export interface Client {
 
 export interface Trip {
   id:string; companyId:string; code:string; clientId?:string; clientName:string; clientPhone:string; origin:Location; destination:Location;
+  operatorRequestId?:string;
   status:TripStatus; driverId?:string; driverUnitNumber?:string; driverName?:string;
   vehicleId?:string; vehicleUnitNumber?:string; vehiclePlate?:string;
   reservedDriverId?:string; reservedDriverUnitNumber?:string; reservedDriverName?:string; reservationReason?:string;

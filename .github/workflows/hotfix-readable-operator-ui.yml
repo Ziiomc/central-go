@@ -1,32 +1,25 @@
-name: Improve operator console readability
+name: Check operator console readability
+
 on:
-  push:
-    paths: ['.github/workflows/hotfix-readable-operator-ui.yml']
+  pull_request:
+    paths:
+      - 'src/components/modules/OperatorConsole.tsx'
+      - 'src/components/modals/NewTripModal.tsx'
+      - '.github/workflows/hotfix-readable-operator-ui.yml'
+  workflow_dispatch:
+
 permissions:
-  contents: write
+  contents: read
+
 jobs:
-  patch:
+  quality:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with: {ref: main}
-      - name: Normalize operational typography
-        shell: python
-        run: |
-          from pathlib import Path
-          paths=[Path('src/components/modules/OperatorConsole.tsx'),Path('src/components/modals/NewTripModal.tsx')]
-          for p in paths:
-            if not p.exists(): continue
-            s=p.read_text()
-            for old,new in [('text-[9px]','text-xs'),('text-[10px]','text-xs'),('text-[11px]','text-sm')]: s=s.replace(old,new)
-            s=s.replace('text-xs font-black text-white','text-base font-black text-white')
-            s=s.replace('text-sm font-extrabold text-white','text-base font-extrabold text-white')
-            s=s.replace('text-zinc-500','text-zinc-400')
-            p.write_text(s)
-      - name: Commit
-        run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src/components/modules/OperatorConsole.tsx src/components/modals/NewTripModal.tsx
-          git commit -m 'Improve readability across operator workflow' || exit 0
-          git push origin main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run lint
+      - run: npm run check:commercial

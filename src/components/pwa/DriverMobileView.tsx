@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
-import type { FareDestination, Trip } from '../../types';
+import type { FareDestination, PaymentMethod, Trip } from '../../types';
 import { soundManager } from '../../lib/audio';
 import { primeRadioAudio, speakVHFDispatch } from '../../lib/audioService';
 import { isPWAStandalone, promptPWAInstall } from '../../lib/pwa';
@@ -39,7 +39,7 @@ const isIOSDevice = () => {
 
 export const DriverMobileView: React.FC = () => {
   const {
-    drivers, trips, notifications, markNotificationAsRead, updateTripStatus, toggleDriverAvailability,
+    drivers, trips, notifications, markNotificationAsRead, updateTripStatus, completeTrip, toggleDriverAvailability,
     updateDriverLocation, triggerDriverSOS, resolveDriverSOS, rejectTripOffer, currentUser, currentCompany,
   } = useApp();
   const { signOut,refreshIdentity } = useAuth();
@@ -61,7 +61,10 @@ export const DriverMobileView: React.FC = () => {
   const [offerTimer, setOfferTimer] = useState(15);
   const [sosConfirmOpen, setSosConfirmOpen] = useState(false);
   const [finishModalOpen, setFinishModalOpen] = useState(false);
-  const [selectedPayment, setSelectedPayment] = useState('efectivo');
+  const [selectedPayment, setSelectedPayment] = useState<PaymentMethod>('efectivo');
+  const [finalFareInput, setFinalFareInput] = useState('');
+  const [pendingAction, setPendingAction] = useState<string | null>(null);
+  const [actionError, setActionError] = useState('');
   const[photoBusy,setPhotoBusy]=useState(false);
 
   const gpsWatchId = useRef<number | null>(null);
@@ -298,16 +301,21 @@ export const DriverMobileView: React.FC = () => {
   useEffect(() => {
     if (!incomingOffer) return;
     if (offerTimer <= 0) {
+      if (pendingAction === 'reject-offer') return;
       const expiredOffer = incomingOffer;
-      setIncomingOffer(null);
-      void Promise.resolve(
-        rejectTripOffer(expiredOffer.id, 'Oferta no aceptada dentro de 15 segundos')
-      ).catch(() => undefined);
+      setPendingAction('reject-offer');
+      void Promise.resolve(rejectTripOffer(expiredOffer.id, 'Oferta no aceptada dentro de 15 segundos'))
+        .then(() => setIncomingOffer(null))
+        .catch((error) => {
+          setActionError(error instanceof Error ? error.message : 'No fue posible rechazar la oferta. Inténtalo nuevamente.');
+          setOfferTimer(15);
+        })
+        .finally(() => setPendingAction(null));
       return;
     }
     const timer = window.setTimeout(() => setOfferTimer((value) => Math.max(0, value - 1)), 1000);
     return () => window.clearTimeout(timer);
-  }, [incomingOffer?.id, offerTimer]);
+  }, [incomingOffer?.id, offerTimer, pendingAction]);
 
   const installDriverApp = async () => {
     if (isPWAStandalone()) return setInstallHint('Ya está instalada.');
@@ -333,18 +341,33 @@ export const DriverMobileView: React.FC = () => {
     );
   }
 
-  const acceptOffer = () => {
-    if (!incomingOffer) return;
-    if (!radioReady) void enableRadioAlerts();
-    void Promise.resolve(updateTripStatus(incomingOffer.id, 'en_route'));
-    setIncomingOffer(null);
+  const runDriverAction = async (key: string, action: () => Promise<unknown>, onSuccess?: () => void) => {
+    if (pendingAction) return false;
+    setPendingAction(key);
+    setActionError('');
+    try {
+      await action();
+      onSuccess?.();
+      return true;
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'La operación no pudo confirmarse. Revisa la conexión e inténtalo nuevamente.');
+      return false;
+    } finally {
+      setPendingAction(null);
+    }
   };
 
-  const rejectOffer = () => {
+  const acceptOffer = async () => {
+    if (!incomingOffer) return;
+    if (!radioReady) void enableRadioAlerts();
+    const offerId = incomingOffer.id;
+    await runDriverAction('accept-offer', () => Promise.resolve(updateTripStatus(offerId, 'en_route')), () => setIncomingOffer(null));
+  };
+
+  const rejectOffer = async () => {
     if (!incomingOffer) return;
     const rejected = incomingOffer;
-    setIncomingOffer(null);
-    void Promise.resolve(rejectTripOffer(rejected.id, 'Rechazado por conductor')).catch(() => undefined);
+    await runDriverAction('reject-offer', () => Promise.resolve(rejectTripOffer(rejected.id, 'Rechazado por conductor')), () => setIncomingOffer(null));
   };
 
   const openGpsNavigation = (address: string, lat: number, lng: number) => {
@@ -370,14 +393,54 @@ export const DriverMobileView: React.FC = () => {
     }
   };
 
-  const setStatus = (status: 'available' | 'paused' | 'offline') => {
+  const setStatus = async (status: 'available' | 'paused' | 'offline') => {
     if (!radioReady) void enableRadioAlerts();
-    void Promise.resolve(toggleDriverAvailability(driver.id, status));
+    await runDriverAction(`status-${status}`, () => Promise.resolve(toggleDriverAvailability(driver.id, status)));
   };
 
   const arrivedAtPassenger = async () => {
-    await Promise.resolve(updateTripStatus(activeTrip!.id, 'arrived'));
+    if (!activeTrip) return;
+    await runDriverAction('arrived', () => Promise.resolve(updateTripStatus(activeTrip.id, 'arrived')), () => requestFreshPosition(true));
+  };
+
+  const startTrip = async () => {
+    if (!activeTrip) return;
+    await runDriverAction('start-trip', () => Promise.resolve(updateTripStatus(activeTrip.id, 'in_progress')), () => requestFreshPosition(true));
+  };
+
+  const openFinishModal = () => {
+    if (!activeTrip) return;
+    setSelectedPayment(activeTrip.paymentMethod);
+    setFinalFareInput(String(Math.round(activeTrip.finalFare ?? activeTrip.estimatedFare)));
+    setActionError('');
+    setFinishModalOpen(true);
+  };
+
+  const finishTrip = async () => {
+    if (!activeTrip) return;
+    const finalFare = Number(finalFareInput);
+    if (!Number.isFinite(finalFare) || finalFare < 0) {
+      setActionError('Ingresa el monto realmente cobrado antes de finalizar.');
+      return;
+    }
     requestFreshPosition(true);
+    await runDriverAction(
+      'complete-trip',
+      () => Promise.resolve(completeTrip(activeTrip.id, finalFare, selectedPayment)),
+      () => {
+        setFinishModalOpen(false);
+        void refreshAnalytics();
+      },
+    );
+  };
+
+  const activateSos = async () => {
+    requestFreshPosition(true);
+    await runDriverAction('activate-sos', () => Promise.resolve(triggerDriverSOS(driver.id)), () => setSosConfirmOpen(false));
+  };
+
+  const closeSos = async () => {
+    await runDriverAction('close-sos', () => Promise.resolve(resolveDriverSOS(driver.id)));
   };
 
   const destinationIsNext = activeTrip?.status === 'arrived' || activeTrip?.status === 'in_progress';
@@ -392,6 +455,11 @@ export const DriverMobileView: React.FC = () => {
       {radioBanner && (
         <div className="fixed left-1/2 top-3 z-[160] w-[min(410px,calc(100vw-1rem))] -translate-x-1/2 rounded-2xl border border-amber-400/50 bg-[#111014]/95 px-3 py-2.5 shadow-2xl backdrop-blur-xl">
           <div className="flex gap-2.5"><Radio className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" /><p className="text-xs font-bold text-white">{radioBanner}</p></div>
+        </div>
+      )}
+      {actionError && (
+        <div role="alert" className="fixed left-1/2 top-20 z-[165] w-[min(410px,calc(100vw-1rem))] -translate-x-1/2 rounded-2xl border border-rose-400/40 bg-[#261014]/95 px-3 py-2.5 shadow-2xl backdrop-blur-xl">
+          <div className="flex items-start gap-2.5"><ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-rose-300" /><p className="flex-1 text-xs font-bold text-rose-100">{actionError}</p><button onClick={() => setActionError('')} aria-label="Cerrar error"><X className="h-4 w-4 text-rose-200" /></button></div>
         </div>
       )}
 
@@ -440,9 +508,9 @@ export const DriverMobileView: React.FC = () => {
         </section>
 
         <section className="grid grid-cols-3 gap-1.5 rounded-xl border border-zinc-800 bg-[#121215] p-1.5">
-          <StatusButton active={driver.status === 'available'} label="Disponible" tone="emerald" onClick={() => setStatus('available')} />
-          <StatusButton active={driver.status === 'paused'} label="Pausa" tone="amber" icon={<Clock className="h-3.5 w-3.5" />} onClick={() => setStatus('paused')} />
-          <StatusButton active={driver.status === 'offline'} label="Fuera" tone="zinc" icon={<XCircle className="h-3.5 w-3.5" />} onClick={() => setStatus('offline')} />
+          <StatusButton active={driver.status === 'available'} disabled={Boolean(pendingAction)} label="Disponible" tone="emerald" onClick={() => void setStatus('available')} />
+          <StatusButton active={driver.status === 'paused'} disabled={Boolean(pendingAction)} label="Pausa" tone="amber" icon={<Clock className="h-3.5 w-3.5" />} onClick={() => void setStatus('paused')} />
+          <StatusButton active={driver.status === 'offline'} disabled={Boolean(pendingAction)} label="Fuera" tone="zinc" icon={<XCircle className="h-3.5 w-3.5" />} onClick={() => void setStatus('offline')} />
         </section>
 
         {incomingOffer && (
@@ -450,7 +518,7 @@ export const DriverMobileView: React.FC = () => {
             <div className="flex items-center justify-between"><span className="rounded-lg bg-blue-600 px-3 py-1 text-[9px] font-black uppercase">Nueva carrera</span><span className="text-sm font-black text-blue-300">{offerTimer > 0 ? `${offerTimer}s` : 'Pendiente'}</span></div>
             <div className="mt-3"><p className="text-[8px] uppercase text-zinc-600">Retiro</p><p className="mt-1 flex gap-2 text-xs font-bold"><MapPin className="h-4 w-4 text-emerald-400" />{incomingOffer.origin.address}</p></div>
             <div className="mt-3 grid grid-cols-2 gap-2"><MiniValue label="Tarifa estimada" value={`$${incomingOffer.estimatedFare.toLocaleString('es-CL')}`} accent /><MiniValue label="Distancia" value={isFlexibleDestinationAddress(incomingOffer.destination.address)?'A convenir':`${incomingOffer.estimatedDistanceKm} km`} /></div>
-            <div className="mt-3 grid grid-cols-2 gap-2"><button onClick={rejectOffer} className="rounded-xl bg-zinc-800 py-2.5 text-[10px] font-black text-rose-300">Rechazar</button><button onClick={acceptOffer} className="rounded-xl bg-emerald-400 py-2.5 text-[10px] font-black text-zinc-950">Aceptar carrera</button></div>
+            <div className="mt-3 grid grid-cols-2 gap-2"><button disabled={Boolean(pendingAction)} onClick={() => void rejectOffer()} className="rounded-xl bg-zinc-800 py-2.5 text-[10px] font-black text-rose-300 disabled:opacity-40">{pendingAction==='reject-offer'?'Confirmando…':'Rechazar'}</button><button disabled={Boolean(pendingAction)} onClick={() => void acceptOffer()} className="rounded-xl bg-emerald-400 py-2.5 text-[10px] font-black text-zinc-950 disabled:opacity-40">{pendingAction==='accept-offer'?'Confirmando…':'Aceptar carrera'}</button></div>
           </section>
         )}
 
@@ -462,16 +530,16 @@ export const DriverMobileView: React.FC = () => {
             <div className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-950 p-2.5"><div><p className="text-[8px] uppercase text-zinc-600">Tarifa</p><p className="text-sm font-black text-emerald-400">${activeTrip.estimatedFare.toLocaleString('es-CL')}</p></div><div className="text-right"><p className="text-[8px] uppercase text-zinc-600">Pago</p><p className="text-[9px] font-black uppercase">{activeTrip.paymentMethod}</p></div></div>
             {canNavigateCurrentLeg?<button onClick={() => openGpsNavigation(navAddress, navLat, navLng)} className="flex w-full items-center justify-center gap-2 rounded-xl border border-blue-500/25 bg-blue-500/10 py-2.5 text-[10px] font-black text-blue-300"><ExternalLink className="h-4 w-4" />{destinationIsNext ? 'Abrir GPS al destino' : 'Abrir GPS al pasajero'}</button>:<div className="rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-2.5 text-center"><p className="text-[10px] font-black text-amber-300">Destino a convenir / Taxímetro</p><p className="mt-0.5 text-[9px] text-zinc-500">No se abrirá un GPS de destino hasta que exista una dirección real.</p></div>}
             <div className="space-y-1.5 border-t border-zinc-800 pt-2.5">
-              <button onClick={() => void arrivedAtPassenger()} disabled={activeTrip.status === 'arrived' || activeTrip.status === 'in_progress'} className="flex w-full items-center justify-center gap-2 rounded-xl border border-blue-500/30 bg-blue-500/10 py-2.5 text-[10px] font-black text-blue-300 disabled:opacity-30"><CheckCircle className="h-4 w-4" />Llegué al pasajero</button>
-              <button onClick={() => { void Promise.resolve(updateTripStatus(activeTrip.id, 'in_progress')); requestFreshPosition(true); }} className="flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 py-2.5 text-[10px] font-black text-emerald-300"><Play className="h-4 w-4" />Pasajero a bordo</button>
-              <button onClick={() => setFinishModalOpen(true)} className="flex w-full items-center justify-center gap-2 rounded-xl bg-rose-600 py-3 text-[10px] font-black"><DollarSign className="h-4 w-4" />Finalizar y cobrar</button>
+              <button onClick={() => void arrivedAtPassenger()} disabled={Boolean(pendingAction)||activeTrip.status === 'arrived' || activeTrip.status === 'in_progress'} className="flex w-full items-center justify-center gap-2 rounded-xl border border-blue-500/30 bg-blue-500/10 py-2.5 text-[10px] font-black text-blue-300 disabled:opacity-30"><CheckCircle className="h-4 w-4" />{pendingAction==='arrived'?'Confirmando…':'Llegué al pasajero'}</button>
+              <button onClick={() => void startTrip()} disabled={Boolean(pendingAction)||activeTrip.status!=='arrived'} className="flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 py-2.5 text-[10px] font-black text-emerald-300 disabled:opacity-30"><Play className="h-4 w-4" />{pendingAction==='start-trip'?'Confirmando…':'Pasajero a bordo'}</button>
+              <button onClick={openFinishModal} disabled={Boolean(pendingAction)||activeTrip.status!=='in_progress'} className="flex w-full items-center justify-center gap-2 rounded-xl bg-rose-600 py-3 text-[10px] font-black disabled:opacity-30"><DollarSign className="h-4 w-4" />Finalizar y cobrar</button>
             </div>
           </section>
         )}
 
         {!activeTrip && !incomingOffer && <section className="rounded-xl border border-zinc-800 bg-[#121215] px-4 py-4 text-center"><Navigation className="mx-auto h-7 w-7 text-blue-400" /><h3 className="mt-2 text-[12px] font-black">Esperando asignación</h3><p className="mt-1 text-[10px] text-zinc-500">{isGpsActive ? 'Ubicación sincronizada con la central.' : 'Activa GPS para aparecer en el mapa.'}</p></section>}
 
-        <section className="border-t border-zinc-800 pt-2">{driver.sosActive ? <button onClick={() => void Promise.resolve(resolveDriverSOS(driver.id))} className="flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-500/40 bg-zinc-800 py-3 text-[10px] font-black text-emerald-300"><ShieldAlert className="h-4 w-4" />SOS activo · cerrar emergencia</button> : <button onClick={() => setSosConfirmOpen(true)} className="flex w-full items-center justify-center gap-2 rounded-xl bg-red-600 py-3.5 text-[11px] font-black shadow-lg"><ShieldAlert className="h-5 w-5" />SOS DE EMERGENCIA</button>}</section>
+        <section className="border-t border-zinc-800 pt-2">{driver.sosActive ? <button disabled={Boolean(pendingAction)} onClick={() => void closeSos()} className="flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-500/40 bg-zinc-800 py-3 text-[10px] font-black text-emerald-300 disabled:opacity-40"><ShieldAlert className="h-4 w-4" />{pendingAction==='close-sos'?'Confirmando…':'SOS activo · cerrar emergencia'}</button> : <button disabled={Boolean(pendingAction)} onClick={() => setSosConfirmOpen(true)} className="flex w-full items-center justify-center gap-2 rounded-xl bg-red-600 py-3.5 text-[11px] font-black shadow-lg disabled:opacity-40"><ShieldAlert className="h-5 w-5" />SOS DE EMERGENCIA</button>}</section>
       </div>
 
       {profileOpen && (
@@ -503,18 +571,18 @@ export const DriverMobileView: React.FC = () => {
         </div>
       )}
 
-      {sosConfirmOpen && <ModalShell><ShieldAlert className="mx-auto h-10 w-10 text-red-500" /><h3 className="mt-3 text-center text-base font-black">¿Activar SOS?</h3><p className="mt-2 text-center text-xs text-zinc-400">La central recibirá una alerta prioritaria con tu última ubicación.</p><div className="mt-5 grid grid-cols-2 gap-3"><button onClick={() => setSosConfirmOpen(false)} className="rounded-xl bg-zinc-800 py-3 text-xs font-bold">Cancelar</button><button onClick={() => { requestFreshPosition(true); void Promise.resolve(triggerDriverSOS(driver.id)); setSosConfirmOpen(false); }} className="rounded-xl bg-red-600 py-3 text-xs font-black">Activar SOS</button></div></ModalShell>}
+      {sosConfirmOpen && <ModalShell><ShieldAlert className="mx-auto h-10 w-10 text-red-500" /><h3 className="mt-3 text-center text-base font-black">¿Activar SOS?</h3><p className="mt-2 text-center text-xs text-zinc-400">La central recibirá una alerta prioritaria con tu última ubicación.</p><div className="mt-5 grid grid-cols-2 gap-3"><button disabled={Boolean(pendingAction)} onClick={() => setSosConfirmOpen(false)} className="rounded-xl bg-zinc-800 py-3 text-xs font-bold disabled:opacity-40">Cancelar</button><button disabled={Boolean(pendingAction)} onClick={() => void activateSos()} className="rounded-xl bg-red-600 py-3 text-xs font-black disabled:opacity-40">{pendingAction==='activate-sos'?'Enviando SOS…':'Activar SOS'}</button></div></ModalShell>}
 
-      {finishModalOpen && activeTrip && <ModalShell><h3 className="text-center text-base font-black">Finalizar {activeTrip.code}</h3><p className="mt-1 text-center text-xs text-zinc-500">Confirma el medio de pago recibido.</p><div className="mt-4 rounded-xl border border-zinc-800 bg-zinc-950 p-4 text-center"><p className="text-[9px] uppercase text-zinc-600">Monto</p><p className="mt-1 text-3xl font-black text-emerald-400">${activeTrip.estimatedFare.toLocaleString('es-CL')}</p></div><div className="mt-4 grid grid-cols-2 gap-2">{[['efectivo', 'Efectivo'], ['transferencia', 'Transferencia'], ['posnet_tarjeta', 'Tarjeta'], ['cuenta_corriente', 'Cta. corriente']].map(([id, label]) => <button key={id} onClick={() => setSelectedPayment(id)} className={`rounded-xl border px-3 py-3 text-xs font-bold ${selectedPayment === id ? 'border-blue-500 bg-blue-600' : 'border-zinc-800 bg-zinc-900'}`}>{label}</button>)}</div><div className="mt-5 grid grid-cols-2 gap-3"><button onClick={() => setFinishModalOpen(false)} className="rounded-xl bg-zinc-800 py-3 text-xs font-bold">Volver</button><button onClick={() => { requestFreshPosition(true); void Promise.resolve(updateTripStatus(activeTrip.id, 'completed', `Pago: ${selectedPayment}`)).then(() => void refreshAnalytics()); setFinishModalOpen(false); }} className="rounded-xl bg-emerald-400 py-3 text-xs font-black text-zinc-950">Cobrado y completado</button></div></ModalShell>}
+      {finishModalOpen && activeTrip && <ModalShell><h3 className="text-center text-base font-black">Finalizar {activeTrip.code}</h3><p className="mt-1 text-center text-xs text-zinc-500">Registra exactamente el monto y el medio de pago recibido.</p><label className="mt-4 block rounded-xl border border-zinc-800 bg-zinc-950 p-4"><span className="block text-center text-[9px] font-black uppercase text-zinc-500">Monto realmente cobrado</span><span className="mt-2 flex items-center justify-center gap-2"><span className="text-2xl font-black text-emerald-400">$</span><input autoFocus inputMode="numeric" type="number" min="0" step="100" value={finalFareInput} onChange={(event)=>setFinalFareInput(event.target.value)} className="w-40 bg-transparent text-center text-3xl font-black text-emerald-400 outline-none" /></span><span className="mt-1 block text-center text-[9px] text-zinc-600">Estimado: ${activeTrip.estimatedFare.toLocaleString('es-CL')}</span></label><div className="mt-4 grid grid-cols-2 gap-2">{([['efectivo','Efectivo'],['transferencia','Transferencia'],['posnet_tarjeta','Tarjeta'],['cuenta_corriente','Cta. corriente']] as Array<[PaymentMethod,string]>).map(([id,label])=><button key={id} disabled={Boolean(pendingAction)} onClick={()=>setSelectedPayment(id)} className={`rounded-xl border px-3 py-3 text-xs font-bold disabled:opacity-40 ${selectedPayment===id?'border-blue-500 bg-blue-600':'border-zinc-800 bg-zinc-900'}`}>{label}</button>)}</div>{actionError&&<p className="mt-3 rounded-xl border border-rose-500/25 bg-rose-500/10 p-3 text-xs font-bold text-rose-200">{actionError}</p>}<div className="mt-5 grid grid-cols-2 gap-3"><button disabled={Boolean(pendingAction)} onClick={()=>{setActionError('');setFinishModalOpen(false);}} className="rounded-xl bg-zinc-800 py-3 text-xs font-bold disabled:opacity-40">Volver</button><button disabled={Boolean(pendingAction)} onClick={()=>void finishTrip()} className="rounded-xl bg-emerald-400 py-3 text-xs font-black text-zinc-950 disabled:opacity-40">{pendingAction==='complete-trip'?'Confirmando cobro…':'Cobrado y completado'}</button></div></ModalShell>}
     </main>
   );
 };
 
 const Metric: React.FC<{ icon: React.ReactNode; label: string; value: string }> = ({ icon, label, value }) => <div className="rounded-lg border border-zinc-800 bg-zinc-950/70 p-2.5"><div className="flex items-center gap-1.5 text-violet-300">{icon}<span className="text-[8px] font-bold uppercase text-zinc-600">{label}</span></div><p className="mt-1.5 text-sm font-black">{value}</p></div>;
 const MiniValue: React.FC<{ label: string; value: string; accent?: boolean }> = ({ label, value, accent }) => <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-2.5"><p className="text-[8px] text-zinc-600">{label}</p><p className={`mt-1 text-sm font-black ${accent ? 'text-emerald-400' : 'text-white'}`}>{value}</p></div>;
-const StatusButton: React.FC<{ active: boolean; label: string; tone: 'emerald' | 'amber' | 'zinc'; icon?: React.ReactNode; onClick: () => void }> = ({ active, label, tone, icon, onClick }) => {
+const StatusButton: React.FC<{ active: boolean; disabled?: boolean; label: string; tone: 'emerald' | 'amber' | 'zinc'; icon?: React.ReactNode; onClick: () => void }> = ({ active, disabled, label, tone, icon, onClick }) => {
   const activeClass = tone === 'emerald' ? 'bg-emerald-400 text-zinc-950 border-emerald-300' : tone === 'amber' ? 'bg-amber-400 text-zinc-950 border-amber-300' : 'bg-zinc-700 text-white border-zinc-600';
-  return <button onClick={onClick} className={`flex min-h-12 flex-col items-center justify-center gap-1 rounded-lg border px-2 text-[9px] font-black uppercase ${active ? activeClass : 'border-zinc-800 bg-zinc-950 text-zinc-500'}`}>{icon ?? <span className={`h-2 w-2 rounded-full ${active ? 'bg-current' : 'bg-zinc-700'}`} />}{label}</button>;
+  return <button disabled={disabled} onClick={onClick} className={`flex min-h-12 flex-col items-center justify-center gap-1 rounded-lg border px-2 text-[9px] font-black uppercase disabled:opacity-40 ${active ? activeClass : 'border-zinc-800 bg-zinc-950 text-zinc-500'}`}>{icon ?? <span className={`h-2 w-2 rounded-full ${active ? 'bg-current' : 'bg-zinc-700'}`} />}{label}</button>;
 };
 const RoutePoint: React.FC<{ label: string; text: string; destination?: boolean }> = ({ label, text, destination }) => <div className="flex items-start gap-2.5"><span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${destination ? 'bg-rose-500' : 'bg-emerald-500'}`} /><div><p className="text-[8px] font-black uppercase tracking-wider text-zinc-600">{label}</p><p className="mt-0.5 text-[11px] font-semibold text-zinc-200">{text}</p></div></div>;
 const ModalShell: React.FC<React.PropsWithChildren> = ({ children }) => <div className="fixed inset-0 z-[180] flex items-center justify-center bg-black/85 p-4 backdrop-blur-md"><section className="w-full max-w-sm rounded-3xl border border-zinc-700 bg-[#0d0d0f] p-6 shadow-2xl">{children}</section></div>;
