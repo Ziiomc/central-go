@@ -22,7 +22,8 @@ set search_path = public
 as $$
 declare
   t public.trips%rowtype;
-  selected_driver public.drivers%rowtype;
+  selected_driver_id uuid;
+  selected_queue_order bigint;
   selected_distance double precision;
   selected_provider text;
   selected_band text;
@@ -53,8 +54,8 @@ begin
   end if;
 
   -- Stage 1: <= 1.5 km. Queue order is the deciding factor inside the radius.
-  select d, candidate.distance_km, candidate.provider
-    into selected_driver, selected_distance, selected_provider
+  select d.id, d.dispatch_queue_order, candidate.distance_km, candidate.provider
+    into selected_driver_id, selected_queue_order, selected_distance, selected_provider
   from public.drivers d
   join lateral (
     select
@@ -112,12 +113,12 @@ begin
   limit 1
   for update of d skip locked;
 
-  if selected_driver.id is not null then
+  if selected_driver_id is not null then
     selected_band := '1,5 km';
   else
     -- Stage 2: no one qualified in 1.5 km. Expand to 5 km and start queue priority again.
-    select d, candidate.distance_km, candidate.provider
-      into selected_driver, selected_distance, selected_provider
+    select d.id, d.dispatch_queue_order, candidate.distance_km, candidate.provider
+      into selected_driver_id, selected_queue_order, selected_distance, selected_provider
     from public.drivers d
     join lateral (
       select
@@ -176,23 +177,23 @@ begin
     limit 1
     for update of d skip locked;
 
-    if selected_driver.id is not null then
+    if selected_driver_id is not null then
       selected_band := '5 km';
     end if;
   end if;
 
-  if selected_driver.id is null then
+  if selected_driver_id is null then
     -- Stay pending. The scheduled worker will retry; an operator can always assign manually.
     return t;
   end if;
 
   return public.centralgo_internal_assign_offer(
     t.id,
-    selected_driver.id,
+    selected_driver_id,
     format(
       'Despacho automático: radio %s, prioridad #%s, %.1f km por %s',
       selected_band,
-      selected_driver.dispatch_queue_order,
+      selected_queue_order,
       selected_distance,
       selected_provider
     )
