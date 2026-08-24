@@ -402,6 +402,25 @@ export async function insertVehicle(data: Omit<Vehicle, 'id'>): Promise<Vehicle>
   return mapVehicleRow(row);
 }
 
+export async function updateVehicleRecord(vehicle: Vehicle): Promise<Vehicle> {
+  const { data: row, error } = await requireSupabase().from('vehicles').update({
+    unit_number: vehicle.unitNumber.trim(),
+    license_plate: vehicle.licensePlate.trim().toUpperCase(),
+    brand: vehicle.brand.trim(),
+    model: vehicle.model.trim(),
+    year: vehicle.year,
+    color: vehicle.color.trim(),
+    capacity: vehicle.capacity,
+    pet_friendly: vehicle.petFriendly,
+    wheelchair_accessible: vehicle.wheelchairAccessible,
+    air_conditioning: vehicle.airConditioning,
+    technical_inspection_expiry: vehicle.technicalInspectionExpiry || null,
+    status: vehicle.status,
+  }).eq('id', vehicle.id).eq('company_id', vehicle.companyId).select('*').single();
+  if (error) throw error;
+  return mapVehicleRow(row);
+}
+
 export async function assignCompanyUserByEmail(companyId: string, email: string, role: 'company_admin' | 'operator' | 'driver'): Promise<string> {
   const { data, error } = await requireSupabase().rpc('centralgo_assign_company_user', { p_company_id: companyId, p_email: email.trim(), p_role: role });
   if (error) throw error;

@@ -90,6 +90,7 @@ export interface AppContextType {
   // Management CRUD
   addClient: (client: Omit<Client, 'id' | 'totalTrips'>) => MaybePromise<Client>;
   addVehicle: (vehicle: Omit<Vehicle, 'id'>) => MaybePromise<Vehicle>;
+  updateVehicle: (vehicle: Vehicle) => MaybePromise<Vehicle>;
   addDriver: (driver: Omit<Driver, 'id' | 'rating' | 'totalTripsCompleted' | 'todayEarnings'>) => MaybePromise<Driver>;
   updateFareConfig: (config: FareConfig) => MaybePromise<void>;
   markNotificationAsRead: (id: string) => MaybePromise<void>;
@@ -915,6 +916,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return newVeh;
   };
 
+  const updateVehicle = (vehicle: Vehicle): Vehicle => {
+    setVehicles((prev) => prev.map((item) => item.id === vehicle.id ? vehicle : item));
+    addAuditLog('EDICION_VEHICULO', `Actualizó vehículo ${vehicle.unitNumber} (${vehicle.licensePlate})`);
+    return vehicle;
+  };
+
   const addDriver = (data: Omit<Driver, 'id' | 'rating' | 'totalTripsCompleted' | 'todayEarnings'>): Driver => {
     const newDrv: Driver = {
       ...data,
@@ -992,6 +999,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         settleDriverCommission,
         addClient,
         addVehicle,
+        updateVehicle,
         addDriver,
         updateFareConfig,
         markNotificationAsRead,

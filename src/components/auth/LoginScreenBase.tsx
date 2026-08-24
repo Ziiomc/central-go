@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Building2, CarFront, Handshake, Loader2 } from 'lucide-react';
+import { AlertTriangle, Building2, CarFront, Handshake, Headphones, Loader2 } from 'lucide-react';
 import {
   type OnboardingRole,
   useAuth,
@@ -36,6 +36,7 @@ const roleOptions: Array<{
 }> = [
   { id: 'central', label: 'Central', detail: '5 días Full', icon: Building2 },
   { id: 'driver', label: 'Conductor', detail: 'Portal inmediato', icon: CarFront },
+  { id: 'operator', label: 'Operadora', detail: 'Solo con Google', icon: Headphones },
   { id: 'sales_partner', label: 'Socio comercial', detail: 'Requiere aprobación', icon: Handshake },
 ];
 
@@ -210,9 +211,9 @@ export const LoginScreen: React.FC = () => {
       </button>
       {googleAvailable === false && <p className="cg-auth-hint">El acceso por correo está disponible. Google se activará automáticamente al completar la configuración OAuth.</p>}
 
-      <div className="cg-divider">o usa tu correo</div>
+      {role !== 'operator' && <div className="cg-divider">o usa tu correo</div>}
 
-      <form onSubmit={emailSubmit} className="cg-form">
+      {role !== 'operator' && <form onSubmit={emailSubmit} className="cg-form">
         <label className="cg-field">
           <span>Correo electrónico</span>
           <input required type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="tu@correo.com" />
@@ -231,7 +232,8 @@ export const LoginScreen: React.FC = () => {
           {busy && <Loader2 className="h-4 w-4 animate-spin" />}
           {busy ? (mode === 'register' ? 'Creando cuenta…' : 'Ingresando…') : (mode === 'register' ? 'Crear mi cuenta' : 'Iniciar sesión')}
         </button>
-      </form>
+      </form>}
+      {mode === 'register' && role === 'operator' && <div className="cg-alert cg-alert-info">Las cuentas de operadora se registran únicamente con Google. Así validamos el correo de las invitaciones y protegemos el acceso a la central.</div>}
 
       {mode === 'login' && (
         <button type="button" disabled={busy || !email.trim() || recoveryCooldown > 0} onClick={() => void recoverPassword()} className="cg-subtle-button w-full disabled:opacity-40">

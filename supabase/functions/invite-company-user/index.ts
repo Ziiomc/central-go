@@ -96,7 +96,7 @@ Deno.serve(async (req) => {
     const isSuper = profile.global_role === 'super_admin';
     let authorized = isSuper;
 
-    if (!authorized && role === 'driver') {
+    if (!authorized && (role === 'driver' || role === 'operator')) {
       const { data: membership, error: membershipError } = await service
         .from('company_memberships')
         .select('user_id')
@@ -132,7 +132,7 @@ Deno.serve(async (req) => {
     }
 
     if (!authorized) {
-      return json({ error: role === 'driver' ? 'Solo la administración de esta central puede registrar o reenviar acceso a sus conductores.' : 'Usuarios y permisos se administran exclusivamente desde el Panel Global.' }, 403);
+      return json({ error: role === 'driver' || role === 'operator' ? 'Solo la administración de esta central puede registrar o invitar a su equipo operativo.' : 'Usuarios y permisos se administran exclusivamente desde el Panel Global.' }, 403);
     }
     if (password && (!isSuper || role !== 'company_admin')) return json({ error: 'Solo Superadmin puede definir la contraseña inicial del administrador' }, 403);
 
@@ -148,7 +148,11 @@ Deno.serve(async (req) => {
     };
 
     const redirectTo = role === 'driver' ? OFFICIAL_DRIVER_URL : safeRedirect(body?.redirectTo);
-    const requestedMetadata = { ...(name ? { name } : {}), needs_password_setup: !password };
+    const requestedMetadata = {
+      ...(name ? { name } : {}),
+      needs_password_setup: !password,
+      ...(role === 'operator' ? { account_kind: 'operator', operator_invite: true } : {}),
+    };
     let targetUser: any = await findUser();
     let invited = false;
     let emailPending = false;
@@ -168,6 +172,25 @@ Deno.serve(async (req) => {
         const { data: existingDriver, error: existingDriverError } = await service.from('drivers').select('id,company_id,display_name,unit_number').eq('user_id', targetUser.id).limit(1).maybeSingle();
         if (existingDriverError) throw existingDriverError;
         if (existingDriver) return json({ error: `Ese correo ya está vinculado al conductor ${existingDriver.display_name} (${existingDriver.unit_number}). Edita ese conductor o usa otro correo.`, code: 'EMAIL_ALREADY_DRIVER' }, 409);
+      }
+      if (role === 'operator') {
+        const { data: existingMembership, error: existingMembershipError } = await service
+          .from('company_memberships')
+          .select('role,company_id,companies(name)')
+          .eq('user_id', targetUser.id)
+          .eq('active', true)
+          .limit(1)
+          .maybeSingle();
+        if (existingMembershipError) throw existingMembershipError;
+        if (existingMembership) {
+          const membershipCompany = Array.isArray(existingMembership.companies)
+            ? existingMembership.companies[0]
+            : existingMembership.companies;
+          return json({
+            error: `Ese correo ya tiene un acceso activo en ${membershipCompany?.name ?? 'otra central'}. Debe desvincularse antes de aceptar una nueva invitación.`,
+            code: 'EMAIL_ALREADY_COMPANY_MEMBER',
+          }, 409);
+        }
       }
     }
 
@@ -201,6 +224,20 @@ Deno.serve(async (req) => {
         passwordReady = true;
         passwordUpdated = true;
       }
+    } else if (!password && role === 'operator') {
+      const metadata = targetUser.user_metadata ?? {};
+      const { data: updated, error: updateError } = await service.auth.admin.updateUserById(targetUser.id, {
+        user_metadata: { ...metadata, ...requestedMetadata },
+      });
+      if (updateError) throw updateError;
+      targetUser = updated.user;
+      const { error: otpError } = await service.auth.signInWithOtp({
+        email,
+        options: { emailRedirectTo: redirectTo, data: requestedMetadata },
+      });
+      if (!otpError) invited = true;
+      else if (isEmailRateLimit(otpError)) emailPending = true;
+      else throw otpError;
     } else if (!password && targetUser.user_metadata?.needs_password_setup === true) {
       const metadata = targetUser.user_metadata ?? {};
       const { data: updated, error: updateError } = await service.auth.admin.updateUserById(targetUser.id, { user_metadata: { ...metadata, ...(name ? { name } : {}), needs_password_setup: true } });
@@ -213,6 +250,26 @@ Deno.serve(async (req) => {
     }
 
     if (!targetUser) return json({ error: 'No fue posible crear o localizar el usuario' }, 500);
+
+    if (role === 'operator') {
+      const { error: invitationError } = await service.from('operator_invitations').upsert({
+        company_id: companyId,
+        invited_email: email,
+        target_user_id: targetUser.id,
+        invited_by: callerId,
+        status: 'pending',
+        expires_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+        accepted_at: null,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'company_id,invited_email' });
+      if (invitationError) throw invitationError;
+      const message = emailPending
+        ? 'La operadora quedó registrada, pero el correo está pendiente por el límite temporal de envíos. Puede entrar directamente con Google usando el correo registrado.'
+        : invited
+          ? 'Operadora registrada. Debe entrar primero con Google y luego crear su contraseña.'
+          : 'Operadora registrada. Al entrar con Google deberá crear su contraseña.';
+      return json({ ok: true, userId: targetUser.id, email, role, invited, emailPending, passwordReady: false, passwordUpdated: false, needsPasswordSetup: true, googleRequired: true, message });
+    }
 
     const { error: membershipError } = await service.from('company_memberships').upsert({ company_id: companyId, user_id: targetUser.id, role, active: true }, { onConflict: 'company_id,user_id,role' });
     if (membershipError) throw membershipError;

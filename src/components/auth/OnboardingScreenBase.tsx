@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AlertTriangle, ArrowLeft, Building2, CarFront, FileDown, Handshake, Loader2, Search, Sparkles } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Building2, CarFront, FileDown, Handshake, Headphones, Loader2, Search, Sparkles } from 'lucide-react';
 import {
   ONBOARDING_INTENT_KEY,
   type OnboardingRole,
@@ -10,7 +10,7 @@ import { AuthShell } from './AuthShell';
 import { WorldLocationPicker, type WorldLocationValue } from './WorldLocationPicker';
 
 const validRole = (value: unknown): value is OnboardingRole =>
-  value === 'central' || value === 'driver' || value === 'sales_partner';
+  value === 'central' || value === 'driver' || value === 'operator' || value === 'sales_partner';
 
 const getInitialRole = (metadataRole: unknown): OnboardingRole => {
   const stored = typeof window !== 'undefined' ? window.localStorage.getItem(ONBOARDING_INTENT_KEY) : null;
@@ -35,6 +35,12 @@ const roleContent: Record<OnboardingRole, {
     description: 'Entra de inmediato a tu portal, busca centrales por país o ciudad y presenta tus antecedentes cuando corresponda.',
     action: 'Crear mi portal de conductor',
     icon: CarFront,
+  },
+  operator: {
+    title: 'Quiero operar una central',
+    description: 'Completa tu perfil con Google y solicita unirte a la central activa más cercana.',
+    action: 'Crear mi perfil de operadora',
+    icon: Headphones,
   },
   sales_partner: {
     title: 'Quiero ser socio comercial',
@@ -119,8 +125,8 @@ export const OnboardingScreen: React.FC = () => {
           return (
             <button key={id} type="button" className="cg-role-card" data-active={role === id} aria-pressed={role === id} onClick={() => chooseRole(id)}>
               <span className="cg-role-icon"><Icon /></span>
-              <strong>{id === 'central' ? 'Central' : id === 'driver' ? 'Conductor' : 'Socio comercial'}</strong>
-              <small>{id === 'central' ? '5 días Full' : id === 'driver' ? 'Portal inmediato' : 'Aprobación previa'}</small>
+              <strong>{id === 'central' ? 'Central' : id === 'driver' ? 'Conductor' : id === 'operator' ? 'Operadora' : 'Socio comercial'}</strong>
+              <small>{id === 'central' ? '5 días Full' : id === 'driver' ? 'Portal inmediato' : id === 'operator' ? 'Solo Google' : 'Aprobación previa'}</small>
             </button>
           );
         })}
@@ -164,6 +170,12 @@ export const OnboardingScreen: React.FC = () => {
           </div>
         )}
 
+        {role === 'operator' && (
+          <div className="cg-alert cg-alert-info mt-0">
+            <Search className="mr-1.5 inline h-4 w-4" /> Al terminar podrás usar tu ubicación para encontrar la central más cercana. La central aprobará tu acceso antes de que puedas despachar.
+          </div>
+        )}
+
         {role === 'sales_partner' && (
           <div className="space-y-3">
             <div className="cg-alert cg-alert-warning mt-0">
@@ -194,6 +206,8 @@ export const OnboardingScreen: React.FC = () => {
         <p className="cg-auth-hint">
           {role === 'driver'
             ? 'Portal inmediato · el acceso a viajes y GPS comienza solo cuando una central te aprueba o valida una invitación directa.'
+            : role === 'operator'
+              ? 'Cuenta Google obligatoria · incorporación protegida por aprobación o invitación de la central.'
             : role === 'sales_partner'
               ? 'Postulación gratuita · revisión exclusiva del superadministrador · comisión comercial del 20%.'
               : 'Acceso completo durante 5 días · después eliges el plan que mejor te sirve.'}

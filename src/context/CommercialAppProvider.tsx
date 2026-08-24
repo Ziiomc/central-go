@@ -46,6 +46,7 @@ import {
   subscribeCompanyRealtime,
   triggerDriverSos,
   unassignTripAtomic,
+  updateVehicleRecord,
   writeAudit,
 } from '../lib/commercialRepository';
 
@@ -407,6 +408,13 @@ export const CommercialAppProvider: React.FC<React.PropsWithChildren> = ({ child
     return vehicle;
   };
 
+  const updateVehicle = async (data: Vehicle) => {
+    const vehicle = await updateVehicleRecord({ ...data, companyId: currentCompany.id });
+    setVehicles((items) => upsertById(items, vehicle));
+    addAuditLog('EDICION_VEHICULO', `Actualizó ${vehicle.unitNumber} (${vehicle.licensePlate})`);
+    return vehicle;
+  };
+
   const addDriver = async (data: Omit<Driver, 'id' | 'rating' | 'totalTripsCompleted' | 'todayEarnings'>) => {
     let linkedUserId = data.userId;
     if (linkedUserId.includes('@')) linkedUserId = await assignCompanyUserByEmail(currentCompany.id, linkedUserId, 'driver');
@@ -479,6 +487,7 @@ export const CommercialAppProvider: React.FC<React.PropsWithChildren> = ({ child
     settleDriverCommission,
     addClient,
     addVehicle,
+    updateVehicle,
     addDriver,
     updateFareConfig,
     markNotificationAsRead,

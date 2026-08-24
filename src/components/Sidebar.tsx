@@ -52,7 +52,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     { id: 'drivers', group: 'Operación', label: 'Conductores', icon: Users, roles: ['company_admin', 'operator'] },
     { id: 'vehicles', group: 'Operación', label: 'Vehículos y Flota', icon: Car, roles: ['company_admin'] },
     { id: 'clients', group: 'Operación', label: 'Clientes', icon: UserCheck, roles: ['company_admin', 'operator'] },
-    { id: 'operators', group: 'Operación', label: 'Operadoras', icon: Headphones, roles: ['company_admin'] },
+    { id: 'operators', group: 'Operación', label: 'Operadores/as', icon: Headphones, roles: ['company_admin'] },
     { id: 'users', group: 'Administración', label: 'Usuarios y Permisos', icon: Lock, roles: ['super_admin'] },
     { id: 'reports', group: 'Administración', label: 'Reportes de Operación', icon: BarChart3, roles: ['company_admin'] },
     { id: 'history', group: 'Administración', label: currentRole === 'super_admin' ? 'Auditoría Global' : 'Historial Auditoría', icon: History, roles: ['super_admin', 'company_admin'] },

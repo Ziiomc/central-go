@@ -63,7 +63,9 @@ export async function inviteCompanyUser(input: {
   // accesos nuevos vuelven al origen canónico de producción.
   const redirectTo = input.role === 'driver'
     ? `${runtimeConfig.officialAppUrl}/driver`
-    : `${runtimeConfig.officialAppUrl}/`;
+    : input.role === 'operator'
+      ? `${runtimeConfig.officialAppUrl}/?operator_invite=1`
+      : `${runtimeConfig.officialAppUrl}/`;
 
   const { data, error } = await db.functions.invoke('invite-company-user', {
     body: {
