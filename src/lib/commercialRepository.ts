@@ -201,8 +201,8 @@ export async function loadCommercialSnapshot(companyId: string, canSeeAllCompani
 
   const [companiesRes, vehiclesRes, driversRes, locationsRes, clientsRes, addressesRes, tripsRes, notificationsRes, auditRes, fareRes] = await Promise.all([
     companyQuery,
-    db.from('vehicles').select('*').eq('company_id', companyId).order('unit_number'),
-    db.from('drivers').select('*').eq('company_id', companyId).order('unit_number'),
+    db.from('vehicles').select('*').eq('company_id', companyId).is('archived_at', null).order('unit_number'),
+    db.from('drivers').select('*').eq('company_id', companyId).is('archived_at', null).order('unit_number'),
     db.from('driver_locations').select('*').eq('company_id', companyId),
     db.from('clients').select('*').eq('company_id', companyId).order('name'),
     db.from('client_addresses').select('*').eq('company_id', companyId),
@@ -382,29 +382,64 @@ export async function insertClient(data: Omit<Client, 'id' | 'totalTrips'>): Pro
   return mapClientRow(row, data.frequentAddresses ?? []);
 }
 
-export async function insertVehicle(data: Omit<Vehicle, 'id'>): Promise<Vehicle> {
-  const { data: row, error } = await requireSupabase().from('vehicles').insert({
+const normalizeVehicleUnitNumber = (value: string) => value.trim().replace(/^m[oó]vil\s*/i, '').trim();
+
+const vehiclePayload = (data: Omit<Vehicle, 'id'>) => ({
     company_id: data.companyId,
-    unit_number: data.unitNumber,
-    license_plate: data.licensePlate,
-    brand: data.brand,
-    model: data.model,
+    unit_number: normalizeVehicleUnitNumber(data.unitNumber),
+    license_plate: data.licensePlate.trim().toUpperCase(),
+    brand: data.brand.trim(),
+    model: data.model.trim(),
     year: data.year,
-    color: data.color,
+    color: data.color.trim(),
     capacity: data.capacity,
     pet_friendly: data.petFriendly,
     wheelchair_accessible: data.wheelchairAccessible,
     air_conditioning: data.airConditioning,
     technical_inspection_expiry: data.technicalInspectionExpiry || null,
     status: data.status,
-  }).select('*').single();
-  if (error) throw error;
+});
+
+const readableVehicleError = (error: unknown, unitNumber: string, licensePlate: string): Error => {
+  const details = typeof error === 'object' && error ? error as { code?: unknown; message?: unknown; details?: unknown; hint?: unknown } : {};
+  const code = typeof details.code === 'string' ? details.code : '';
+  const message = typeof details.message === 'string' ? details.message : '';
+  const constraint = `${message} ${typeof details.details === 'string' ? details.details : ''}`.toLowerCase();
+  if (/^(El móvil|La patente|El número móvil|Ingresa )/i.test(message)) return new Error(message);
+  if (code === '23505' && constraint.includes('unit_number')) return new Error(`El móvil ${unitNumber} ya está registrado en esta central.`);
+  if (code === '23505' && constraint.includes('license_plate')) return new Error(`La patente ${licensePlate} ya está registrada en esta central.`);
+  if (code === '23514' && message) return new Error(message);
+  if (code === '42501') return new Error('Tu cuenta no tiene permiso para registrar vehículos en esta central.');
+  console.error('Vehicle save failed', error);
+  return new Error('No fue posible guardar el vehículo. Revisa los datos e inténtalo nuevamente.');
+};
+
+export async function insertVehicle(data: Omit<Vehicle, 'id'>): Promise<Vehicle> {
+  const db = requireSupabase();
+  const payload = vehiclePayload(data);
+  const { data: row, error } = await db.rpc('centralgo_admin_save_vehicle', {
+    p_company_id: payload.company_id,
+    p_unit_number: payload.unit_number,
+    p_license_plate: payload.license_plate,
+    p_brand: payload.brand,
+    p_model: payload.model,
+    p_year: payload.year,
+    p_color: payload.color,
+    p_capacity: payload.capacity,
+    p_pet_friendly: payload.pet_friendly,
+    p_wheelchair_accessible: payload.wheelchair_accessible,
+    p_air_conditioning: payload.air_conditioning,
+    p_technical_inspection_expiry: payload.technical_inspection_expiry,
+    p_status: payload.status,
+  });
+  if (error) throw readableVehicleError(error, payload.unit_number, payload.license_plate);
+  if (!row) throw new Error('No fue posible confirmar el registro del vehículo.');
   return mapVehicleRow(row);
 }
 
 export async function updateVehicleRecord(vehicle: Vehicle): Promise<Vehicle> {
   const { data: row, error } = await requireSupabase().from('vehicles').update({
-    unit_number: vehicle.unitNumber.trim(),
+    unit_number: normalizeVehicleUnitNumber(vehicle.unitNumber),
     license_plate: vehicle.licensePlate.trim().toUpperCase(),
     brand: vehicle.brand.trim(),
     model: vehicle.model.trim(),
@@ -417,7 +452,7 @@ export async function updateVehicleRecord(vehicle: Vehicle): Promise<Vehicle> {
     technical_inspection_expiry: vehicle.technicalInspectionExpiry || null,
     status: vehicle.status,
   }).eq('id', vehicle.id).eq('company_id', vehicle.companyId).select('*').single();
-  if (error) throw error;
+  if (error) throw readableVehicleError(error, vehicle.unitNumber, vehicle.licensePlate);
   return mapVehicleRow(row);
 }
 
