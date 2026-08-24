@@ -19,6 +19,7 @@ create table if not exists storage.objects (
   bucket_id text not null references storage.buckets(id),
   name text not null,
   owner uuid,
+  owner_id text,
   metadata jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
