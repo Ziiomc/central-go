@@ -1,51 +1,63 @@
-import React, { useMemo, useState, useEffect, useRef } from 'react';
-import { CalendarClock, ChevronRight, Clock3, MapPin, Radio, Sparkles, UserRound, Zap } from 'lucide-react';
-import { useApp } from '../../context/AppContext';
-import { soundManager } from '../../lib/audio';
+import React,{useEffect,useMemo,useRef,useState}from'react';
+import{CalendarClock,ChevronRight,Clock3,Copy,MapPin,Radio,Trash2,UserRound,Zap}from'lucide-react';
+import{useApp}from'../../context/AppContext';
+import{soundManager}from'../../lib/audio';
+import type{Trip}from'../../types';
 
-const formatSchedule = (iso: string) => new Date(iso).toLocaleString('es-CL', { weekday:'short',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit' });
-const formatTime = (iso: string) => new Date(iso).toLocaleTimeString('es-CL', { hour:'2-digit',minute:'2-digit' });
-const minutesUntil = (iso: string, now: number) => Math.ceil((new Date(iso).getTime() - now) / 60000);
+const formatSchedule=(iso:string)=>new Date(iso).toLocaleString('es-CL',{weekday:'short',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false});
+const formatTime=(iso:string)=>new Date(iso).toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit',hour12:false});
+const minutesUntil=(iso:string,now:number)=>Math.ceil((new Date(iso).getTime()-now)/60000);
 
-export const ScheduledTripsStrip: React.FC = () => {
-  const { trips, setSelectedTripForDetail, addNotification, soundMuted } = useApp();
-  const [now, setNow] = useState(Date.now());
-  const lastAlertMinuteRef = useRef<Map<string, number>>(new Map());
+export const ScheduledTripsStrip:React.FC=()=>{
+ const{trips,setSelectedTripForDetail,addNotification,soundMuted,cancelTrip,createTrip}=useApp();
+ const[now,setNow]=useState(Date.now());
+ const lastAlertMinuteRef=useRef<Map<string,number>>(new Map());
+ const knownReservationsRef=useRef<Set<string>|null>(null);
+ const[busyId,setBusyId]=useState<string|null>(null);
+ const[message,setMessage]=useState('');
 
-  useEffect(() => { const timer=window.setInterval(()=>setNow(Date.now()),15000); return()=>window.clearInterval(timer); }, []);
-  const scheduled=useMemo(()=>trips.filter(t=>Boolean(t.scheduledFor)&&!['completed','cancelled'].includes(t.status)).sort((a,b)=>new Date(a.scheduledFor!).getTime()-new Date(b.scheduledFor!).getTime()),[trips]);
-  const waitingReservations=useMemo(()=>scheduled.filter(t=>minutesUntil(t.scheduledFor!,now)>20),[scheduled,now]);
+ useEffect(()=>{const timer=window.setInterval(()=>setNow(Date.now()),15000);return()=>window.clearInterval(timer);},[]);
+ useEffect(()=>{const unlock=()=>{void soundManager.prime();window.removeEventListener('pointerdown',unlock,true);window.removeEventListener('keydown',unlock,true);};window.addEventListener('pointerdown',unlock,true);window.addEventListener('keydown',unlock,true);return()=>{window.removeEventListener('pointerdown',unlock,true);window.removeEventListener('keydown',unlock,true);};},[]);
 
-  useEffect(()=>{
-    scheduled.forEach((trip)=>{
-      if(!trip.scheduledFor)return;
-      const remaining=minutesUntil(trip.scheduledFor,now);
-      const row=document.querySelector<HTMLElement>(`[data-dispatch-trip-id="${trip.id}"]`);
-      if(row){row.hidden=remaining>20;row.dataset.centralgoReservation='true';row.dataset.reservationLabel=`RESERVA · ${formatTime(trip.scheduledFor)}`;}
+ const scheduled=useMemo(()=>trips.filter(t=>Boolean(t.scheduledFor)&&!['completed','cancelled'].includes(t.status)).sort((a,b)=>new Date(a.scheduledFor!).getTime()-new Date(b.scheduledFor!).getTime()),[trips]);
+ const waitingReservations=useMemo(()=>scheduled.filter(t=>minutesUntil(t.scheduledFor!,now)>20),[scheduled,now]);
 
-      // Desde 10 minutos antes de la reserva, insiste cada minuto mientras siga pendiente/asignada.
-      // El bucket evita repetir varias veces durante el mismo minuto aunque el reloj refresque cada 15 s.
-      if(remaining<=10 && remaining>=0){
-        const minuteBucket=Math.floor(Date.now()/60000);
-        if(lastAlertMinuteRef.current.get(trip.id)!==minuteBucket){
-          lastAlertMinuteRef.current.set(trip.id,minuteBucket);
-          addNotification('RESERVA PRÓXIMA',`${trip.code} · ${trip.clientName} · retiro ${formatTime(trip.scheduledFor)} · faltan ${Math.max(0,remaining)} min`,'trip',trip.id);
-          if(!soundMuted) soundManager.playReservationAlarm();
-        }
-      }
-    });
-  },[scheduled,now,addNotification,soundMuted]);
+ useEffect(()=>{
+  const ids=new Set(scheduled.map(t=>t.id));
+  if(knownReservationsRef.current===null){knownReservationsRef.current=ids;return;}
+  const fresh=scheduled.find(t=>!knownReservationsRef.current!.has(t.id)&&Date.now()-new Date(t.createdAt).getTime()<45000);
+  knownReservationsRef.current=ids;
+  if(fresh&&!soundMuted){void soundManager.prime().then(()=>soundManager.playReservationAlarm());}
+ },[scheduled,soundMuted]);
 
-  const reservationStyle=<style>{`[data-centralgo-reservation="true"]{border-color:rgba(96,165,250,.45)!important;background:linear-gradient(90deg,rgba(59,130,246,.12),rgba(14,165,233,.06))!important;box-shadow:inset 3px 0 0 rgba(96,165,250,.75)}[data-centralgo-reservation="true"]::before{content:attr(data-reservation-label);display:inline-flex;margin:0 0 6px 0;padding:3px 8px;border:1px solid rgba(125,211,252,.35);border-radius:999px;background:rgba(14,165,233,.12);color:#bae6fd;font-size:9px;font-weight:900;letter-spacing:.08em}`}</style>;
-  if(!waitingReservations.length)return reservationStyle;
+ useEffect(()=>{
+  scheduled.forEach(trip=>{
+   if(!trip.scheduledFor)return;
+   const remaining=minutesUntil(trip.scheduledFor,now);
+   const row=document.querySelector<HTMLElement>(`[data-dispatch-trip-id="${trip.id}"]`);
+   if(row){row.hidden=remaining>20;row.dataset.centralgoReservation='true';row.dataset.reservationLabel=`RESERVA · ${formatTime(trip.scheduledFor)}`;}
+   if(remaining<=10&&remaining>=0){const bucket=Math.floor(Date.now()/60000);if(lastAlertMinuteRef.current.get(trip.id)!==bucket){lastAlertMinuteRef.current.set(trip.id,bucket);addNotification('RESERVA PRÓXIMA',`${trip.code} · ${trip.clientName} · retiro ${formatTime(trip.scheduledFor)} · faltan ${Math.max(0,remaining)} min`,'trip',trip.id);if(!soundMuted)void soundManager.prime().then(()=>soundManager.playReservationAlarm());}}
+  });
+ },[scheduled,now,addNotification,soundMuted]);
 
-  return <>{reservationStyle}<section className="overflow-hidden rounded-2xl border border-sky-400/25 bg-gradient-to-r from-sky-400/[0.09] via-[#0d0d0f] to-[#0d0d0f] shadow-xl shadow-black/20">
-    <div className="flex items-center justify-between gap-3 border-b border-sky-400/15 px-3 py-2.5"><div className="flex min-w-0 items-center gap-2"><div className="rounded-lg bg-sky-400/10 p-1.5 text-sky-200"><CalendarClock className="h-4 w-4"/></div><div className="min-w-0"><h2 className="text-xs font-black text-white">Reservas programadas</h2><p className="truncate text-[9px] text-zinc-500">Pasan a la planilla 20 min antes. Desde 10 min antes, la alarma insiste cada minuto.</p></div></div><span className="rounded-full border border-sky-400/20 bg-sky-400/10 px-2 py-1 text-[9px] font-black text-sky-200">{waitingReservations.length}</span></div>
-    <div className="flex gap-2 overflow-x-auto p-2.5">{waitingReservations.slice(0,10).map((trip)=>{const remaining=minutesUntil(trip.scheduledFor!,now);const automatic=trip.dispatchMode==='automatic';return <button key={trip.id} type="button" onClick={()=>setSelectedTripForDetail(trip)} className="min-w-[270px] max-w-[340px] flex-1 rounded-xl border border-sky-400/20 bg-sky-400/[0.06] p-3 text-left transition hover:border-sky-300/45 hover:bg-sky-400/[0.09]">
-      <div className="flex items-start justify-between gap-2"><div className="flex items-center gap-1.5 text-[10px] font-black text-sky-200"><Clock3 className="h-3.5 w-3.5"/>RESERVA · {formatSchedule(trip.scheduledFor!)}</div><ChevronRight className="h-4 w-4 shrink-0 text-zinc-600"/></div>
-      <div className="mt-2 flex flex-wrap gap-1.5"><span className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[9px] font-black ${automatic?'border-emerald-500/20 bg-emerald-500/10 text-emerald-300':'border-cyan-500/20 bg-cyan-500/10 text-cyan-200'}`}>{automatic?<Zap className="h-3 w-3"/>:<Radio className="h-3 w-3"/>}{automatic?'Despacho automático':'Despacho manual'}</span><span className="rounded-full border border-sky-400/20 bg-sky-400/10 px-2 py-1 text-[9px] font-bold text-sky-200">Pasa a principal en {Math.max(1,remaining-20)} min</span></div>
-      <p className="mt-2 flex items-center gap-1.5 truncate text-[10px] font-bold text-zinc-200"><UserRound className="h-3.5 w-3.5 shrink-0 text-zinc-500"/>{trip.clientName}</p><p className="mt-1 flex items-center gap-1.5 truncate text-[9px] text-zinc-500"><MapPin className="h-3.5 w-3.5 shrink-0 text-emerald-400"/>{trip.origin.address}</p>
-      {trip.reservedDriverUnitNumber?<div className="mt-2 flex items-center gap-1.5 rounded-lg border border-violet-500/20 bg-violet-500/[0.07] px-2 py-1.5 text-[9px] font-black text-violet-300"><Sparkles className="h-3.5 w-3.5"/>Móvil reservado: {trip.reservedDriverUnitNumber}</div>:<div className="mt-2 rounded-lg border border-zinc-800 bg-zinc-900/70 px-2 py-1.5 text-[9px] font-bold text-zinc-500">En espera hasta la ventana operativa de 20 minutos</div>}
-    </button>})}</div>
-  </section></>;
+ const cancelReservation=async(trip:Trip)=>{if(busyId)return;if(!window.confirm(`¿Cancelar la reserva ${trip.code} de las ${formatTime(trip.scheduledFor!)}?`))return;setBusyId(trip.id);setMessage('');try{await Promise.resolve(cancelTrip(trip.id,'Reserva cancelada por la central'));setMessage('Reserva cancelada.');}catch(e){setMessage(e instanceof Error?e.message:'No se pudo cancelar la reserva.');}finally{setBusyId(null);}};
+ const repeatNextWeek=async(trip:Trip)=>{if(!trip.scheduledFor||busyId)return;const next=new Date(trip.scheduledFor);next.setDate(next.getDate()+7);const exists=scheduled.some(item=>item.id!==trip.id&&item.clientId===trip.clientId&&Math.abs(new Date(item.scheduledFor!).getTime()-next.getTime())<120000);if(exists){setMessage('Ya existe una reserva equivalente para la próxima semana.');return;}setBusyId(trip.id);setMessage('');try{await Promise.resolve(createTrip({clientId:trip.clientId,clientName:trip.clientName,clientPhone:trip.clientPhone,origin:trip.origin,destination:trip.destination,vehicleTypeRequested:trip.vehicleTypeRequested,estimatedDistanceKm:trip.estimatedDistanceKm,estimatedDurationMins:trip.estimatedDurationMins,estimatedFare:trip.estimatedFare,isFixedFare:trip.isFixedFare,fixedFareAmount:trip.fixedFareAmount,paymentMethod:trip.paymentMethod,notes:trip.notes,dispatchMode:trip.dispatchMode,scheduledFor:next.toISOString()}));setMessage(`Reserva semanal creada para ${formatSchedule(next.toISOString())}.`);}catch(e){setMessage(e instanceof Error?e.message:'No se pudo repetir la reserva.');}finally{setBusyId(null);}};
+
+ const style=<style>{`
+ [data-centralgo-reservation="true"]{border-color:rgba(14,116,144,.5)!important;background:linear-gradient(90deg,rgba(224,242,254,.96),rgba(240,249,255,.92))!important;box-shadow:inset 4px 0 0 rgba(2,132,199,.9)!important;color:#0f172a!important}
+ [data-centralgo-reservation="true"]::before{content:attr(data-reservation-label);display:inline-flex;margin:0 0 6px 0;padding:4px 9px;border:1px solid rgba(3,105,161,.35);border-radius:999px;background:#0369a1;color:white;font-size:10px;font-weight:900;letter-spacing:.08em}
+ [data-centralgo-reservation="true"] .text-white,[data-centralgo-reservation="true"] .text-zinc-200,[data-centralgo-reservation="true"] .text-zinc-300,[data-centralgo-reservation="true"] .text-zinc-400{color:#0f172a!important}
+ `}</style>;
+ if(!waitingReservations.length)return <>{style}{message&&<div className="rounded-lg border border-sky-300 bg-sky-50 px-3 py-2 text-xs font-bold text-sky-900">{message}</div>}</>;
+
+ return <>{style}<section className="overflow-hidden rounded-2xl border border-sky-300 bg-sky-50 shadow-xl shadow-black/10">
+  <div className="flex items-center justify-between gap-3 border-b border-sky-200 px-3 py-2.5"><div className="flex min-w-0 items-center gap-2"><div className="rounded-lg bg-sky-600 p-1.5 text-white"><CalendarClock className="h-4 w-4"/></div><div className="min-w-0"><h2 className="text-xs font-black text-slate-900">Reservas programadas</h2><p className="truncate text-[10px] text-slate-600">Formato 24 h · pasan a planilla 20 min antes · alarma fuerte cada minuto desde 10 min antes</p></div></div><span className="rounded-full bg-sky-700 px-2 py-1 text-[10px] font-black text-white">{waitingReservations.length}</span></div>
+  {message&&<div className="border-b border-sky-200 bg-white px-3 py-2 text-[10px] font-bold text-sky-900">{message}</div>}
+  <div className="flex gap-2 overflow-x-auto p-2.5">{waitingReservations.slice(0,12).map(trip=>{const remaining=minutesUntil(trip.scheduledFor!,now);const automatic=trip.dispatchMode==='automatic';return <article key={trip.id} className="min-w-[290px] max-w-[360px] flex-1 rounded-xl border border-sky-300 bg-white p-3 text-left shadow-sm">
+   <button type="button" onClick={()=>setSelectedTripForDetail(trip)} className="w-full text-left"><div className="flex items-start justify-between gap-2"><div className="flex items-center gap-1.5 text-[11px] font-black text-sky-800"><Clock3 className="h-3.5 w-3.5"/>RESERVA · {formatSchedule(trip.scheduledFor!)}</div><ChevronRight className="h-4 w-4 shrink-0 text-sky-500"/></div>
+   <div className="mt-2 flex flex-wrap gap-1.5"><span className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[9px] font-black ${automatic?'border-emerald-300 bg-emerald-50 text-emerald-800':'border-cyan-300 bg-cyan-50 text-cyan-800'}`}>{automatic?<Zap className="h-3 w-3"/>:<Radio className="h-3 w-3"/>}{automatic?'Despacho automático':'Despacho manual'}</span><span className="rounded-full border border-sky-300 bg-sky-50 px-2 py-1 text-[9px] font-bold text-sky-900">Pasa a principal en {Math.max(1,remaining-20)} min</span></div>
+   <p className="mt-2 flex items-center gap-1.5 truncate text-[11px] font-normal text-slate-800"><UserRound className="h-3.5 w-3.5 shrink-0 text-slate-500"/>{trip.clientName}</p><p className="mt-1 flex items-center gap-1.5 truncate text-[11px] font-black text-slate-950"><MapPin className="h-3.5 w-3.5 shrink-0 text-emerald-600"/>{trip.origin.address}</p></button>
+   <div className="mt-3 grid grid-cols-2 gap-2"><button type="button" disabled={busyId===trip.id} onClick={()=>void repeatNextWeek(trip)} className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-indigo-300 bg-indigo-50 px-2 text-[10px] font-black text-indigo-800 disabled:opacity-50"><Copy className="h-3.5 w-3.5"/>Próxima semana</button><button type="button" disabled={busyId===trip.id} onClick={()=>void cancelReservation(trip)} className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-rose-300 bg-rose-50 px-2 text-[10px] font-black text-rose-800 disabled:opacity-50"><Trash2 className="h-3.5 w-3.5"/>Cancelar reserva</button></div>
+  </article>})}</div>
+ </section></>;
 };
