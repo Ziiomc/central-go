@@ -1,0 +1,101 @@
+name: Hotfix dispatch edit and payment
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/hotfix-dispatch-edit-payment.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Patch operator queue and trip detail
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          op = Path('src/components/modules/OperatorConsole.tsx')
+          s = op.read_text()
+
+          s = s.replace(
+            "Plus, RefreshCw, Search, Timer, Trash2, Undo2, UserRound, Wifi, WifiOff, X, Zap,",
+            "Plus, RefreshCw, Search, Timer, Trash2, Undo2, UserRound, Wifi, WifiOff, X, Zap, Pencil, WalletCards,"
+          )
+
+          s = s.replace(
+            "const formatMoney = (value:number) => `$${Math.round(value).toLocaleString('es-CL')}`;",
+            "const formatMoney = (value:number) => `$${Math.round(value).toLocaleString('es-CL')}`;\nconst paymentLabel=(method?:string)=>method==='transferencia'?'Transferencia':method==='posnet_tarjeta'?'Tarjeta':method==='cuenta_corriente'?'Cuenta corriente':'Efectivo';"
+          )
+
+          anchor = "  const handleAutoAssign=async(tripId:string,tripCode:string)=>{const d=await autoAssignClosestDriver(tripId);if(!d)return;setFocusDriverPoint(null);setFocusDriverId(d.id);setAssignmentToast({tripId,tripCode,driverUnitNumber:d.unitNumber});};"
+          if anchor in s and 'const editTripFromQueue=' not in s:
+            s = s.replace(anchor, anchor + "\n  const editTripFromQueue=(trip:Trip)=>{setSelectedTripForDetail(trip);window.setTimeout(()=>window.dispatchEvent(new CustomEvent('centralgo:edit-trip',{detail:{tripId:trip.id}})),0);};")
+
+          s = s.replace(
+            "onDetail={setSelectedTripForDetail} onAssign={handleAutoAssign} onCancel={handleCancelTrip}",
+            "onDetail={setSelectedTripForDetail} onEdit={editTripFromQueue} onAssign={handleAutoAssign} onCancel={handleCancelTrip}"
+          )
+          s = s.replace(
+            "onDetail={setSelectedTripForDetail} onAssign={handleAutoAssign} onCancel={handleCancelTrip} onStart={id=>updateTripStatus(id,'in_progress')}",
+            "onDetail={setSelectedTripForDetail} onEdit={editTripFromQueue} onAssign={handleAutoAssign} onCancel={handleCancelTrip} onStart={id=>updateTripStatus(id,'in_progress')}"
+          )
+
+          old_sig = "function CompactTripTable({trips,selectedTripId,visibleColumns,availableDriversCount,onSelect,onDetail,onAssign,onCancel,onCall,onLocateDriver}:{trips:Trip[];selectedTripId:string|null;visibleColumns:Record<ColumnKey,boolean>;availableDriversCount:number;onSelect:(id:string)=>void;onDetail:(trip:Trip)=>void;onAssign:(id:string,code:string)=>void;onCancel:(trip:Trip)=>void;onCall:(phone:string)=>void;onLocateDriver:(trip:Trip)=>void}){"
+          new_sig = "function CompactTripTable({trips,selectedTripId,visibleColumns,availableDriversCount,onSelect,onDetail,onEdit,onAssign,onCancel,onCall,onLocateDriver}:{trips:Trip[];selectedTripId:string|null;visibleColumns:Record<ColumnKey,boolean>;availableDriversCount:number;onSelect:(id:string)=>void;onDetail:(trip:Trip)=>void;onEdit:(trip:Trip)=>void;onAssign:(id:string,code:string)=>void;onCancel:(trip:Trip)=>void;onCall:(phone:string)=>void;onLocateDriver:(trip:Trip)=>void}){"
+          s = s.replace(old_sig,new_sig)
+
+          s = s.replace(
+            "{visibleColumns.fare&&<strong className=\"ml-auto shrink-0 text-xs font-black text-zinc-200\">{formatMoney(trip.estimatedFare)}</strong>}",
+            "{visibleColumns.fare&&<span className=\"ml-auto inline-flex shrink-0 items-center gap-1 rounded-md border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-xs font-black text-zinc-200\"><WalletCards className=\"h-3 w-3 text-emerald-300\"/>{formatMoney(trip.estimatedFare)} · {paymentLabel(trip.paymentMethod)}</span>}"
+          )
+
+          target = "<button onClick={e=>{e.stopPropagation();onDetail(trip);}} className=\"rounded-md border border-zinc-700 bg-zinc-900 p-1.5 text-zinc-400\" title=\"Ver detalle\"><ArrowRight className=\"h-3 w-3\"/></button>"
+          repl = "<button onClick={e=>{e.stopPropagation();onEdit(trip);}} className=\"inline-flex items-center gap-1 rounded-md border border-sky-500/35 bg-sky-500/10 px-2 py-1 text-xs font-black text-sky-200 hover:bg-sky-500/20\" title=\"Editar carrera\"><Pencil className=\"h-3 w-3\"/>Editar</button>" + target
+          if target in s and 'title=\"Editar carrera\"' not in s:
+            s = s.replace(target,repl)
+
+          old_vsig = "function VisualTripQueue({trips,selectedTripId,availableDriversCount,onSelect,onDetail,onAssign,onCancel,onStart,onLocateDriver}:{trips:Trip[];selectedTripId:string|null;availableDriversCount:number;onSelect:(id:string)=>void;onDetail:(trip:Trip)=>void;onAssign:(id:string,code:string)=>void;onCancel:(trip:Trip)=>void;onStart:(id:string)=>void;onLocateDriver:(trip:Trip)=>void}){"
+          new_vsig = "function VisualTripQueue({trips,selectedTripId,availableDriversCount,onSelect,onDetail,onEdit,onAssign,onCancel,onStart,onLocateDriver}:{trips:Trip[];selectedTripId:string|null;availableDriversCount:number;onSelect:(id:string)=>void;onDetail:(trip:Trip)=>void;onEdit:(trip:Trip)=>void;onAssign:(id:string,code:string)=>void;onCancel:(trip:Trip)=>void;onStart:(id:string)=>void;onLocateDriver:(trip:Trip)=>void}){"
+          s = s.replace(old_vsig,new_vsig)
+
+          vis_target = "<button onClick={()=>void onCancel(trip)} className=\"inline-flex items-center gap-1 rounded-lg border border-rose-500/30 bg-rose-500/10 px-2 py-1.5 text-xs font-black text-rose-300 hover:bg-rose-500/20\" title=\"Cancelar carrera\"><X className=\"h-3.5 w-3.5\"/>Cancelar</button>"
+          vis_repl = "<button onClick={()=>onEdit(trip)} className=\"inline-flex items-center gap-1 rounded-lg border border-sky-500/30 bg-sky-500/10 px-2 py-1.5 text-xs font-black text-sky-200 hover:bg-sky-500/20\" title=\"Editar carrera\"><Pencil className=\"h-3.5 w-3.5\"/>Editar</button>" + vis_target
+          if vis_target in s:
+            s = s.replace(vis_target,vis_repl)
+
+          op.write_text(s)
+
+          detail = Path('src/components/modals/TripDetailModal.tsx')
+          d = detail.read_text()
+          if "const paymentLabel=" not in d:
+            d = d.replace(
+              "const norm=(v:string)=>v.normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase().trim();",
+              "const norm=(v:string)=>v.normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase().trim();\nconst paymentLabel=(m:PaymentMethod)=>m==='transferencia'?'Transferencia':m==='posnet_tarjeta'?'Tarjeta':m==='cuenta_corriente'?'Cuenta corriente':'Efectivo';"
+            )
+
+          pay_anchor = "<div className=\"grid grid-cols-2 gap-3\"><div className=\"space-y-1 rounded-lg border border-zinc-800 bg-[#121215] p-3 text-xs\"><span className=\"text-[10px] uppercase text-zinc-400\">Pasajero</span><div className=\"font-bold text-white\">{trip.clientName}</div><div className=\"text-[11px] text-zinc-400\">{trip.clientPhone}</div></div><div className=\"space-y-1 rounded-lg border border-zinc-800 bg-[#121215] p-3 text-xs\"><span className=\"text-[10px] uppercase text-zinc-400\">Móvil asignado</span><div className=\"font-bold text-emerald-400\">{trip.driverUnitNumber||'Sin asignar'}</div><div className=\"text-[11px] text-zinc-400\">{trip.driverName||'-'}</div></div></div>"
+          pay_repl = pay_anchor + "<div className=\"grid grid-cols-2 gap-3\"><div className=\"rounded-lg border border-emerald-500/20 bg-emerald-500/[.08] p-3\"><p className=\"text-[10px] font-black uppercase tracking-wider text-emerald-300\">Monto</p><p className=\"mt-1 text-lg font-black text-white\">${Math.round(trip.finalFare??trip.estimatedFare).toLocaleString('es-CL')}</p></div><div className=\"rounded-lg border border-sky-500/20 bg-sky-500/[.08] p-3\"><p className=\"text-[10px] font-black uppercase tracking-wider text-sky-300\">Forma de pago</p><p className=\"mt-1 text-sm font-black text-white\">{paymentLabel(trip.paymentMethod)}</p></div></div>"
+          if pay_anchor in d and 'Forma de pago</p><p className=\"mt-1 text-sm font-black' not in d:
+            d = d.replace(pay_anchor,pay_repl)
+          detail.write_text(d)
+          PY
+      - name: Verify TypeScript edits
+        run: |
+          grep -q 'Editar carrera' src/components/modules/OperatorConsole.tsx
+          grep -q 'Forma de pago' src/components/modals/TripDetailModal.tsx
+          npm ci
+          npm run build
+      - name: Commit hotfix
+        run: |
+          git config user.name 'central-go-hotfix'
+          git config user.email 'actions@users.noreply.github.com'
+          git add src/components/modules/OperatorConsole.tsx src/components/modals/TripDetailModal.tsx
+          git commit -m 'fix: allow editing dispatch queue and show payment method' || exit 0
+          git push origin main
