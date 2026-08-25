@@ -20,6 +20,8 @@ export interface CompanyInviteResult {
   needsPasswordSetup: boolean;
   message: string;
   userId: string;
+  username?: string;
+  manualOperator?: boolean;
 }
 
 export async function loadCompanyUsers(companyId: string): Promise<CompanyUserDirectoryItem[]> {
@@ -52,15 +54,14 @@ async function readFunctionErrorMessage(error: unknown): Promise<string | null> 
 
 export async function inviteCompanyUser(input: {
   companyId: string;
-  email: string;
+  email?: string;
   role: CompanyUserRole;
   name?: string;
   redirectTo?: string;
   initialPassword?: string;
+  username?: string;
 }): Promise<CompanyInviteResult> {
   const db = requireSupabase();
-  // No confiar en URLs antiguas guardadas en componentes o cachés. Todos los
-  // accesos nuevos vuelven al origen canónico de producción.
   const redirectTo = input.role === 'driver'
     ? `${runtimeConfig.officialAppUrl}/driver`
     : input.role === 'operator'
@@ -70,11 +71,12 @@ export async function inviteCompanyUser(input: {
   const { data, error } = await db.functions.invoke('invite-company-user', {
     body: {
       companyId: input.companyId,
-      email: input.email.trim().toLowerCase(),
+      email: input.email?.trim().toLowerCase() || undefined,
       role: input.role,
       name: input.name?.trim() || undefined,
       redirectTo,
       password: input.initialPassword || undefined,
+      username: input.username?.trim().toLowerCase() || undefined,
     },
   });
 
@@ -96,6 +98,8 @@ export async function inviteCompanyUser(input: {
     needsPasswordSetup: Boolean(data?.needsPasswordSetup),
     message: data?.message ?? 'Usuario vinculado',
     userId: String(data?.userId ?? ''),
+    username: data?.username ? String(data.username) : undefined,
+    manualOperator: Boolean(data?.manualOperator),
   };
 }
 
