@@ -15,6 +15,9 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 });
 
 const allowedRole = (value: string): value is 'company_admin' | 'operator' | 'driver' => ['company_admin', 'operator', 'driver'].includes(value);
+const normalizeUsername = (value?: string) => (value ?? '').trim().toLowerCase();
+const validUsername = (value: string) => /^[a-z0-9][a-z0-9._-]{2,31}$/.test(value);
+const operatorInternalEmail = (companyId: string, username: string) => `${username}@${companyId}.operators.centralgo.app`;
 
 const safeRedirect = (value?: string) => {
   try {
@@ -59,16 +62,24 @@ Deno.serve(async (req) => {
       name?: string;
       redirectTo?: string;
       password?: string;
+      username?: string;
     } | null;
 
     const companyId = body?.companyId?.trim();
-    const email = body?.email?.trim().toLowerCase();
     const role = body?.role?.trim() ?? '';
     const name = body?.name?.trim() ?? '';
     const password = body?.password ?? '';
+    const username = normalizeUsername(body?.username);
+    const manualOperator = role === 'operator' && Boolean(password) && Boolean(username);
+    const email = manualOperator && companyId
+      ? operatorInternalEmail(companyId, username)
+      : body?.email?.trim().toLowerCase();
 
-    if (!companyId || !email || !email.includes('@') || !allowedRole(role)) {
-      return json({ error: 'Central, correo y rol válidos son obligatorios' }, 400);
+    if (!companyId || !allowedRole(role) || !email || !email.includes('@')) {
+      return json({ error: manualOperator ? 'Central, usuario y contraseña válidos son obligatorios' : 'Central, correo y rol válidos son obligatorios' }, 400);
+    }
+    if (manualOperator && !validUsername(username)) {
+      return json({ error: 'El usuario debe tener entre 3 y 32 caracteres y usar solo letras, números, punto, guion o guion bajo.' }, 400);
     }
     if (password && password.length < 10) return json({ error: 'La contraseña inicial debe tener al menos 10 caracteres' }, 400);
 
@@ -134,7 +145,9 @@ Deno.serve(async (req) => {
     if (!authorized) {
       return json({ error: role === 'driver' || role === 'operator' ? 'Solo la administración de esta central puede registrar o invitar a su equipo operativo.' : 'Usuarios y permisos se administran exclusivamente desde el Panel Global.' }, 403);
     }
-    if (password && (!isSuper || role !== 'company_admin')) return json({ error: 'Solo Superadmin puede definir la contraseña inicial del administrador' }, 403);
+
+    const canDefinePassword = (isSuper && role === 'company_admin') || manualOperator;
+    if (password && !canDefinePassword) return json({ error: 'No tienes permiso para definir esta contraseña inicial.' }, 403);
 
     const findUser = async () => {
       for (let page = 1; page <= 10; page += 1) {
@@ -148,25 +161,34 @@ Deno.serve(async (req) => {
     };
 
     const redirectTo = role === 'driver' ? OFFICIAL_DRIVER_URL : safeRedirect(body?.redirectTo);
-    const requestedMetadata = {
+    const requestedMetadata = manualOperator ? {
+      ...(name ? { name } : {}),
+      needs_password_setup: false,
+      account_kind: 'operator',
+      manual_operator: true,
+      operator_username: username,
+      operator_company_id: companyId,
+    } : {
       ...(name ? { name } : {}),
       needs_password_setup: !password,
       ...(role === 'operator' ? { account_kind: 'operator', operator_invite: true } : {}),
     };
+
     let targetUser: any = await findUser();
     let invited = false;
     let emailPending = false;
     let passwordReady = false;
     let passwordUpdated = false;
 
+    if (manualOperator && targetUser) {
+      return json({ error: `El usuario ${username} ya existe en esta central. Elige otro nombre de usuario.`, code: 'OPERATOR_USERNAME_EXISTS' }, 409);
+    }
+
     if (targetUser) {
       const { data: targetProfile, error: targetProfileError } = await service.from('profiles').select('name,global_role').eq('id', targetUser.id).maybeSingle();
       if (targetProfileError) throw targetProfileError;
       if (targetProfile?.global_role) {
-        return json({
-          error: `El correo ${email} ya pertenece a ${roleLabel(targetProfile.global_role)}${targetProfile.name ? ` (${targetProfile.name})` : ''}. Usa un correo distinto para la cuenta de la empresa.`,
-          code: 'EMAIL_RESERVED_GLOBAL_ROLE',
-        }, 409);
+        return json({ error: `El correo ${email} ya pertenece a ${roleLabel(targetProfile.global_role)}${targetProfile.name ? ` (${targetProfile.name})` : ''}. Usa un correo distinto para la cuenta de la empresa.`, code: 'EMAIL_RESERVED_GLOBAL_ROLE' }, 409);
       }
       if (role === 'driver') {
         const { data: existingDriver, error: existingDriverError } = await service.from('drivers').select('id,company_id,display_name,unit_number').eq('user_id', targetUser.id).limit(1).maybeSingle();
@@ -183,20 +205,21 @@ Deno.serve(async (req) => {
           .maybeSingle();
         if (existingMembershipError) throw existingMembershipError;
         if (existingMembership) {
-          const membershipCompany = Array.isArray(existingMembership.companies)
-            ? existingMembership.companies[0]
-            : existingMembership.companies;
-          return json({
-            error: `Ese correo ya tiene un acceso activo en ${membershipCompany?.name ?? 'otra central'}. Debe desvincularse antes de aceptar una nueva invitación.`,
-            code: 'EMAIL_ALREADY_COMPANY_MEMBER',
-          }, 409);
+          const membershipCompany = Array.isArray(existingMembership.companies) ? existingMembership.companies[0] : existingMembership.companies;
+          return json({ error: `Ese correo ya tiene un acceso activo en ${membershipCompany?.name ?? 'otra central'}. Debe desvincularse antes de aceptar una nueva invitación.`, code: 'EMAIL_ALREADY_COMPANY_MEMBER' }, 409);
         }
       }
     }
 
     if (!targetUser) {
       if (password) {
-        const { data, error } = await service.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: requestedMetadata });
+        const { data, error } = await service.auth.admin.createUser({
+          email,
+          password,
+          email_confirm: true,
+          user_metadata: requestedMetadata,
+          app_metadata: manualOperator ? { account_kind: 'operator', operator_mode: 'manual', company_id: companyId, username } : undefined,
+        });
         if (error) throw error;
         targetUser = data.user;
         passwordReady = true;
@@ -226,15 +249,10 @@ Deno.serve(async (req) => {
       }
     } else if (!password && role === 'operator') {
       const metadata = targetUser.user_metadata ?? {};
-      const { data: updated, error: updateError } = await service.auth.admin.updateUserById(targetUser.id, {
-        user_metadata: { ...metadata, ...requestedMetadata },
-      });
+      const { data: updated, error: updateError } = await service.auth.admin.updateUserById(targetUser.id, { user_metadata: { ...metadata, ...requestedMetadata } });
       if (updateError) throw updateError;
       targetUser = updated.user;
-      const { error: otpError } = await service.auth.signInWithOtp({
-        email,
-        options: { emailRedirectTo: redirectTo, data: requestedMetadata },
-      });
+      const { error: otpError } = await service.auth.signInWithOtp({ email, options: { emailRedirectTo: redirectTo, data: requestedMetadata } });
       if (!otpError) invited = true;
       else if (isEmailRateLimit(otpError)) emailPending = true;
       else throw otpError;
@@ -250,6 +268,16 @@ Deno.serve(async (req) => {
     }
 
     if (!targetUser) return json({ error: 'No fue posible crear o localizar el usuario' }, 500);
+
+    if (manualOperator) {
+      const { error: membershipError } = await service.from('company_memberships').upsert({ company_id: companyId, user_id: targetUser.id, role: 'operator', active: true }, { onConflict: 'company_id,user_id,role' });
+      if (membershipError) throw membershipError;
+      if (name) {
+        const { error: profileUpdateError } = await service.from('profiles').update({ name }).eq('id', targetUser.id);
+        if (profileUpdateError) throw profileUpdateError;
+      }
+      return json({ ok: true, userId: targetUser.id, username, role, invited: false, emailPending: false, passwordReady: true, passwordUpdated: false, needsPasswordSetup: false, manualOperator: true, message: `Cuenta ${username} creada. Ya puede iniciar turno desde una terminal autorizada.` });
+    }
 
     if (role === 'operator') {
       const { error: invitationError } = await service.from('operator_invitations').upsert({
@@ -274,7 +302,7 @@ Deno.serve(async (req) => {
     const { error: membershipError } = await service.from('company_memberships').upsert({ company_id: companyId, user_id: targetUser.id, role, active: true }, { onConflict: 'company_id,user_id,role' });
     if (membershipError) throw membershipError;
 
-    const roleName = role === 'driver' ? 'conductor' : role === 'operator' ? 'operadora' : 'administrador';
+    const roleName = role === 'driver' ? 'conductor' : 'administrador';
     const message = passwordReady
       ? (passwordUpdated ? 'Contraseña inicial definida y administrador vinculado' : 'Administrador creado con contraseña y vinculado')
       : emailPending
