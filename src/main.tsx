@@ -20,6 +20,7 @@ import './operatorPriorityStatusColors.css';
 import './fireModePremium.css';
 import './operatorPriorityHarmony.css';
 import './collectionListViews.css';
+import './operatorActionSizingFix.css';
 import {registerServiceWorker} from './lib/pwa';
 import {registerRegionalPartnerReferralBootstrap} from './lib/regionalPartnerReferralBootstrap';
 import {registerGoogleOnboardingRoleBootstrap} from './lib/googleOnboardingRoleBootstrap';
