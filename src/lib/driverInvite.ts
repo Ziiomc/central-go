@@ -21,6 +21,13 @@ export interface DriverRecruitmentLink extends DriverInviteTarget {
   usesCount: number;
 }
 
+export interface DriverInviteIdentity {
+  name: string;
+  phone: string;
+  nationalIdNumber: string;
+  address: string;
+}
+
 const normalizeInviteToken = (value: string | null | undefined) => {
   const token = (value ?? '').trim();
   if (token.length < 48 || token.length > 160 || !/^[A-Za-z0-9_-]+$/.test(token)) return null;
@@ -95,13 +102,15 @@ export const resolveDriverInvite = async (value: string): Promise<DriverInviteTa
   };
 };
 
-export const acceptDriverInvite = async (value: string, profile?: { name?: string | null; phone?: string | null }) => {
+export const acceptDriverInvite = async (value: string, identity: DriverInviteIdentity) => {
   const token = normalizeInviteToken(value);
   if (!token) throw new Error('La invitación no es válida.');
-  const { data, error } = await requireSupabase().rpc('centralgo_accept_driver_recruitment_link', {
+  const { data, error } = await requireSupabase().rpc('centralgo_accept_driver_recruitment_link_v2', {
     p_token: token,
-    p_name: profile?.name?.trim() || null,
-    p_phone: profile?.phone?.trim() || null,
+    p_name: identity.name.trim(),
+    p_phone: identity.phone.trim(),
+    p_national_id_number: identity.nationalIdNumber.trim(),
+    p_address: identity.address.trim(),
   });
   if (error) throw error;
   return data as {
@@ -113,6 +122,7 @@ export const acceptDriverInvite = async (value: string, profile?: { name?: strin
     unitNumber: string;
     documentsRequired: false;
     immediateAccess: true;
+    identityComplete: true;
   };
 };
 
@@ -124,8 +134,6 @@ export const clearDriverInvite = () => {
   window.history.replaceState({}, document.title, `${url.pathname}${url.search}${url.hash}`);
 };
 
-// Compatibilidad con componentes creados antes de que el código público de la central
-// fuera reemplazado por un token privado y revocable.
 export const rememberDriverInviteCode = rememberDriverInviteToken;
 export const readDriverInviteCodeFromUrl = readDriverInviteTokenFromUrl;
 export const readRememberedDriverInviteCode = readRememberedDriverInviteToken;
