@@ -21,6 +21,17 @@ export async function updateDriverProfile(input:DriverProfileUpdateInput):Promis
  if(error){if(error.code==='23505')throw new Error('Ese número de móvil o número de licencia ya está registrado en esta central.');throw error;}
 }
 
+export async function releaseDriverVehicle(driverId:string,companyId:string):Promise<void>{
+ const db=requireSupabase();
+ const{data:current,error:currentError}=await db.from('drivers').select('id, vehicle_id, status').eq('id',driverId).eq('company_id',companyId).maybeSingle();
+ if(currentError)throw currentError;
+ if(!current)throw new Error('No fue posible encontrar al conductor en esta central.');
+ if(!current.vehicle_id)return;
+ if(['en_route','in_trip','sos'].includes(String(current.status)))throw new Error('No puedes liberar el vehículo mientras el conductor está en una carrera activa o con SOS. Déjalo libre o fuera de servicio primero.');
+ const{error}=await db.from('drivers').update({vehicle_id:null}).eq('id',driverId).eq('company_id',companyId);
+ if(error)throw error;
+ window.dispatchEvent(new Event('centralgo:driver-resync'));
+}
 
 export interface TraditionalDriverRegistrationInput {
   companyId:string; vehicleId?:string; unitNumber:string; name:string; phone:string;
