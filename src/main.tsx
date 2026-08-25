@@ -12,36 +12,22 @@ import './fontSize.css';
 import './lightModePremium.css';
 import './premiumThemeModes.css';
 import './themeInteractionFixes.css';
-import './operatorQueueUsability.css';
-import './operatorPriorityLight.css';
-import './operatorPriorityPremium.css';
 import './designSystem.css';
-import './operatorPriorityStatusColors.css';
 import './fireModePremium.css';
-import './operatorPriorityHarmony.css';
 import './collectionListViews.css';
-import './operatorActionSizingFix.css';
 import {registerServiceWorker} from './lib/pwa';
 import {registerRegionalPartnerReferralBootstrap} from './lib/regionalPartnerReferralBootstrap';
 import {registerGoogleOnboardingRoleBootstrap} from './lib/googleOnboardingRoleBootstrap';
 import {registerDriverWakeLock} from './lib/driverWakeLock';
 import {registerDriverStorageReliability} from './lib/driverStorageReliability';
 import {initializeFontSizePreference} from './lib/fontSizePreference';
-import {registerOperatorQueueUsability} from './lib/operatorQueueUsability';
-import {registerOperatorSearchShortcut} from './lib/operatorSearchShortcut';
 import {registerOperationalSnapshotSafety} from './lib/operationalSnapshotSafety';
 import {registerDriverFormOptionalFields} from './lib/driverFormOptionalFields';
-import {registerDriverCoverageMode} from './lib/driverCoverageMode';
-import {registerDefaultQueueMode} from './lib/defaultQueueMode';
 
 // Aplicar accesibilidad visual antes de montar React evita que el texto cambie de tamaño después de cargar.
 initializeFontSizePreference();
-registerOperatorQueueUsability();
-registerOperatorSearchShortcut();
 registerOperationalSnapshotSafety();
 registerDriverFormOptionalFields();
-registerDriverCoverageMode();
-registerDefaultQueueMode();
 
 // Registrar PWA, atribuciones y protecciones de operación antes de montar React.
 registerServiceWorker();
