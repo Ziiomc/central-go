@@ -48,7 +48,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     { id: 'commissions_network', group: 'Red comercial', label: 'Comisiones y Pagos', icon: BadgeDollarSign, roles: ['super_admin', 'regional_partner', 'sales_partner'] },
     { id: 'payments', group: 'Red comercial', label: 'Pagos y Mercado Pago', icon: WalletCards, roles: ['super_admin'] },
     { id: 'network_support', group: 'Red comercial', label: 'Soporte', icon: Headphones, roles: ['super_admin', 'regional_partner', 'sales_partner'] },
-    { id: 'trips', group: 'Operación', label: 'Todas las Carreras', icon: Route, roles: ['company_admin', 'operator'] },
+    { id: 'trips', group: 'Operación', label: 'Carreras', icon: Route, roles: ['company_admin', 'operator'] },
     { id: 'drivers', group: 'Operación', label: 'Conductores', icon: Users, roles: ['company_admin', 'operator'] },
     { id: 'vehicles', group: 'Operación', label: 'Vehículos y Flota', icon: Car, roles: ['company_admin'] },
     { id: 'clients', group: 'Operación', label: 'Clientes', icon: UserCheck, roles: ['company_admin', 'operator'] },
@@ -61,7 +61,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     { id: 'help', group: 'Cuenta', label: isNetworkRole ? 'Material y Ayuda' : 'Ayuda y Protocolos', icon: HelpCircle, roles: ['super_admin', 'regional_partner', 'sales_partner', 'company_admin', 'operator'] },
   ];
 
-  const allowedItems = navItems.filter((item) => item.roles.includes(currentRole));
+  const operatorCore = new Set(['dashboard', 'trips', 'drivers']);
+  const allowedItems = navItems
+    .filter((item) => item.roles.includes(currentRole))
+    .filter((item) => currentRole !== 'operator' || operatorCore.has(item.id));
   const groups = ['Vista general', 'Red comercial', 'Operación', 'Administración', 'Cuenta']
     .map((name) => ({ name, items: allowedItems.filter((item) => item.group === name) }))
     .filter((section) => section.items.length > 0);
