@@ -31,6 +31,7 @@ import {registerOperatorSearchShortcut} from './lib/operatorSearchShortcut';
 import {registerOperationalSnapshotSafety} from './lib/operationalSnapshotSafety';
 import {registerDriverFormOptionalFields} from './lib/driverFormOptionalFields';
 import {registerDriverCoverageMode} from './lib/driverCoverageMode';
+import {registerDefaultQueueMode} from './lib/defaultQueueMode';
 
 // Aplicar accesibilidad visual antes de montar React evita que el texto cambie de tamaño después de cargar.
 initializeFontSizePreference();
@@ -39,6 +40,7 @@ registerOperatorSearchShortcut();
 registerOperationalSnapshotSafety();
 registerDriverFormOptionalFields();
 registerDriverCoverageMode();
+registerDefaultQueueMode();
 
 // Registrar PWA, atribuciones y protecciones de operación antes de montar React.
 registerServiceWorker();
