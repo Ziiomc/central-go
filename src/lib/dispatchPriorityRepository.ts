@@ -13,16 +13,16 @@ export interface DispatchQueueItem {
 const isFresh=(timestamp:string|null,maxAgeMs:number)=>{if(!timestamp)return false;const ageMs=Date.now()-new Date(timestamp).getTime();return Number.isFinite(ageMs)&&ageMs>=-60*1000&&ageMs<=maxAgeMs;};
 
 /**
- * Android/iOS pueden congelar timers y GPS cuando la PWA pasa a segundo plano.
- * No retiramos un móvil de la fila por una suspensión breve: respetamos el
- * estado operativo explícito y damos una ventana de 20 min a presencia/GPS.
+ * La fila y el mapa son dos señales distintas:
+ * - la presencia mantiene al conductor dentro de la fila;
+ * - el GPS, cuando existe, permite además ubicarlo en el mapa.
+ * Así un móvil recién integrado no desaparece sólo porque todavía está tomando
+ * la primera posición GPS o porque Android suspendió temporalmente el sensor.
  */
 export const isQueueConnected=(item:DispatchQueueItem)=>{
   if(['offline','paused','sos'].includes(item.status)||!item.serviceEnabled)return false;
   if(item.operationMode==='traditional')return item.status==='available';
-  const hasRecentPresence=isFresh(item.presenceLastSeenAt,20*60*1000);
-  const hasRecentGps=isFresh(item.locationUpdatedAt,20*60*1000);
-  return hasRecentPresence&&(hasRecentGps||item.status==='en_route'||item.status==='in_trip');
+  return isFresh(item.presenceLastSeenAt,20*60*1000);
 };
 
 export async function loadDispatchQueue(companyId:string,tripId?:string):Promise<DispatchQueueItem[]>{
@@ -41,4 +41,4 @@ export async function refreshDispatchRouteMatrix(tripId:string){const{error}=awa
 export async function moveDispatchPriority(driverId:string,direction:DispatchQueueDirection){const{error}=await requireSupabase().rpc('centralgo_operator_move_driver_priority',{p_driver_id:driverId,p_direction:direction});if(error)throw error;}
 export async function setDriverOperationMode(driverId:string,mode:DriverOperationMode){const{error}=await requireSupabase().rpc('centralgo_operator_set_driver_operation_mode',{p_driver_id:driverId,p_mode:mode});if(error)throw error;}
 export async function setTraditionalDriverAvailability(driverId:string,available:boolean){const{error}=await requireSupabase().rpc('centralgo_operator_set_driver_daily_service',{p_driver_id:driverId,p_enabled:available,p_mode:'traditional'});if(error)throw error;}
-export function subscribeDispatchQueue(companyId:string,onChange:()=>void){const db=requireSupabase();let timer:number|null=null;const schedule=()=>{if(timer!==null)window.clearTimeout(timer);timer=window.setTimeout(onChange,120);};const channel=db.channel(`centralgo-dispatch-priority:${companyId}`).on('postgres_changes',{event:'*',schema:'public',table:'drivers',filter:`company_id=eq.${companyId}`},schedule).on('postgres_changes',{event:'*',schema:'public',table:'driver_locations',filter:`company_id=eq.${companyId}`},schedule).subscribe();return()=>{if(timer!==null)window.clearTimeout(timer);void db.removeChannel(channel);};}
+export function subscribeDispatchQueue(companyId:string,onChange:()=>void){const db=requireSupabase();let timer:number|null=null;const schedule=()=>{if(timer!==null)window.clearTimeout(timer);timer=window.setTimeout(onChange,120);};const channel=db.channel(`centralgo-dispatch-priority:${companyId}`).on('postgres_changes',{event:'*',schema:'public',table:'drivers',filter:`company_id=eq.${companyId}`},schedule).on('postgres_changes',{event:'*',schema:'public',table:'driver_locations',filter:`company_id=eq.${companyId}`},schedule).on('postgres_changes',{event:'*',schema:'public',table:'driver_presence_sessions',filter:`company_id=eq.${companyId}`},schedule).subscribe();return()=>{if(timer!==null)window.clearTimeout(timer);void db.removeChannel(channel);};}
