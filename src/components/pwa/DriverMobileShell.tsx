@@ -2,6 +2,7 @@ import React,{useEffect,useRef}from'react';
 import{DriverMobileView}from'./DriverMobileView';
 import{DriverThemeCycleButton}from'./DriverThemeCycleButton';
 import{DriverPushRegistration}from'./DriverPushRegistration';
+import{DriverIdentityCompletionGate}from'../auth/DriverIdentityCompletionGate';
 import{useApp}from'../../context/AppContext';
 import{soundManager}from'../../lib/audio';
 import{speakVHFDispatch}from'../../lib/audioService';
@@ -62,5 +63,5 @@ export const DriverMobileShell:React.FC=()=>{
   }
  },[trips,drivers,currentUser.id,soundMuted]);
 
- return <><DriverMobileView/><DriverPushRegistration/><DriverThemeCycleButton/></>;
+ return <DriverIdentityCompletionGate><><DriverMobileView/><DriverPushRegistration/><DriverThemeCycleButton/></></DriverIdentityCompletionGate>;
 };
