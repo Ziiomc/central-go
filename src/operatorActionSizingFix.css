@@ -1,0 +1,71 @@
+/* Operator queue action sizing hotfix
+   Keep operational actions compact and prevent labels from overflowing when
+   the global accessibility/font-size controls enlarge interface text. */
+
+[data-dispatch-trip-id] button[title="Asignar"],
+[data-dispatch-trip-id] button[title="Editar carrera"],
+[data-dispatch-trip-id] button[title="Cancelar carrera"],
+[data-dispatch-trip-id] button[title="Llamar al cliente"],
+[data-dispatch-trip-id] button[title="Ver detalle"],
+[data-dispatch-trip-id] a[href^="tel:"] {
+  box-sizing: border-box !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex: 0 0 34px !important;
+  width: 34px !important;
+  min-width: 34px !important;
+  max-width: 34px !important;
+  height: 34px !important;
+  min-height: 34px !important;
+  max-height: 34px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  gap: 0 !important;
+  overflow: hidden !important;
+  white-space: nowrap !important;
+  line-height: 1 !important;
+  font-size: 0 !important;
+  border-radius: 9px !important;
+  vertical-align: middle !important;
+}
+
+[data-dispatch-trip-id] button[title="Asignar"] svg,
+[data-dispatch-trip-id] button[title="Editar carrera"] svg,
+[data-dispatch-trip-id] button[title="Cancelar carrera"] svg,
+[data-dispatch-trip-id] button[title="Llamar al cliente"] svg,
+[data-dispatch-trip-id] button[title="Ver detalle"] svg,
+[data-dispatch-trip-id] a[href^="tel:"] svg {
+  display: block !important;
+  flex: 0 0 auto !important;
+  width: 16px !important;
+  height: 16px !important;
+  min-width: 16px !important;
+  min-height: 16px !important;
+  stroke-width: 2.35;
+}
+
+/* The compact queue should remain on one clean action row. */
+[data-dispatch-trip-id] > div button[title="Asignar"],
+[data-dispatch-trip-id] > div button[title="Editar carrera"],
+[data-dispatch-trip-id] > div button[title="Cancelar carrera"] {
+  text-indent: 0 !important;
+}
+
+/* Slightly larger touch targets on coarse-pointer devices while keeping them square. */
+@media (pointer: coarse) {
+  [data-dispatch-trip-id] button[title="Asignar"],
+  [data-dispatch-trip-id] button[title="Editar carrera"],
+  [data-dispatch-trip-id] button[title="Cancelar carrera"],
+  [data-dispatch-trip-id] button[title="Llamar al cliente"],
+  [data-dispatch-trip-id] button[title="Ver detalle"],
+  [data-dispatch-trip-id] a[href^="tel:"] {
+    flex-basis: 36px !important;
+    width: 36px !important;
+    min-width: 36px !important;
+    max-width: 36px !important;
+    height: 36px !important;
+    min-height: 36px !important;
+    max-height: 36px !important;
+  }
+}
