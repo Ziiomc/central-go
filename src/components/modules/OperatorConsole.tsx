@@ -24,7 +24,7 @@ const statusTone: Record<DriverStatus, string> = {
   paused:'border-zinc-600 bg-zinc-800 text-zinc-300', offline:'border-zinc-700 bg-zinc-900 text-zinc-400', sos:'border-red-500/40 bg-red-500/15 text-red-300',
 };
 const minutesSince = (date:string) => Math.max(0, Math.round((Date.now()-new Date(date).getTime())/60000));
-const formatTime = (date:string) => new Date(date).toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'});
+const formatTime = (date:string) => new Date(date).toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit',hour12:false});
 const formatMoney = (value:number) => `$${Math.round(value).toLocaleString('es-CL')}`;
 const inferZone = (address?:string) => {
   const n=(address||'').toLowerCase();
@@ -163,7 +163,7 @@ export const OperatorConsole:React.FC=()=>{
     const trip=activeTrips.find(item=>item.id===tripId);
     const driver=drivers.find(item=>item.id===driverId);
     if(!tripId||!trip||trip.status!=='pending'||trip.driverId||!driver||driver.status!=='available')return;
-    if(driver.operationMode==='traditional'&&!window.confirm(`¿El Móvil ${driver.unitNumber} confirmó la carrera por radio o teléfono?\\n\\nAl confirmar, Central GO registrará la asignación y la operadora deberá avisarle por radio.`))return;
+    if(driver.operationMode==='traditional'&&!window.confirm(`¿El Móvil ${driver.unitNumber} confirmó la carrera por radio o teléfono?\n\nAl confirmar, Central GO registrará la asignación y la operadora deberá avisarle por radio.`))return;
     try{
       await assignTrip(trip.id,driver.id);
       setSelectedTripId(trip.id);
@@ -176,12 +176,11 @@ export const OperatorConsole:React.FC=()=>{
     }
   };
 
-
   return <div className="space-y-3 pb-5">
     <section className="flex flex-wrap items-center gap-2 rounded-2xl border border-zinc-800 bg-[#0d0d0f] p-2.5 shadow-xl shadow-black/20">
-      <div className="flex min-w-0 flex-1 items-center gap-3 px-1.5"><div className="hidden rounded-xl border border-blue-500/20 bg-blue-500/10 p-2 text-blue-300 sm:block"><UserRound className="h-4 w-4"/></div><div className="min-w-0"><p className="truncate text-base font-black text-white">{operator?.name??currentUser.name}</p><div className="mt-0.5 flex flex-wrap gap-x-3 text-xs text-zinc-400"><span className="flex items-center gap-1"><Clock3 className="h-3 w-3 text-amber-300"/>{now.toLocaleTimeString('es-CL')}</span><span className="flex items-center gap-1"><Timer className="h-3 w-3 text-emerald-300"/>Promedio {operator?.avgDispatchTimeSeconds??0}s</span><span className="flex items-center gap-1"><Gauge className="h-3 w-3 text-blue-300"/>{operator?.dispatchesToday??0} despachos hoy</span></div></div></div>
+      <div className="flex min-w-0 flex-1 items-center gap-3 px-1.5"><div className="hidden rounded-xl border border-blue-500/20 bg-blue-500/10 p-2 text-blue-300 sm:block"><UserRound className="h-4 w-4"/></div><div className="min-w-0"><p className="truncate text-base font-black text-white">{operator?.name??currentUser.name}</p><div className="mt-0.5 flex flex-wrap gap-x-3 text-xs text-zinc-400"><span className="flex items-center gap-1"><Clock3 className="h-3 w-3 text-amber-300"/>{now.toLocaleTimeString('es-CL',{hour12:false})}</span><span className="flex items-center gap-1"><Timer className="h-3 w-3 text-emerald-300"/>Promedio {operator?.avgDispatchTimeSeconds??0}s</span><span className="flex items-center gap-1"><Gauge className="h-3 w-3 text-blue-300"/>{operator?.dispatchesToday??0} despachos hoy</span></div></div></div>
       <div className="relative min-w-[220px] flex-[1.3] lg:max-w-xl"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400"/><input ref={searchInputRef} value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar carrera, cliente, teléfono, calle o móvil…" className="w-full rounded-xl border border-zinc-800 bg-zinc-950 py-2.5 pl-9 pr-16 text-xs text-white outline-none focus:border-amber-400"/><kbd className="absolute right-3 top-1/2 -translate-y-1/2 rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-xs font-black text-zinc-400">Ctrl K</kbd></div>
-      <button onClick={()=>{setLastSync(new Date());setNow(new Date());}} className="flex h-10 items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900 px-3 text-sm font-bold text-zinc-300" title={`Última sincronización: ${lastSync.toLocaleTimeString('es-CL')}`}><RefreshCw className="h-4 w-4"/><span className="hidden xl:inline">Actualizar</span></button>
+      <button onClick={()=>{setLastSync(new Date());setNow(new Date());}} className="flex h-10 items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900 px-3 text-sm font-bold text-zinc-300" title={`Última sincronización: ${lastSync.toLocaleTimeString('es-CL',{hour12:false})}`}><RefreshCw className="h-4 w-4"/><span className="hidden xl:inline">Actualizar</span></button>
       <button onClick={()=>selectedDriver&&focusDriver(selectedDriver,false)} disabled={!selectedDriver} className="flex h-10 items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900 px-3 text-sm font-bold text-zinc-300 disabled:opacity-35"><LocateFixed className="h-4 w-4"/><span className="hidden xl:inline">Ubicar</span></button>
       <button onClick={()=>setNewTripModalOpen(true)} className="flex h-10 items-center gap-2 rounded-xl bg-amber-400 px-4 text-xs font-black text-zinc-950"><Plus className="h-4 w-4" strokeWidth={3}/>Nueva carrera</button>
     </section>
