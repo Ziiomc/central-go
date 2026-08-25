@@ -1,5 +1,20 @@
 -- Compatibilidad mínima para ejecutar las migraciones en PostgreSQL limpio de CI.
--- Supabase administra este esquema en producción; este archivo nunca se aplica allí.
+-- Supabase administra estos esquemas en producción; este archivo nunca se aplica allí.
+
+-- Algunas migraciones de autenticación consultan auth.identities para distinguir
+-- cuentas Google. El workflow ya crea auth.users; añadimos aquí la parte mínima
+-- de identities que existe de forma nativa en Supabase producción.
+create table if not exists auth.identities (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  provider text not null,
+  identity_data jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists auth_identities_user_provider_idx
+  on auth.identities(user_id, provider);
 
 create schema if not exists storage;
 
