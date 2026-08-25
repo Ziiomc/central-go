@@ -6,6 +6,7 @@ export interface ExistingCentralMembershipRequest {
   companyId: string;
   applicantName: string;
   phone: string;
+  nationalIdNumber: string;
   licenseNumber: string;
   claimedUnitNumber: string;
   notes: string;
@@ -16,6 +17,7 @@ export const requestExistingCentralMembership = async (input: {
   companyId: string;
   applicantName: string;
   phone: string;
+  nationalIdNumber: string;
   licenseNumber: string;
   claimedUnitNumber?: string;
   notes?: string;
@@ -27,6 +29,7 @@ export const requestExistingCentralMembership = async (input: {
     p_license_number: input.licenseNumber.trim(),
     p_claimed_unit_number: input.claimedUnitNumber?.trim() || null,
     p_notes: input.notes?.trim() || null,
+    p_national_id_number: input.nationalIdNumber.trim(),
   });
   if (error) throw error;
   return data as { applicationId: string; status: 'pending'; applicationMode: 'existing_member' };
@@ -35,7 +38,7 @@ export const requestExistingCentralMembership = async (input: {
 export const loadPendingExistingCentralMemberships = async (companyId: string): Promise<ExistingCentralMembershipRequest[]> => {
   const { data, error } = await requireSupabase()
     .from('driver_applications')
-    .select('id,user_id,company_id,applicant_name,phone,license_number,claimed_unit_number,notes,created_at')
+    .select('id,user_id,company_id,applicant_name,phone,national_id_number,license_number,claimed_unit_number,notes,created_at')
     .eq('company_id', companyId)
     .eq('status', 'pending')
     .eq('application_mode', 'existing_member')
@@ -47,6 +50,7 @@ export const loadPendingExistingCentralMemberships = async (companyId: string): 
     companyId: row.company_id,
     applicantName: row.applicant_name,
     phone: row.phone ?? '',
+    nationalIdNumber: row.national_id_number ?? '',
     licenseNumber: row.license_number ?? '',
     claimedUnitNumber: row.claimed_unit_number ?? '',
     notes: row.notes ?? '',
