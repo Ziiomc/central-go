@@ -1,98 +1,215 @@
-import React,{useEffect,useId,useMemo,useRef,useState}from'react';
-import{CalendarClock,Car,ChevronDown,CircleDollarSign,Clock3,Loader2,MapPin,MessageSquareText,Navigation,Phone,Send,Sparkles,UserRound,X,Zap}from'lucide-react';
-import{useApp}from'../../context/AppContext';
-import type{FareDestination,PaymentMethod}from'../../types';
-import{runtimeConfig}from'../../config/runtime';
-import{geocodeCommercialAddress}from'../../lib/geocoding';
-import{estimateDrivingDistanceKm}from'../../lib/tripDistance';
-import{loadClientDriverBlocks,loadFareDestinations}from'../../lib/operationalIntelligenceRepository';
+import React, { useEffect, useRef, useState } from 'react';
+import { Loader2, MapPin, MessageSquareText, Phone, Plus, UserRound, WalletCards, X } from 'lucide-react';
+import { useApp } from '../../context/AppContext';
+import type { PaymentMethod } from '../../types';
+import { runtimeConfig } from '../../config/runtime';
+import { geocodeCommercialAddress } from '../../lib/geocoding';
+import { estimateDrivingDistanceKm } from '../../lib/tripDistance';
 
-const norm=(v:string)=>v.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
-const nextHourLocal=()=>{const d=new Date(Date.now()+3600000);d.setMinutes(0,0,0);const p=(n:number)=>String(n).padStart(2,'0');return`${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;};
-type DistanceStatus='idle'|'calculating'|'ready'|'error';
+export const NewTripModal: React.FC = () => {
+  const {
+    newTripModalOpen,
+    setNewTripModalOpen,
+    clients,
+    createTrip,
+    addClient,
+    fareConfig,
+    currentCompany,
+  } = useApp();
 
-export const NewTripModal:React.FC=()=>{
- const{newTripModalOpen,setNewTripModalOpen,clients,drivers,trips,createTrip,addClient,fareConfig,currentCompany}=useApp();
- const originRef=useRef<HTMLInputElement>(null);
- const submissionRequestRef=useRef<string|null>(null);
- const[origin,setOrigin]=useState(''),[destination,setDestination]=useState(''),[clientId,setClientId]=useState(''),[clientName,setClientName]=useState(''),[clientPhone,setClientPhone]=useState(''),[payment,setPayment]=useState<PaymentMethod>('efectivo'),[notes,setNotes]=useState(''),[vehicleType,setVehicleType]=useState<'standard'|'pet'|'wheelchair'|'vip'>('standard'),[driverId,setDriverId]=useState(''),[driverSearch,setDriverSearch]=useState(''),[queueOnly,setQueueOnly]=useState(true),[km,setKm]=useState(0),[distanceStatus,setDistanceStatus]=useState<DistanceStatus>('idle'),[scheduled,setScheduled]=useState(false),[scheduledLocal,setScheduledLocal]=useState(nextHourLocal()),[fixedFare,setFixedFare]=useState(false),[fixedAmount,setFixedAmount]=useState(2500),[fares,setFares]=useState<FareDestination[]>([]),[blockedDriverIds,setBlockedDriverIds]=useState<Set<string>>(new Set()),[error,setError]=useState(''),[submitting,setSubmitting]=useState(false);
- const resetForm=()=>{submissionRequestRef.current=null;setOrigin('');setDestination('');setClientId('');setClientName('');setClientPhone('');setPayment('efectivo');setNotes('');setVehicleType('standard');setDriverId('');setDriverSearch('');setQueueOnly(true);setKm(0);setDistanceStatus('idle');setScheduled(false);setScheduledLocal(nextHourLocal());setFixedFare(false);setFixedAmount(2500);setBlockedDriverIds(new Set());setError('');};
- const addressCache=useMemo(()=>{const seen=new Set<string>(),result:string[]=[];const add=(v?:string)=>{const c=v?.trim();if(!c||c.length<3||/^a convenir/i.test(c)||seen.has(norm(c)))return;seen.add(norm(c));result.push(c);};trips.slice(0,500).forEach(t=>{add(t.origin.address);add(t.destination.address);});clients.forEach(c=>c.frequentAddresses.forEach(a=>add(a.address)));return result.slice(0,80);},[trips,clients]);
- const fareMatch=useMemo(()=>{const d=norm(destination);if(!d||/^a convenir/.test(d))return undefined;return fares.find(f=>f.active&&(d.includes(norm(f.matchText))||d.includes(norm(f.name))));},[destination,fares]);
- useEffect(()=>{if(!newTripModalOpen)return;resetForm();window.setTimeout(()=>originRef.current?.focus(),50);void loadFareDestinations(currentCompany.id).then(setFares).catch(()=>setFares([]));},[newTripModalOpen,currentCompany.id]);
- useEffect(()=>{if(fareMatch){setFixedFare(true);setFixedAmount(fareMatch.fareAmount);}},[fareMatch?.id]);
- useEffect(()=>{if(!clientId){setBlockedDriverIds(new Set());return;}void loadClientDriverBlocks(currentCompany.id,clientId).then(rows=>setBlockedDriverIds(new Set(rows.map(r=>r.driverId)))).catch(()=>setBlockedDriverIds(new Set()));},[clientId,currentCompany.id]);
- useEffect(()=>{if(!newTripModalOpen||clientId)return;const q=norm(origin);if(q.length<5)return;const match=clients.find(c=>c.frequentAddresses.some(a=>{const saved=norm(a.address);return saved===q||(q.length>=8&&(saved.includes(q)||q.includes(saved)));}));if(!match)return;setClientId(match.id);setClientName(match.name);setClientPhone(match.phone);if(match.hasCurrentAccount)setPayment('cuenta_corriente');},[newTripModalOpen,origin,clientId,clients]);
- useEffect(()=>{if(!newTripModalOpen||clientId)return;const phone=clientPhone.replace(/\D/g,'');if(phone.length<7)return;const match=clients.find(c=>c.phone.replace(/\D/g,'')===phone);if(!match)return;setClientId(match.id);setClientName(match.name);if(match.frequentAddresses[0]&&!origin.trim())setOrigin(match.frequentAddresses[0].address);if(match.hasCurrentAccount)setPayment('cuenta_corriente');},[newTripModalOpen,clientPhone,clientId,clients,origin]);
- useEffect(()=>{if(!newTripModalOpen)return;const cleanOrigin=origin.trim(),cleanDestination=destination.trim();if(cleanOrigin.length<3||cleanDestination.length<3||/^a convenir/i.test(cleanDestination)){setKm(0);setDistanceStatus('idle');return;}let alive=true;const timer=window.setTimeout(()=>{setDistanceStatus('calculating');const originPromise=runtimeConfig.isCommercial?geocodeCommercialAddress(currentCompany.id,cleanOrigin):Promise.resolve({lat:-35.8454,lng:-71.5979});const destinationPromise=runtimeConfig.isCommercial?geocodeCommercialAddress(currentCompany.id,cleanDestination):Promise.resolve({lat:-35.849,lng:-71.603});void Promise.all([originPromise,destinationPromise]).then(([originPoint,destinationPoint])=>{if(!alive)return;const distance=estimateDrivingDistanceKm(originPoint,destinationPoint);setKm(distance);setDistanceStatus(distance>0?'ready':'error');}).catch(()=>{if(alive){setKm(0);setDistanceStatus('error');}});},550);return()=>{alive=false;window.clearTimeout(timer);};},[newTripModalOpen,origin,destination,currentCompany.id]);
- const available=useMemo(()=>drivers.filter(d=>d.status==='available'&&!blockedDriverIds.has(d.id)),[drivers,blockedDriverIds]);
- const driverMatches=useMemo(()=>{const q=norm(driverSearch);if(!q)return[];return available.filter(d=>norm(d.unitNumber).includes(q)||norm(d.name).includes(q)).slice(0,6);},[available,driverSearch]);
- const quickDrivers=useMemo(()=>available.slice(0,8),[available]);
- const chooseDriver=(id:string)=>{const d=available.find(x=>x.id===id);if(!d)return;setDriverId(d.id);setDriverSearch(d.unitNumber);setQueueOnly(false);setError('');};
- const handleDriverSearchKey=(e:React.KeyboardEvent<HTMLInputElement>)=>{if(e.key!=='Enter')return;e.preventDefault();const q=norm(driverSearch);const exact=available.find(d=>norm(d.unitNumber)===q);const match=exact??driverMatches[0];if(match)chooseDriver(match.id);};
- const handleFormKeyDown=(e:React.KeyboardEvent<HTMLFormElement>)=>{if(e.key!=='Enter'||e.shiftKey||e.ctrlKey||e.altKey||e.metaKey)return;const target=e.target as HTMLElement;if(target.tagName==='BUTTON'||target.tagName==='TEXTAREA')return;if(driverSearch&&document.activeElement?.getAttribute('inputmode')==='numeric')return;e.preventDefault();e.currentTarget.requestSubmit();};
- const calculated=fixedFare?Math.max(0,fixedAmount):Math.round(fareConfig.baseFare+Math.max(.5,km)*fareConfig.pricePerKm);
- const close=()=>{resetForm();setNewTripModalOpen(false);};
- const selectClient=(id:string)=>{setClientId(id);const c=clients.find(x=>x.id===id);if(!c){setClientName('');setClientPhone('');return;}setClientName(c.name);setClientPhone(c.phone);if(c.frequentAddresses[0])setOrigin(c.frequentAddresses[0].address);if(c.hasCurrentAccount)setPayment('cuenta_corriente');};
- const submit=async(e:React.FormEvent)=>{e.preventDefault();const cleanOrigin=origin.trim(),cleanDestination=destination.trim()||'A convenir / Taxímetro';if(cleanOrigin.length<3){setError('Escribe la dirección de retiro.');originRef.current?.focus();return;}let scheduledFor:string|undefined;if(scheduled){const date=new Date(scheduledLocal);if(Number.isNaN(date.getTime())||date.getTime()<Date.now()+120000){setError('La carrera agendada debe ser al menos 2 minutos después.');return;}scheduledFor=date.toISOString();}const selected=scheduled||queueOnly?undefined:available.find(d=>d.id===driverId);const operationId=submissionRequestRef.current??crypto.randomUUID();submissionRequestRef.current=operationId;setSubmitting(true);try{const originPoint=runtimeConfig.isCommercial?await geocodeCommercialAddress(currentCompany.id,cleanOrigin):{lat:-35.8454,lng:-71.5979};const unknown=/^a convenir/i.test(cleanDestination);const destPoint=runtimeConfig.isCommercial?(unknown?originPoint:await geocodeCommercialAddress(currentCompany.id,cleanDestination)):{lat:-35.849,lng:-71.603};const finalKm=unknown?0:estimateDrivingDistanceKm(originPoint,destPoint);const cleanName=clientName.trim(),cleanPhone=clientPhone.trim();let resolvedClientId=clientId;let resolvedName=cleanName||'Cliente Particular';let resolvedPhone=cleanPhone||'Sin teléfono';if(!resolvedClientId&&(cleanName||cleanPhone)){const phoneDigits=cleanPhone.replace(/\D/g,'');const byKnownData=clients.find(c=>(phoneDigits.length>=7&&c.phone.replace(/\D/g,'')===phoneDigits)||c.frequentAddresses.some(a=>norm(a.address)===norm(cleanOrigin)));if(byKnownData){resolvedClientId=byKnownData.id;resolvedName=cleanName||byKnownData.name;resolvedPhone=cleanPhone||byKnownData.phone;}else{const saved=await addClient({companyId:currentCompany.id,name:cleanName||cleanPhone||'Cliente',phone:cleanPhone,email:undefined,frequentAddresses:[{label:'Retiro habitual',address:cleanOrigin,lat:originPoint.lat,lng:originPoint.lng}],rating:5,isVIP:false,hasCurrentAccount:false});resolvedClientId=saved.id;resolvedName=saved.name;resolvedPhone=saved.phone||resolvedPhone;}}await createTrip({operatorRequestId:operationId,clientId:resolvedClientId||undefined,clientName:resolvedName,clientPhone:resolvedPhone,origin:{...originPoint,address:cleanOrigin},destination:{...destPoint,address:cleanDestination},driverId:selected?.id,driverUnitNumber:selected?.unitNumber,driverName:selected?.name,dispatchMode:selected?'manual':queueOnly?'manual':'automatic',scheduledFor,vehicleTypeRequested:vehicleType,paymentMethod:payment,notes:notes.trim()||undefined,estimatedDistanceKm:finalKm,estimatedDurationMins:finalKm>0?Math.max(5,Math.round(finalKm*3)):0,estimatedFare:fixedFare?Math.max(0,fixedAmount):Math.round(fareConfig.baseFare+Math.max(.5,finalKm)*fareConfig.pricePerKm),isFixedFare:fixedFare,fixedFareAmount:fixedFare?Math.max(0,fixedAmount):undefined});resetForm();setNewTripModalOpen(false);}catch(err){setError(err instanceof Error?err.message:'No fue posible crear la carrera. Puedes reintentar sin duplicarla.');}finally{setSubmitting(false);}};
- if(!newTripModalOpen)return null;
- return <div className="cg-dispatch-modal-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-2 backdrop-blur-md sm:p-4">
-  <div className="cg-dispatch-modal-shell flex max-h-[94vh] w-full max-w-5xl flex-col overflow-hidden rounded-[26px] border border-zinc-700/80 bg-[#0b1118] shadow-[0_30px_90px_rgba(0,0,0,.55)]">
-   <header className="cg-dispatch-modal-header grid shrink-0 grid-cols-[1fr_auto] items-center gap-3 border-b border-zinc-800/90 bg-[#0d141d] px-4 py-3 sm:grid-cols-[1fr_auto_1fr] sm:px-5">
-    <div className="flex min-w-0 items-center gap-3"><div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-amber-400 text-zinc-950 shadow-lg shadow-amber-950/25"><Zap className="h-5 w-5"/></div><div className="min-w-0"><h2 className="truncate text-lg font-black text-white">Nueva carrera</h2><p className="hidden truncate text-xs text-zinc-400 sm:block">Consola rápida de despacho</p></div></div>
-    <div className="hidden grid-cols-2 gap-1 rounded-xl border border-zinc-800 bg-zinc-950/70 p-1 sm:grid"><button type="button" onClick={()=>{setScheduled(false);setDriverId('');}} className={`rounded-lg px-5 py-2 text-xs font-black transition ${!scheduled?'bg-amber-400 text-zinc-950 shadow':'text-zinc-400 hover:text-white'}`}><Zap className="mr-1.5 inline h-3.5 w-3.5"/>Ahora</button><button type="button" onClick={()=>{setScheduled(true);setDriverId('');}} className={`rounded-lg px-5 py-2 text-xs font-black transition ${scheduled?'bg-blue-600 text-white shadow':'text-zinc-400 hover:text-white'}`}><CalendarClock className="mr-1.5 inline h-3.5 w-3.5"/>Agendar</button></div>
-    <button type="button" onClick={close} className="ml-auto grid h-9 w-9 place-items-center rounded-xl border border-zinc-800 bg-zinc-950/60 text-zinc-400 hover:text-white"><X className="h-4 w-4"/></button>
-   </header>
-   <form onSubmit={submit} onKeyDown={handleFormKeyDown} className="cg-dispatch-modal-form flex min-h-0 flex-1 flex-col">
-    <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3 sm:px-5 sm:py-4">
-     <div className="grid grid-cols-2 gap-1 rounded-xl border border-zinc-800 bg-zinc-950/70 p-1 sm:hidden"><button type="button" onClick={()=>{setScheduled(false);setDriverId('');}} className={`rounded-lg py-2 text-xs font-black ${!scheduled?'bg-amber-400 text-zinc-950':'text-zinc-400'}`}>Ahora</button><button type="button" onClick={()=>{setScheduled(true);setDriverId('');}} className={`rounded-lg py-2 text-xs font-black ${scheduled?'bg-blue-600 text-white':'text-zinc-400'}`}>Agendar</button></div>
-     {scheduled&&<div className="mt-3 rounded-xl border border-blue-500/25 bg-blue-500/[.07] p-3 sm:mt-0"><label className="grid items-center gap-2 sm:grid-cols-[auto_260px]"><span className="flex items-center gap-2 text-xs font-black text-blue-100"><Clock3 className="h-4 w-4 text-blue-300"/>Fecha y hora</span><input type="datetime-local" value={scheduledLocal} onChange={e=>setScheduledLocal(e.target.value)} className={`${inputClass} [color-scheme:dark]`}/></label></div>}
+  const originRef = useRef<HTMLInputElement>(null);
+  const submissionRequestRef = useRef<string | null>(null);
+  const [origin, setOrigin] = useState('');
+  const [destination, setDestination] = useState('');
+  const [clientName, setClientName] = useState('');
+  const [clientPhone, setClientPhone] = useState('');
+  const [payment, setPayment] = useState<PaymentMethod>('efectivo');
+  const [notes, setNotes] = useState('');
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
-     <section className={`${scheduled?'mt-3':'mt-3 sm:mt-0'} grid gap-3 md:grid-cols-2`}>
-      <AddressBox ref={originRef} label="1. Retiro" value={origin} onChange={setOrigin} suggestions={addressCache} origin/>
-      <AddressBox label="2. Destino" value={destination} onChange={setDestination} suggestions={['A convenir / Taxímetro',...fares.filter(f=>f.active).map(f=>f.name),...addressCache]}/>
-     </section>
+  const reset = () => {
+    submissionRequestRef.current = null;
+    setOrigin('');
+    setDestination('');
+    setClientName('');
+    setClientPhone('');
+    setPayment('efectivo');
+    setNotes('');
+    setError('');
+    setSubmitting(false);
+  };
 
-     {fareMatch&&<div className="mt-3 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200"><Sparkles className="mr-1.5 inline h-3.5 w-3.5"/><strong>Tarifa automática:</strong> {fareMatch.name} · ${Math.round(fareMatch.fareAmount).toLocaleString('es-CL')}</div>}
+  useEffect(() => {
+    if (!newTripModalOpen) return;
+    reset();
+    window.setTimeout(() => originRef.current?.focus(), 50);
+  }, [newTripModalOpen]);
 
-     <section className="mt-3 rounded-2xl border border-zinc-800 bg-zinc-950/35 p-3">
-      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-       <Field label="Pasajero" icon={UserRound}><input value={clientName} onChange={e=>setClientName(e.target.value)} placeholder="Nombre del pasajero" className={inputClass}/></Field>
-       <Field label="Teléfono" icon={Phone}><input value={clientPhone} onChange={e=>setClientPhone(e.target.value)} placeholder="+56 9…" className={inputClass}/></Field>
-       <Field label="Forma de pago" icon={CircleDollarSign}><select value={payment} onChange={e=>setPayment(e.target.value as PaymentMethod)} className={inputClass}><option value="efectivo">Efectivo</option><option value="transferencia">Transferencia</option><option value="posnet_tarjeta">Tarjeta / POS</option><option value="cuenta_corriente">Cuenta corriente</option></select></Field>
-       <Field label="Cliente frecuente" icon={UserRound}><select value={clientId} onChange={e=>selectClient(e.target.value)} className={inputClass}><option value="">Cliente ocasional</option>{clients.map(c=><option key={c.id} value={c.id}>{c.name} · {c.phone}</option>)}</select></Field>
+  const close = () => {
+    reset();
+    setNewTripModalOpen(false);
+  };
+
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (submitting) return;
+
+    const cleanOrigin = origin.trim();
+    const cleanDestination = destination.trim() || 'A convenir / Taxímetro';
+    const cleanName = clientName.trim();
+    const cleanPhone = clientPhone.trim();
+
+    if (cleanOrigin.length < 3) {
+      setError('Escribe la dirección de retiro.');
+      originRef.current?.focus();
+      return;
+    }
+
+    const requestId = submissionRequestRef.current ?? crypto.randomUUID();
+    submissionRequestRef.current = requestId;
+    setSubmitting(true);
+    setError('');
+
+    try {
+      const originPoint = runtimeConfig.isCommercial
+        ? await geocodeCommercialAddress(currentCompany.id, cleanOrigin)
+        : { lat: -35.8454, lng: -71.5979 };
+
+      const flexibleDestination = /^a convenir/i.test(cleanDestination);
+      const destinationPoint = runtimeConfig.isCommercial
+        ? flexibleDestination
+          ? originPoint
+          : await geocodeCommercialAddress(currentCompany.id, cleanDestination)
+        : { lat: -35.849, lng: -71.603 };
+
+      const distanceKm = flexibleDestination ? 0 : estimateDrivingDistanceKm(originPoint, destinationPoint);
+      const estimatedFare = Math.round(
+        fareConfig.baseFare + Math.max(0.5, distanceKm) * fareConfig.pricePerKm,
+      );
+
+      const phoneDigits = cleanPhone.replace(/\D/g, '');
+      const existingClient = clients.find((client) =>
+        phoneDigits.length >= 7 && client.phone.replace(/\D/g, '') === phoneDigits,
+      );
+
+      let clientId = existingClient?.id;
+      let resolvedName = cleanName || existingClient?.name || 'Cliente Particular';
+      let resolvedPhone = cleanPhone || existingClient?.phone || 'Sin teléfono';
+
+      if (!clientId && (cleanName || cleanPhone)) {
+        const saved = await Promise.resolve(addClient({
+          companyId: currentCompany.id,
+          name: cleanName || cleanPhone || 'Cliente',
+          phone: cleanPhone,
+          email: undefined,
+          frequentAddresses: [{
+            label: 'Retiro habitual',
+            address: cleanOrigin,
+            lat: originPoint.lat,
+            lng: originPoint.lng,
+          }],
+          rating: 5,
+          isVIP: false,
+          hasCurrentAccount: false,
+        }));
+        clientId = saved.id;
+        resolvedName = saved.name;
+        resolvedPhone = saved.phone || resolvedPhone;
+      }
+
+      await Promise.resolve(createTrip({
+        operatorRequestId: requestId,
+        clientId,
+        clientName: resolvedName,
+        clientPhone: resolvedPhone,
+        origin: { ...originPoint, address: cleanOrigin },
+        destination: { ...destinationPoint, address: cleanDestination },
+        paymentMethod: payment,
+        notes: notes.trim() || undefined,
+        dispatchMode: 'manual',
+        estimatedDistanceKm: distanceKm,
+        estimatedDurationMins: distanceKm > 0 ? Math.max(5, Math.round(distanceKm * 3)) : 0,
+        estimatedFare,
+      }));
+
+      reset();
+      setNewTripModalOpen(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No fue posible crear la carrera.');
+      setSubmitting(false);
+    }
+  };
+
+  if (!newTripModalOpen) return null;
+
+  const inputClass = 'h-11 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-sm text-white outline-none transition placeholder:text-zinc-600 focus:border-blue-500';
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-3 backdrop-blur-sm">
+      <div className="w-full max-w-2xl overflow-hidden rounded-2xl border border-zinc-700 bg-[#0d0d0f] shadow-[0_30px_90px_rgba(0,0,0,.55)]">
+        <header className="flex items-center justify-between gap-3 border-b border-zinc-800 px-4 py-3">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[.18em] text-zinc-500">Despacho</p>
+            <h2 className="text-lg font-black text-white">Nueva carrera</h2>
+          </div>
+          <button type="button" onClick={close} className="grid h-9 w-9 place-items-center rounded-xl border border-zinc-800 bg-zinc-950 text-zinc-400 hover:text-white" aria-label="Cerrar">
+            <X className="h-4 w-4" />
+          </button>
+        </header>
+
+        <form onSubmit={submit} className="p-4">
+          <div className="grid gap-3 md:grid-cols-2">
+            <label className="space-y-1.5 md:col-span-2">
+              <span className="flex items-center gap-1.5 text-xs font-black text-zinc-300"><MapPin className="h-3.5 w-3.5 text-amber-300" />Retiro *</span>
+              <input ref={originRef} required value={origin} onChange={(event) => setOrigin(event.target.value)} placeholder="Dirección de retiro" className={inputClass} />
+            </label>
+
+            <label className="space-y-1.5 md:col-span-2">
+              <span className="flex items-center gap-1.5 text-xs font-black text-zinc-300"><MapPin className="h-3.5 w-3.5 text-blue-300" />Destino</span>
+              <input value={destination} onChange={(event) => setDestination(event.target.value)} placeholder="Opcional · si queda vacío se usa taxímetro" className={inputClass} />
+            </label>
+
+            <label className="space-y-1.5">
+              <span className="flex items-center gap-1.5 text-xs font-black text-zinc-300"><UserRound className="h-3.5 w-3.5" />Cliente</span>
+              <input value={clientName} onChange={(event) => setClientName(event.target.value)} placeholder="Nombre opcional" className={inputClass} />
+            </label>
+
+            <label className="space-y-1.5">
+              <span className="flex items-center gap-1.5 text-xs font-black text-zinc-300"><Phone className="h-3.5 w-3.5" />Teléfono</span>
+              <input value={clientPhone} onChange={(event) => setClientPhone(event.target.value)} placeholder="Teléfono opcional" className={inputClass} />
+            </label>
+
+            <label className="space-y-1.5">
+              <span className="flex items-center gap-1.5 text-xs font-black text-zinc-300"><WalletCards className="h-3.5 w-3.5" />Pago</span>
+              <select value={payment} onChange={(event) => setPayment(event.target.value as PaymentMethod)} className={inputClass}>
+                <option value="efectivo">Efectivo</option>
+                <option value="transferencia">Transferencia</option>
+                <option value="posnet_tarjeta">Tarjeta</option>
+                <option value="cuenta_corriente">Cuenta corriente</option>
+              </select>
+            </label>
+
+            <label className="space-y-1.5 md:col-span-2">
+              <span className="flex items-center gap-1.5 text-xs font-black text-zinc-300"><MessageSquareText className="h-3.5 w-3.5" />Nota</span>
+              <textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={3} placeholder="Indicaciones importantes, si existen" className="w-full resize-none rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2.5 text-sm text-white outline-none transition placeholder:text-zinc-600 focus:border-blue-500" />
+            </label>
+          </div>
+
+          {error && <div className="mt-3 rounded-xl border border-rose-500/25 bg-rose-500/10 px-3 py-2.5 text-xs font-bold text-rose-200">{error}</div>}
+
+          <div className="mt-4 flex items-center justify-between gap-3 border-t border-zinc-800 pt-4">
+            <p className="text-xs text-zinc-500">La carrera entra a la cola y luego eliges el móvil.</p>
+            <div className="flex gap-2">
+              <button type="button" onClick={close} className="h-10 rounded-xl border border-zinc-700 bg-zinc-900 px-4 text-xs font-black text-zinc-300">Cancelar</button>
+              <button type="submit" disabled={submitting} className="flex h-10 items-center gap-2 rounded-xl bg-amber-400 px-4 text-xs font-black text-zinc-950 disabled:opacity-50">
+                {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" strokeWidth={3} />}
+                {submitting ? 'Creando…' : 'Crear carrera'}
+              </button>
+            </div>
+          </div>
+        </form>
       </div>
-      <div className="mt-3 grid gap-3 md:grid-cols-3">
-       <Field label="Tipo vehículo" icon={Car}><select value={vehicleType} onChange={e=>setVehicleType(e.target.value as typeof vehicleType)} className={inputClass}><option value="standard">Estándar</option><option value="pet">Mascotas</option><option value="wheelchair">Accesible</option><option value="vip">VIP</option></select></Field>
-       <Field label="Distancia estimada" icon={Navigation}><div className={`${inputClass} flex min-h-[38px] items-center gap-2 font-black ${distanceStatus==='ready'?'text-emerald-300':'text-zinc-400'}`}>{distanceStatus==='calculating'?<><Loader2 className="h-3.5 w-3.5 animate-spin text-blue-300"/><span>Calculando…</span></>:distanceStatus==='ready'&&km>0?<><Navigation className="h-3.5 w-3.5 text-emerald-400"/><span>{km.toLocaleString('es-CL',{minimumFractionDigits:1,maximumFractionDigits:1})} km aprox.</span></>:distanceStatus==='error'?<span>No disponible aún</span>:<span>{/^a convenir/i.test(destination)?'A convenir':'Por definir'}</span>}</div></Field>
-       <Field label="Observación" icon={MessageSquareText}><input value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Esperar afuera…" className={inputClass}/></Field>
-      </div>
-     </section>
-
-     <section className="mt-3 rounded-2xl border border-cyan-500/20 bg-cyan-500/[.045] p-3">
-      <div className="flex flex-wrap items-center justify-between gap-2"><div><h3 className="text-base font-black text-white">3. Asignación</h3><p className="mt-0.5 text-xs text-zinc-400">Equidad + cercanía vial. Puedes elegir un móvil manualmente.</p></div><span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-xs font-black text-emerald-300">{available.length} libres</span></div>
-      <div className="mt-2 flex flex-wrap gap-2"><button type="button" onClick={()=>{setDriverId('');setDriverSearch('');setQueueOnly(false);}} className={`rounded-lg border px-3 py-2 text-sm font-black ${driverId===''&&!queueOnly?'border-amber-300 bg-amber-400 text-zinc-950':'border-zinc-700 bg-zinc-900 text-zinc-300'}`}>Automático equitativo</button><button type="button" onClick={()=>{setQueueOnly(v=>!v);setDriverId('');setDriverSearch('');}} className={`rounded-lg border px-3 py-2 text-sm font-black ${queueOnly?'border-cyan-300 bg-cyan-500 text-zinc-950':'border-cyan-700/60 bg-cyan-950/40 text-cyan-200'}`}>Modo cola {queueOnly?'ACTIVO':'INACTIVO'}</button></div>
-      {!scheduled&&<div className="mt-3 rounded-xl border border-zinc-800 bg-zinc-950/55 p-3"><div className="flex flex-wrap items-center justify-between gap-2"><div><p className="text-xs font-black uppercase tracking-wider text-zinc-400">Asignar móvil</p><p className="mt-0.5 text-xs text-zinc-600">Escribe el número del móvil. Enter selecciona la primera coincidencia.</p></div>{driverId&&<span className="rounded-full border border-blue-500/25 bg-blue-500/10 px-2.5 py-1 text-xs font-black text-blue-200">Seleccionado: {available.find(d=>d.id===driverId)?.unitNumber}</span>}</div><div className="relative mt-2"><input inputMode="numeric" autoComplete="off" value={driverSearch} onChange={e=>{const value=e.target.value;setDriverSearch(value);setDriverId('');setQueueOnly(false);const exact=available.find(d=>norm(d.unitNumber)===norm(value));if(exact)chooseDriver(exact.id);}} onKeyDown={handleDriverSearchKey} placeholder="Ej: 94" className={`${inputClass} pr-10 text-sm font-black`}/>{driverSearch&&<button type="button" onClick={()=>{setDriverSearch('');setDriverId('');}} className="absolute inset-y-0 right-0 grid w-10 place-items-center text-zinc-400 hover:text-white" aria-label="Limpiar móvil"><X className="h-4 w-4"/></button>}</div>{driverSearch&&driverMatches.length>0&&<div className="mt-2 grid gap-1 sm:grid-cols-2">{driverMatches.map((d,index)=><button key={d.id} type="button" onClick={()=>chooseDriver(d.id)} className={`flex items-center justify-between rounded-lg border px-3 py-2 text-left ${driverId===d.id?'border-blue-400 bg-blue-600/20':'border-zinc-800 bg-zinc-900/80 hover:border-zinc-600'}`}><span><strong className="text-xs text-white">Móvil {d.unitNumber}</strong><span className="ml-2 text-xs text-zinc-400">{d.name}</span></span><span className="text-xs font-black text-emerald-300">{index===0?'Enter · ':''}Libre</span></button>)}</div>}{driverSearch&&driverMatches.length===0&&<p className="mt-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs font-bold text-amber-200">No hay un móvil libre que coincida con “{driverSearch}”.</p>}<div className="mt-3"><p className="mb-1.5 text-xs font-black uppercase tracking-wider text-zinc-600">Acceso rápido · primeros en la fila</p><div className="flex gap-1.5 overflow-x-auto pb-1">{quickDrivers.map((d,index)=><button key={d.id} type="button" onClick={()=>chooseDriver(d.id)} title={`${index+1}° en la fila · ${d.name}`} className={`shrink-0 rounded-lg border px-3 py-2 text-sm font-black ${driverId===d.id?'border-blue-400 bg-blue-600 text-white':'border-zinc-700 bg-zinc-900 text-zinc-300'}`}>{d.unitNumber}</button>)}{available.length>quickDrivers.length&&<span className="shrink-0 rounded-lg border border-dashed border-zinc-700 px-3 py-2 text-xs font-bold text-zinc-400">+{available.length-quickDrivers.length} más</span>}</div></div></div>}
-      <p className="mt-2 text-xs text-zinc-400">Modo cola funciona como interruptor y queda activo entre carreras. Con el modo activo, Enter guarda la llamada en la cola para seguir atendiendo; desactívalo para despacho automático.</p>{clientId&&blockedDriverIds.size>0&&<p className="mt-1.5 text-xs text-rose-300">{blockedDriverIds.size} móvil(es) excluido(s) por preferencia del cliente.</p>}
-     </section>
-
-     {!fareMatch&&<section className="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-950/40 p-2.5"><span className="mr-1 text-xs font-black uppercase tracking-wider text-zinc-400">Tarifa</span><button type="button" onClick={()=>setFixedFare(false)} className={`rounded-lg px-3 py-2 text-xs font-black ${!fixedFare?'bg-blue-600 text-white':'bg-zinc-900 text-zinc-400'}`}>Calculada</button><button type="button" onClick={()=>{setFixedFare(true);setFixedAmount(2500);}} className={`rounded-lg px-3 py-2 text-xs font-black ${fixedFare&&fixedAmount===2500?'bg-amber-400 text-zinc-950':'bg-zinc-900 text-zinc-300'}`}>$2.500</button><button type="button" onClick={()=>{setFixedFare(true);setFixedAmount(3000);}} className={`rounded-lg px-3 py-2 text-xs font-black ${fixedFare&&fixedAmount===3000?'bg-amber-400 text-zinc-950':'bg-zinc-900 text-zinc-300'}`}>$3.000</button><button type="button" onClick={()=>{setFixedFare(true);if(fixedAmount===2500||fixedAmount===3000)setFixedAmount(3500);}} className={`rounded-lg px-3 py-2 text-xs font-black ${fixedFare&&fixedAmount!==2500&&fixedAmount!==3000?'bg-amber-400 text-zinc-950':'bg-zinc-900 text-zinc-300'}`}>Otra</button>{fixedFare&&<input type="number" min="0" step="500" value={fixedAmount} onChange={e=>{setFixedFare(true);setFixedAmount(Number(e.target.value));}} aria-label="Tarifa fija manual" className={`${inputClass} max-w-36`}/>}</section>}
-     {error&&<div className="mt-3 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-200">{error}</div>}
     </div>
-
-    <footer className="cg-dispatch-modal-footer shrink-0 border-t border-zinc-800 bg-[#0d141d] px-3 py-3 sm:px-5">
-     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-baseline gap-2"><span className="text-xs font-black uppercase tracking-wider text-zinc-400">Tarifa</span><strong className="text-lg font-black text-amber-300">${Math.round(calculated).toLocaleString('es-CL')}</strong>{km>0&&<span className="text-xs font-bold text-emerald-300">· {km.toLocaleString('es-CL',{maximumFractionDigits:1})} km</span>}</div><div className="grid grid-cols-[auto_1fr] gap-2 sm:flex"><button type="button" onClick={close} className="rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-2.5 text-xs font-bold text-zinc-300">Cancelar</button><button disabled={submitting} className="flex min-w-[180px] items-center justify-center gap-2 rounded-xl bg-amber-400 px-6 py-2.5 text-xs font-black text-zinc-950 shadow-lg shadow-amber-950/25 disabled:opacity-50"><Send className="h-4 w-4"/>{submitting?'Guardando…':scheduled?'Agendar carrera':queueOnly?'Guardar en cola · Enter':'Despachar carrera · Enter'}</button></div></div>
-    </footer>
-   </form>
-  </div>
- </div>;
+  );
 };
-
-const inputClass='w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-xs text-white outline-none placeholder:text-zinc-600 focus:border-amber-400 focus:ring-1 focus:ring-amber-400/20';
-const AddressBox=React.forwardRef<HTMLInputElement,{label:string;value:string;onChange:(v:string)=>void;suggestions:string[];origin?:boolean}>(({label,value,onChange,suggestions,origin},ref)=>{
- const[open,setOpen]=useState(false);const inputId=useId();
- const options=useMemo(()=>{const q=norm(value);const seen=new Set<string>();return suggestions.filter(item=>{const key=norm(item);if(!key||seen.has(key))return false;seen.add(key);return !q||key.includes(q)||q.includes(key);}).slice(0,10);},[suggestions,value]);
- const openForEdit=()=>{if(!origin&&/^a convenir(?:\s*\/\s*taxímetro)?$/i.test(value.trim()))onChange('');setOpen(true);};
- return <div className={`relative rounded-2xl border p-3 ${origin?'border-emerald-500/30 bg-emerald-500/[.045]':'border-rose-500/30 bg-rose-500/[.045]'}`}><label htmlFor={inputId} className="mb-2 flex items-center gap-2 text-base font-black text-white">{origin?<MapPin className="h-4 w-4 text-emerald-400"/>:<Navigation className="h-4 w-4 text-rose-400"/>}{label}</label><div className="relative"><input id={inputId} ref={ref} value={value} onFocus={openForEdit} onClick={openForEdit} onChange={e=>{onChange(e.target.value);setOpen(true);}} onBlur={()=>window.setTimeout(()=>setOpen(false),150)} placeholder={origin?'Dirección de retiro':'Destino o A convenir'} autoComplete="off" role="combobox" aria-expanded={open} aria-autocomplete="list" className={`${inputClass} pr-10 text-sm`}/><button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>setOpen(v=>!v)} className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-zinc-400" aria-label={`Ver opciones de ${label.toLowerCase()}`}><ChevronDown className={`h-4 w-4 transition ${open?'rotate-180':''}`}/></button></div>{open&&<div role="listbox" className="absolute left-3 right-3 top-[78px] z-[80] max-h-52 overflow-y-auto rounded-xl border border-zinc-700 bg-zinc-950 p-1.5 shadow-2xl">{options.map(item=><button key={item} type="button" role="option" aria-selected={norm(item)===norm(value)} onMouseDown={e=>e.preventDefault()} onClick={()=>{onChange(item);setOpen(false);}} className="flex w-full items-start gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-zinc-200 hover:bg-zinc-800"><MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-zinc-400"/><span>{item}</span></button>)}{!options.length&&<p className="px-3 py-4 text-center text-xs text-zinc-400">Escribe una dirección nueva para continuar.</p>}</div>}<p className="mt-1.5 text-xs text-zinc-600">Flecha: direcciones frecuentes e históricas.</p></div>;
-});AddressBox.displayName='AddressBox';
-const Field=({label,icon:Icon,children}:{label:string;icon:React.ComponentType<{className?:string}>;children:React.ReactNode})=><label className="space-y-1.5"><span className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-zinc-400"><Icon className="h-3.5 w-3.5"/>{label}</span>{children}</label>;
