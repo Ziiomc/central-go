@@ -16,9 +16,13 @@ type TripDraft = {
   scheduleEnabled: boolean;
   scheduledLocal: string;
   reservationDispatchMode: DispatchMode;
+  fixedFareEnabled: boolean;
+  fixedFareAmount: string;
   savedAt: number;
 };
 
+const QUICK_FARES = [2500, 3000, 3500, 4000];
+const formatMoney = (value: number) => `$${new Intl.NumberFormat('es-CL').format(value)}`;
 const pad = (value: number) => String(value).padStart(2, '0');
 const nextHourLocal = () => {
   const date = new Date(Date.now() + 60 * 60 * 1000);
@@ -49,6 +53,8 @@ export const NewTripModal: React.FC = () => {
   const [scheduleEnabled, setScheduleEnabled] = useState(false);
   const [scheduledLocal, setScheduledLocal] = useState(nextHourLocal());
   const [reservationDispatchMode, setReservationDispatchMode] = useState<DispatchMode>('manual');
+  const [fixedFareEnabled, setFixedFareEnabled] = useState(false);
+  const [fixedFareAmount, setFixedFareAmount] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -63,6 +69,8 @@ export const NewTripModal: React.FC = () => {
     setScheduleEnabled(false);
     setScheduledLocal(nextHourLocal());
     setReservationDispatchMode('manual');
+    setFixedFareEnabled(false);
+    setFixedFareAmount('');
     setError('');
     setSubmitting(false);
   };
@@ -85,6 +93,8 @@ export const NewTripModal: React.FC = () => {
         setScheduleEnabled(Boolean(draft.scheduleEnabled));
         setScheduledLocal(draft.scheduledLocal || nextHourLocal());
         setReservationDispatchMode(draft.reservationDispatchMode === 'automatic' ? 'automatic' : 'manual');
+        setFixedFareEnabled(Boolean(draft.fixedFareEnabled));
+        setFixedFareAmount(draft.fixedFareAmount ?? '');
       } else {
         setBlankForm();
       }
@@ -104,6 +114,7 @@ export const NewTripModal: React.FC = () => {
         || clientPhone.trim()
         || notes.trim()
         || scheduleEnabled
+        || fixedFareEnabled
         || payment !== 'efectivo',
       );
       try {
@@ -121,6 +132,8 @@ export const NewTripModal: React.FC = () => {
           scheduleEnabled,
           scheduledLocal,
           reservationDispatchMode,
+          fixedFareEnabled,
+          fixedFareAmount,
           savedAt: Date.now(),
         };
         window.localStorage.setItem(draftKey(currentCompany.id), JSON.stringify(draft));
@@ -141,6 +154,8 @@ export const NewTripModal: React.FC = () => {
     scheduleEnabled,
     scheduledLocal,
     reservationDispatchMode,
+    fixedFareEnabled,
+    fixedFareAmount,
   ]);
 
   const close = () => {
@@ -160,6 +175,11 @@ export const NewTripModal: React.FC = () => {
     window.setTimeout(() => originRef.current?.focus(), 20);
   };
 
+  const chooseQuickFare = (amount: number) => {
+    setFixedFareEnabled(true);
+    setFixedFareAmount(String(amount));
+  };
+
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (submitting) return;
@@ -168,10 +188,16 @@ export const NewTripModal: React.FC = () => {
     const cleanDestination = destination.trim() || 'A convenir / Taxímetro';
     const cleanName = clientName.trim();
     const cleanPhone = clientPhone.trim();
+    const parsedFixedFare = Number(fixedFareAmount.replace(/[^0-9]/g, ''));
 
     if (cleanOrigin.length < 3) {
       setError('Escribe la dirección de retiro.');
       originRef.current?.focus();
+      return;
+    }
+
+    if (fixedFareEnabled && (!Number.isFinite(parsedFixedFare) || parsedFixedFare <= 0)) {
+      setError('Ingresa una tarifa fija válida o selecciona Taxímetro / estimada.');
       return;
     }
 
@@ -203,7 +229,8 @@ export const NewTripModal: React.FC = () => {
         : { lat: -35.849, lng: -71.603 };
 
       const distanceKm = flexibleDestination ? 0 : estimateDrivingDistanceKm(originPoint, destinationPoint);
-      const estimatedFare = Math.round(fareConfig.baseFare + Math.max(0.5, distanceKm) * fareConfig.pricePerKm);
+      const calculatedFare = Math.round(fareConfig.baseFare + Math.max(0.5, distanceKm) * fareConfig.pricePerKm);
+      const estimatedFare = fixedFareEnabled ? parsedFixedFare : calculatedFare;
 
       const phoneDigits = cleanPhone.replace(/\D/g, '');
       const existingClient = clients.find((client) =>
@@ -249,6 +276,8 @@ export const NewTripModal: React.FC = () => {
         estimatedDistanceKm: distanceKm,
         estimatedDurationMins: distanceKm > 0 ? Math.max(5, Math.round(distanceKm * 3)) : 0,
         estimatedFare,
+        isFixedFare: fixedFareEnabled,
+        fixedFareAmount: fixedFareEnabled ? parsedFixedFare : undefined,
       }));
 
       try {
@@ -434,6 +463,19 @@ export const NewTripModal: React.FC = () => {
                 </select>
               </label>
 
+              <div className="space-y-1 md:col-span-2">
+                <span className="flex items-center gap-1.5 text-xs font-black text-zinc-300">
+                  <WalletCards className="h-3.5 w-3.5 text-emerald-300" />
+                  Tarifa
+                </span>
+                <div className="grid gap-1.5 rounded-xl border border-zinc-800 bg-zinc-950/60 p-2 sm:grid-cols-[1.2fr_repeat(4,minmax(70px,.7fr))_1.2fr]">
+                  <button type="button" onClick={() => { setFixedFareEnabled(false); setFixedFareAmount(''); }} className={`h-10 rounded-lg border px-2 text-[10px] font-black ${!fixedFareEnabled ? 'border-blue-400/40 bg-blue-400/10 text-blue-200' : 'border-zinc-800 bg-zinc-950 text-zinc-500'}`}>Taxímetro / estimada</button>
+                  {QUICK_FARES.map((amount) => <button key={amount} type="button" onClick={() => chooseQuickFare(amount)} className={`h-10 rounded-lg border px-2 text-[10px] font-black ${fixedFareEnabled && Number(fixedFareAmount) === amount ? 'border-emerald-400/45 bg-emerald-400/10 text-emerald-200' : 'border-zinc-800 bg-zinc-950 text-zinc-400 hover:text-white'}`}>{formatMoney(amount)}</button>)}
+                  <input inputMode="numeric" value={fixedFareAmount} onFocus={() => setFixedFareEnabled(true)} onChange={(event) => { setFixedFareEnabled(true); setFixedFareAmount(event.target.value.replace(/[^0-9]/g, '')); }} placeholder="Otro monto" className="h-10 min-w-0 rounded-lg border border-zinc-800 bg-zinc-950 px-2 text-xs font-black text-white outline-none placeholder:text-zinc-600 focus:border-emerald-400" aria-label="Tarifa fija personalizada" />
+                </div>
+                <p className="text-[9px] text-zinc-600">Si eliges un monto, la carrera se guarda como tarifa fija. Si no, mantiene la tarifa calculada/taxímetro.</p>
+              </div>
+
               <label className="space-y-1 md:col-span-2">
                 <span className="flex items-center gap-1.5 text-xs font-black text-zinc-300">
                   <MessageSquareText className="h-3.5 w-3.5" />
@@ -458,7 +500,7 @@ export const NewTripModal: React.FC = () => {
 
           <footer className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-zinc-800 bg-[#0d0d0f] px-4 py-3 sm:px-5">
             <p className="min-w-0 flex-1 text-[11px] text-zinc-500">
-              {scheduleEnabled ? 'Se guardará como reserva programada.' : 'La carrera entra a la cola y luego eliges el móvil.'}
+              {fixedFareEnabled && Number(fixedFareAmount) > 0 ? `Tarifa fija ${formatMoney(Number(fixedFareAmount))}. ` : ''}{scheduleEnabled ? 'Se guardará como reserva programada.' : 'La carrera entra a la cola y luego eliges el móvil.'}
             </p>
             <div className="flex shrink-0 gap-2">
               <button
