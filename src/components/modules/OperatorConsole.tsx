@@ -65,7 +65,8 @@ export const OperatorConsole: React.FC = () => {
   const [selectedTripId, setSelectedTripId] = useState<string | null>(null);
   const [focusDriverId, setFocusDriverId] = useState<string | null>(null);
   const [driverChoice, setDriverChoice] = useState<Record<string, string>>({});
-  const [busyTripId, setBusyTripId] = useState<string | null>(null);
+  const busyTripIdsRef = useRef<Set<string>>(new Set());
+  const [busyTripIds, setBusyTripIds] = useState<Set<string>>(() => new Set());
   const [dragDriverId, setDragDriverId] = useState<string | null>(null);
   const [dragOverTripId, setDragOverTripId] = useState<string | null>(null);
   const [queueItems, setQueueItems] = useState<DispatchQueueItem[]>([]);
@@ -180,18 +181,20 @@ export const OperatorConsole: React.FC = () => {
   const activeCount = activeTrips.filter((trip) => trip.status !== 'pending').length;
 
   const runTripAction = async (tripId: string, action: () => Promise<unknown> | unknown) => {
-    if (busyTripId) return;
-    setBusyTripId(tripId);
-    try {
-      await Promise.resolve(action());
-    } catch (error) {
-      window.alert(error instanceof Error ? error.message : 'No fue posible completar la operación.');
-    } finally {
-      setBusyTripId(null);
-    }
-  };
+  if (busyTripIdsRef.current.has(tripId)) return;
+  busyTripIdsRef.current.add(tripId);
+  setBusyTripIds(new Set(busyTripIdsRef.current));
+  try {
+    await Promise.resolve(action());
+  } catch (error) {
+    window.alert(error instanceof Error ? error.message : 'No fue posible completar la operación.');
+  } finally {
+    busyTripIdsRef.current.delete(tripId);
+    setBusyTripIds(new Set(busyTripIdsRef.current));
+  }
+};
 
-  const assignDriverToTrip = (trip: Trip, driverId: string) => {
+const assignDriverToTrip = (trip: Trip, driverId: string) => {
     if (!driverId || trip.status !== 'pending') return;
     const driver = drivers.find((item) => item.id === driverId);
     if (!driver || driver.status !== 'available') return;
@@ -436,7 +439,7 @@ export const OperatorConsole: React.FC = () => {
             <div className="max-h-[540px] divide-y divide-zinc-800/80 overflow-y-auto">
               {activeTrips.map((trip) => {
                 const next = nextTripAction(trip.status);
-                const isBusy = busyTripId === trip.id;
+                const isBusy = busyTripIds.has(trip.id);
                 const isSelected = selectedTripId === trip.id;
                 const dropReady = trip.status === 'pending' && dragOverTripId === trip.id;
                 return (
