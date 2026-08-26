@@ -36,8 +36,7 @@ jobs:
 
           test.describe.configure({ mode: 'serial' });
 
-          const APP = 'https://central-go-git-qa-operator-stress-audit-ignacio-s-ziio.vercel.app/';
-          const SHARE = `${APP}?_vercel_share=4FXpum7577h7PyRNQthCceqQIy7KVNjK`;
+          const APP = 'https://central-go-one.vercel.app/';
           const ADMIN_EMAIL = 'qa-central-visual-20260826@centralgo.test';
           const ADMIN_PASSWORD = 'CentralGo-QA-20260826!Visual7';
           const OPERATOR_NAME = 'Operadora QA E2E';
@@ -45,14 +44,8 @@ jobs:
           const OPERATOR_PASSWORD = 'QaOperator!260826';
 
           async function loginAdmin(page) {
-            const shareResponse = await page.goto(SHARE, { waitUntil: 'domcontentloaded', timeout: 45000 });
-            expect(shareResponse && shareResponse.ok()).toBeTruthy();
-            await page.waitForTimeout(800);
             const response = await page.goto(APP, { waitUntil: 'domcontentloaded', timeout: 45000 });
             expect(response && response.ok()).toBeTruthy();
-            // The protected-preview SSO layer does not reliably expose the app's
-            // response headers through Playwright. Permissions-Policy is already
-            // checked separately in CI; here we validate the real UI behaviour.
             await expect(page.getByRole('heading', { name: 'Vuelve a tu operación' })).toBeVisible({ timeout: 20000 });
             await page.getByLabel('Correo electrónico').fill(ADMIN_EMAIL);
             await page.getByLabel('Contraseña').fill(ADMIN_PASSWORD);
@@ -158,7 +151,7 @@ jobs:
           }
           TEST
 
-      - name: Ejecutar Chromium contra preview QA
+      - name: Ejecutar Chromium contra producción con central QA aislada
         run: npx playwright test qa-visual.spec.cjs --workers=1 --reporter=line
 
       - name: Guardar capturas y reporte
@@ -169,6 +162,7 @@ jobs:
           path: |
             test-results/**/*.png
             test-results/**/*.webm
+            test-results/**/*.md
             playwright-report/**
           if-no-files-found: warn
           retention-days: 3
