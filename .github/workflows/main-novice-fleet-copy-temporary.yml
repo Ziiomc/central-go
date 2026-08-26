@@ -1,0 +1,55 @@
+name: Refine novice fleet language
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/main-novice-fleet-copy-temporary.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Replace destructive-looking fleet copy
+        shell: python
+        run: |
+          from pathlib import Path
+          p=Path('src/components/modules/VehiclesModule.tsx')
+          s=p.read_text()
+          replacements={
+            "Accessibility,AlertTriangle,Calendar,Car,Download,FileText,History,Loader2,Pencil,Plus,Search,Trash2,Wind,Dog,X,Unlink":"Accessibility,AlertTriangle,Archive,Calendar,Car,Download,FileText,History,Loader2,Pencil,Plus,Search,Wind,Dog,X,Unlink",
+            "Usa “Liberar vehículo” antes de eliminarlo.":"Usa “Liberar vehículo” antes de retirarlo de la flota.",
+            "¿Eliminar ${v.unitNumber} · ${v.licensePlate} de la flota?\\n\\nSe retirará de la operación activa, pero su historial de carreras quedará conservado.":"¿Retirar ${v.unitNumber} · ${v.licensePlate} de la flota activa?\\n\\nNo se borrará el vehículo ni su historial de carreras. Dejará de aparecer en la operación diaria y podrá restaurarse si vuelve a utilizarse.",
+            "fue eliminado de la flota activa. Su historial quedó conservado.":"fue retirado de la flota activa. Su historial quedó conservado.",
+            "No fue posible eliminar el vehículo.":"No fue posible retirar el vehículo de la flota.",
+            "title=\"Eliminar vehículo\"><Trash2 className=\"h-3.5 w-3.5\"/>":"title=\"Retirar de la flota · no borra historial\"><Archive className=\"h-3.5 w-3.5\"/>"
+          }
+          for old,new in replacements.items():
+            count=s.count(old)
+            if count!=1:
+              raise SystemExit(f'expected 1 match, got {count}: {old}')
+            s=s.replace(old,new,1)
+          p.write_text(s)
+      - name: Install
+        run: npm ci --no-audit --no-fund
+      - name: Verify
+        run: npm test
+      - name: Commit verified source
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/components/modules/VehiclesModule.tsx
+          git commit -m 'ux: clarify non-destructive fleet removal'
+          git push origin HEAD:main
