@@ -132,8 +132,8 @@ export const OperatorConsole: React.FC = () => {
     .map((item) => drivers.find((driver) => driver.id === item.driverId))
     .filter((driver): driver is Driver => Boolean(driver)), [drivers, queueItems]);
 
-  const manualDriversOutsideQueue = useMemo(() => queueItems
-    .filter((item) => !item.userId && item.operationMode === 'traditional' && !item.serviceEnabled)
+  const manualDriversManageable = useMemo(() => queueItems
+    .filter((item) => item.operationMode === 'traditional')
     .filter((item) => !['en_route', 'in_trip', 'sos'].includes(item.status))
     .sort((a, b) => a.unitNumber.localeCompare(b.unitNumber, 'es', { numeric: true })), [queueItems]);
 
@@ -148,6 +148,21 @@ export const OperatorConsole: React.FC = () => {
       setQueueItems(await loadDispatchQueue(currentCompany.id));
     } catch (error) {
       setManualError(error instanceof Error ? error.message : 'No fue posible agregar el conductor a la fila.');
+    } finally {
+      setManualBusyId(null);
+    }
+  };
+
+  const removeManualDriverFromQueue = async (item: DispatchQueueItem) => {
+    if (manualBusyId) return;
+    if (!window.confirm(`¿Sacar el móvil ${item.unitNumber} de la fila?\n\nNo se elimina el vehículo ni su historial. Podrás volver a incorporarlo manualmente cuando corresponda.`)) return;
+    setManualBusyId(item.driverId);
+    setManualError('');
+    try {
+      await setTraditionalDriverAvailability(item.driverId, false);
+      setQueueItems(await loadDispatchQueue(currentCompany.id));
+    } catch (error) {
+      setManualError(error instanceof Error ? error.message : 'No fue posible sacar el móvil de la fila.');
     } finally {
       setManualBusyId(null);
     }
@@ -316,8 +331,8 @@ const assignDriverToTrip = (trip: Trip, driverId: string) => {
                   type="button"
                   onClick={() => { setManualMenuOpen((open) => !open); setManualError(''); }}
                   className={`grid h-8 w-8 place-items-center rounded-lg border transition ${manualMenuOpen ? 'border-amber-400/35 bg-amber-400/10 text-amber-200' : 'border-zinc-800 bg-zinc-950 text-zinc-400 hover:border-amber-400/25 hover:text-amber-200'}`}
-                  title="Añadir conductor sin app"
-                  aria-label="Añadir conductor manual"
+                  title="Gestionar móviles manuales"
+                  aria-label="Gestionar móviles manuales"
                   aria-expanded={manualMenuOpen}
                 >
                   <UserPlus className="h-3.5 w-3.5" />
@@ -330,8 +345,8 @@ const assignDriverToTrip = (trip: Trip, driverId: string) => {
               <div className="absolute right-2 top-[58px] z-[80] w-[285px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-amber-400/20 bg-[#111216] shadow-2xl shadow-black/60">
                 <div className="flex items-start justify-between gap-2 border-b border-white/[0.06] px-3 py-2.5">
                   <div className="min-w-0">
-                    <p className="text-[10px] font-black text-white">Conductores sin app</p>
-                    <p className="mt-0.5 text-[8px] leading-snug text-zinc-500">Añade un conductor antiguo al final de la fila. Quedará en modo Radio.</p>
+                    <p className="text-[10px] font-black text-white">Móviles manuales</p>
+                    <p className="mt-0.5 text-[8px] leading-snug text-zinc-500">Añade o saca móviles de la fila sin borrar el vehículo ni su historial.</p>
                   </div>
                   <button type="button" onClick={() => setManualMenuOpen(false)} className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-white/[0.06] text-zinc-500" aria-label="Cerrar lista de conductores manuales">
                     <ChevronUp className="h-3.5 w-3.5" />
@@ -339,7 +354,7 @@ const assignDriverToTrip = (trip: Trip, driverId: string) => {
                 </div>
                 {manualError && <p className="mx-2 mt-2 rounded-lg border border-rose-400/20 bg-rose-400/[0.07] px-2 py-1.5 text-[8px] font-bold text-rose-200">{manualError}</p>}
                 <div className="max-h-64 divide-y divide-white/[0.055] overflow-y-auto">
-                  {manualDriversOutsideQueue.map((item) => {
+                  {manualDriversManageable.map((item) => {
                     const driver = drivers.find((candidate) => candidate.id === item.driverId);
                     const phone = driver?.phone?.trim() || '';
                     return (
@@ -347,27 +362,39 @@ const assignDriverToTrip = (trip: Trip, driverId: string) => {
                         <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-amber-400/20 bg-amber-400/10 text-[9px] font-black text-amber-200">{item.unitNumber}</span>
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-[9px] font-black text-white">{item.name}</span>
-                          <span className="mt-0.5 block truncate text-[7px] text-zinc-500">{phone || 'Sin teléfono registrado'} · Sin app</span>
+                          <span className="mt-0.5 block truncate text-[7px] text-zinc-500">{phone || 'Sin teléfono registrado'} · {item.userId?'Radio temporal':'Sin app'}</span>
                         </span>
                         {phone && (
                           <a href={`tel:${phone}`} className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-cyan-400/20 bg-cyan-400/[0.07] text-cyan-200" title={`Llamar a ${item.name}`} aria-label={`Llamar a ${item.name}`}>
                             <PhoneCall className="h-3 w-3" />
                           </a>
                         )}
-                        <button
-                          type="button"
-                          disabled={Boolean(manualBusyId)}
-                          onClick={() => void addManualDriverToQueue(item)}
-                          className="inline-flex h-7 shrink-0 items-center gap-1 rounded-lg bg-emerald-400 px-2 text-[7px] font-black text-emerald-950 disabled:opacity-40"
-                        >
-                          {manualBusyId === item.driverId ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
-                          Añadir
-                        </button>
+                        {item.serviceEnabled ? (
+                          <button
+                            type="button"
+                            disabled={Boolean(manualBusyId)}
+                            onClick={() => void removeManualDriverFromQueue(item)}
+                            className="inline-flex h-7 shrink-0 items-center gap-1 rounded-lg border border-rose-400/25 bg-rose-400/10 px-2 text-[7px] font-black text-rose-200 disabled:opacity-40"
+                          >
+                            {manualBusyId === item.driverId ? <Loader2 className="h-3 w-3 animate-spin" /> : <XCircle className="h-3 w-3" />}
+                            Sacar
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={Boolean(manualBusyId)}
+                            onClick={() => void addManualDriverToQueue(item)}
+                            className="inline-flex h-7 shrink-0 items-center gap-1 rounded-lg bg-emerald-400 px-2 text-[7px] font-black text-emerald-950 disabled:opacity-40"
+                          >
+                            {manualBusyId === item.driverId ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
+                            Añadir
+                          </button>
+                        )}
                       </div>
                     );
                   })}
-                  {!manualDriversOutsideQueue.length && (
-                    <p className="px-4 py-6 text-center text-[9px] text-zinc-500">Todos los conductores sin app ya están en la fila o en servicio.</p>
+                  {!manualDriversManageable.length && (
+                    <p className="px-4 py-6 text-center text-[9px] text-zinc-500">No hay móviles manuales disponibles para gestionar.</p>
                   )}
                 </div>
                 <div className="flex items-center justify-between border-t border-white/[0.06] px-3 py-2 text-[7px] font-bold text-zinc-500">

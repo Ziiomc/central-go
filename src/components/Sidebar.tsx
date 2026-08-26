@@ -1,6 +1,5 @@
 import React from 'react';
 import { useApp } from '../context/AppContext';
-import { ScheduledTripsStrip } from './modules/ScheduledTripsStrip';
 import {
   BadgeDollarSign,
   BarChart3,
@@ -33,7 +32,6 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const { activeModule, setActiveModule, currentRole, currentCompany } = useApp();
-  const [reservationsOpen,setReservationsOpen]=React.useState(false);
   const isNetworkRole = ['super_admin', 'regional_partner', 'sales_partner'].includes(currentRole);
 
   React.useEffect(() => {
@@ -42,12 +40,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     window.addEventListener('keydown', closeOnEscape);
     return () => window.removeEventListener('keydown', closeOnEscape);
   }, [isOpen, onClose]);
-
-  React.useEffect(()=>{
-    const closeReservations=(event:KeyboardEvent)=>{if(event.key==='Escape'&&reservationsOpen)setReservationsOpen(false);};
-    window.addEventListener('keydown',closeReservations);
-    return()=>window.removeEventListener('keydown',closeReservations);
-  },[reservationsOpen]);
 
   const navItems = [
     { id: 'dashboard', group: 'Vista general', label: currentRole === 'operator' ? 'Central de Despacho' : currentRole === 'super_admin' ? 'Resumen Global' : isNetworkRole ? 'Panel Comercial' : 'Dashboard', icon: currentRole === 'super_admin' ? Globe2 : LayoutDashboard, roles: ['super_admin', 'regional_partner', 'sales_partner', 'company_admin', 'operator'] },
@@ -80,12 +72,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     .filter((section) => section.items.length > 0);
 
   const openItem=(id:string)=>{
-    if(id==='reservations'){
-      setReservationsOpen(true);
-      onClose();
-      return;
-    }
-    setReservationsOpen(false);
     setActiveModule(id);
     onClose();
   };
@@ -102,19 +88,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
             <div className={currentRole === 'operator' ? 'flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-900/80 px-2.5 py-2 text-[10px]' : 'rounded-xl border border-zinc-800 bg-zinc-900/80 px-3 py-2.5'}><div className="flex items-center gap-2"><RadioTower className="h-4 w-4 text-emerald-400" /><div><p className="text-[9px] font-black uppercase tracking-wider text-zinc-500">Central activa</p><p className="mt-0.5 truncate text-xs font-bold text-zinc-300">{currentCompany.name}</p></div></div></div>
           )}
 
-          <nav className="space-y-4">{groups.map((section) => <div key={section.name}><div className="mb-1.5 px-3 text-[8px] font-black uppercase tracking-[.18em] text-zinc-600">{section.name}</div><div className="space-y-1">{section.items.map(({ id, label, icon: Icon }) => { const active=id==='reservations'?reservationsOpen:activeModule===id&&!reservationsOpen; return <button key={id} onClick={() => openItem(id)} data-active={active} className={`cg-nav-item ${currentRole==='operator'?'is-compact':''}`}><span className="cg-nav-icon"><Icon className="h-4 w-4" /></span><span className="min-w-0 flex-1 truncate">{label}</span><span className="cg-nav-indicator" /></button>; })}</div></div>)}</nav>
+          <nav className="space-y-4">{groups.map((section) => <div key={section.name}><div className="mb-1.5 px-3 text-[8px] font-black uppercase tracking-[.18em] text-zinc-600">{section.name}</div><div className="space-y-1">{section.items.map(({ id, label, icon: Icon }) => { const active=activeModule===id; return <button key={id} onClick={() => openItem(id)} data-active={active} className={`cg-nav-item ${currentRole==='operator'?'is-compact':''}`}><span className="cg-nav-icon"><Icon className="h-4 w-4" /></span><span className="min-w-0 flex-1 truncate">{label}</span><span className="cg-nav-indicator" /></button>; })}</div></div>)}</nav>
 
           {isNetworkRole && <div className="rounded-xl border border-zinc-800 bg-zinc-950/50 p-3"><p className="text-[9px] font-black uppercase tracking-widest text-zinc-600">Entorno</p><p className="mt-2 text-xs font-black text-emerald-300">Producción sincronizada</p><p className="mt-1 text-[9px] leading-relaxed text-zinc-600">Los indicadores comerciales visibles se cargan desde Supabase.</p></div>}
           <a href="mailto:ziiomc3@gmail.com" className="block rounded-xl border border-zinc-800 bg-zinc-950/40 px-3 py-2.5 text-[9px] font-bold text-zinc-500 transition hover:border-blue-500/25 hover:text-blue-300">Contacto: ziiomc3@gmail.com</a>
         </div>
       </aside>
 
-      {reservationsOpen&&<div className="fixed inset-0 z-[45] overflow-y-auto bg-[#08090c] p-3 text-zinc-100 sm:p-5">
-        <div className="mx-auto max-w-6xl">
-          <div className="mb-3 flex items-center justify-between rounded-2xl border border-zinc-800 bg-[#0d0d0f] px-4 py-3"><div><p className="text-[9px] font-black uppercase tracking-[.18em] text-sky-400">Central GO · Operación</p><h1 className="mt-0.5 text-xl font-black text-white">Reservas programadas</h1><p className="mt-1 text-[10px] text-zinc-500">Las reservas futuras se administran aquí y entran al despacho solo cuando corresponde.</p></div><button type="button" onClick={()=>setReservationsOpen(false)} className="grid h-10 w-10 place-items-center rounded-xl border border-zinc-700 bg-zinc-900 text-zinc-300" aria-label="Cerrar reservas"><X className="h-4 w-4"/></button></div>
-          <ScheduledTripsStrip/>
-        </div>
-      </div>}
     </>
   );
 };
