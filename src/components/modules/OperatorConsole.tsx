@@ -101,6 +101,7 @@ export const OperatorConsole: React.FC = () => {
   const [manualMenuOpen, setManualMenuOpen] = useState(false);
   const [manualBusyId, setManualBusyId] = useState<string | null>(null);
   const [manualError, setManualError] = useState('');
+  const [manualSearch, setManualSearch] = useState('');
   const [now, setNow] = useState(Date.now());
   const initialWidths = useMemo(readPanelWidths, []);
   const [leftWidth, setLeftWidth] = useState(initialWidths.left);
@@ -176,6 +177,18 @@ export const OperatorConsole: React.FC = () => {
     .filter((item) => item.operationMode === 'traditional' || !isQueueConnected(item))
     .filter((item) => !['en_route', 'in_trip', 'sos'].includes(item.status))
     .sort((a, b) => a.unitNumber.localeCompare(b.unitNumber, 'es', { numeric: true })), [activeTripDriverIds, queueItems]);
+
+  const filteredManualDriversManageable = useMemo(() => {
+    const term = normalizeDriverSearch(manualSearch);
+    if (!term) return manualDriversManageable;
+
+    return manualDriversManageable.filter((item) => {
+      const driver = drivers.find((candidate) => candidate.id === item.driverId);
+      const vehicle = driver?.vehicleId ? vehicleById.get(driver.vehicleId) : undefined;
+      const searchable = [item.unitNumber, item.name, driver?.phone ?? '', vehicle?.licensePlate ?? ''].join(' ');
+      return normalizeDriverSearch(searchable).includes(term);
+    });
+  }, [drivers, manualDriversManageable, manualSearch, vehicleById]);
 
   const noAppDriverCount = useMemo(() => queueItems.filter((item) => !item.userId).length, [queueItems]);
   const outsideQueueCount = useMemo(() => queueItems.filter((item) => !isQueueConnected(item) && !activeTripDriverIds.has(item.driverId)).length, [activeTripDriverIds, queueItems]);
@@ -371,7 +384,7 @@ export const OperatorConsole: React.FC = () => {
               <div className="flex shrink-0 items-center gap-1.5">
                 <button
                   type="button"
-                  onClick={() => { setManualMenuOpen((open) => !open); setManualError(''); }}
+                  onClick={() => { setManualMenuOpen((open) => !open); setManualSearch(''); setManualError(''); }}
                   className={`grid h-8 w-8 place-items-center rounded-lg border transition ${manualMenuOpen ? 'border-amber-400/35 bg-amber-400/10 text-amber-200' : 'border-zinc-800 bg-zinc-950 text-zinc-400 hover:border-amber-400/25 hover:text-amber-200'}`}
                   title="Gestionar móviles por radio"
                   aria-label="Gestionar móviles por radio"
@@ -384,21 +397,57 @@ export const OperatorConsole: React.FC = () => {
             </div>
 
             {manualMenuOpen && (
-              <div className="absolute right-2 top-[58px] z-[80] w-[310px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-amber-400/20 bg-[#111216] shadow-2xl shadow-black/60">
+              <div className="absolute right-2 top-[58px] z-[80] w-[330px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-amber-400/20 bg-[#111216] shadow-2xl shadow-black/60">
                 <div className="flex items-start justify-between gap-2 border-b border-white/[0.06] px-3 py-2.5">
                   <div className="min-w-0">
                     <p className="text-[10px] font-black text-white">Fila / operación por radio</p>
-                    <p className="mt-0.5 text-[8px] leading-snug text-zinc-500">Los móviles con App desconectada pueden incorporarse por radio sin borrar su cuenta, vehículo ni historial.</p>
+                    <p className="mt-0.5 text-[8px] leading-snug text-zinc-500">Busca un móvil y agrégalo por radio sin borrar su cuenta, vehículo ni historial.</p>
                   </div>
                   <button type="button" onClick={() => setManualMenuOpen(false)} className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-white/[0.06] text-zinc-500" aria-label="Cerrar lista de conductores manuales">
                     <ChevronUp className="h-3.5 w-3.5" />
                   </button>
                 </div>
+                <div className="border-b border-white/[0.06] p-2.5">
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-500" />
+                    <input
+                      value={manualSearch}
+                      onChange={(event) => setManualSearch(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key !== 'Enter' || manualBusyId || filteredManualDriversManageable.length !== 1) return;
+                        const item = filteredManualDriversManageable[0];
+                        const alreadyInQueue = item.operationMode === 'traditional' && item.serviceEnabled && item.status === 'available';
+                        if (!alreadyInQueue) {
+                          event.preventDefault();
+                          void addManualDriverToQueue(item);
+                        }
+                      }}
+                      placeholder="Buscar móvil, nombre, teléfono o patente"
+                      autoComplete="off"
+                      autoFocus
+                      className="h-9 w-full rounded-lg border border-zinc-700 bg-zinc-950 pl-8 pr-8 text-[10px] font-bold text-white outline-none transition placeholder:text-zinc-600 focus:border-amber-400/60 focus:ring-2 focus:ring-amber-400/10"
+                      aria-label="Buscar móvil para operación por radio"
+                    />
+                    {manualSearch && (
+                      <button
+                        type="button"
+                        onClick={() => setManualSearch('')}
+                        className="absolute right-1.5 top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded-md text-zinc-500 transition hover:bg-white/[0.06] hover:text-white"
+                        title="Limpiar búsqueda"
+                        aria-label="Limpiar búsqueda de móviles"
+                      >
+                        <XCircle className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+                  <p className="mt-1.5 text-[7px] font-bold text-zinc-600">Escribe, por ejemplo: 6, Juan, 927... o una patente.</p>
+                </div>
                 {manualError && <p className="mx-2 mt-2 rounded-lg border border-rose-400/20 bg-rose-400/[0.07] px-2 py-1.5 text-[8px] font-bold text-rose-200">{manualError}</p>}
                 <div className="max-h-64 divide-y divide-white/[0.055] overflow-y-auto">
-                  {manualDriversManageable.map((item) => {
+                  {filteredManualDriversManageable.map((item) => {
                     const driver = drivers.find((candidate) => candidate.id === item.driverId);
                     const phone = driver?.phone?.trim() || '';
+                    const vehicle = driver?.vehicleId ? vehicleById.get(driver.vehicleId) : undefined;
                     const isManualInQueue = item.operationMode === 'traditional' && item.serviceEnabled && item.status === 'available';
                     const sourceLabel = item.operationMode === 'traditional'
                       ? (item.userId ? 'Radio temporal' : 'Sin app')
@@ -408,7 +457,7 @@ export const OperatorConsole: React.FC = () => {
                         <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-amber-400/20 bg-amber-400/10 text-[9px] font-black text-amber-200">{item.unitNumber}</span>
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-[9px] font-black text-white">{item.name}</span>
-                          <span className="mt-0.5 block truncate text-[7px] text-zinc-500">{phone || 'Sin teléfono registrado'} · {sourceLabel}</span>
+                          <span className="mt-0.5 block truncate text-[7px] text-zinc-500">{[phone || 'Sin teléfono', vehicle?.licensePlate ? `Patente ${vehicle.licensePlate}` : '', sourceLabel].filter(Boolean).join(' · ')}</span>
                         </span>
                         {phone && (
                           <a href={`tel:${phone}`} className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-cyan-400/20 bg-cyan-400/[0.07] text-cyan-200" title={`Llamar a ${item.name}`} aria-label={`Llamar a ${item.name}`}>
@@ -439,12 +488,14 @@ export const OperatorConsole: React.FC = () => {
                       </div>
                     );
                   })}
-                  {!manualDriversManageable.length && (
+                  {!manualDriversManageable.length ? (
                     <p className="px-4 py-6 text-center text-[9px] text-zinc-500">No hay móviles fuera de fila para gestionar.</p>
-                  )}
+                  ) : !filteredManualDriversManageable.length ? (
+                    <p className="px-4 py-6 text-center text-[9px] text-zinc-500">No encontramos un móvil con esa búsqueda.</p>
+                  ) : null}
                 </div>
                 <div className="flex items-center justify-between border-t border-white/[0.06] px-3 py-2 text-[7px] font-bold text-zinc-500">
-                  <span>{queueItems.length} registrados</span>
+                  <span>{manualSearch ? `${filteredManualDriversManageable.length} de ${manualDriversManageable.length} resultados` : `${manualDriversManageable.length} disponibles para gestionar`}</span>
                   <span>{outsideQueueCount} fuera de fila</span>
                 </div>
               </div>
