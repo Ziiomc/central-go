@@ -1,8 +1,8 @@
 name: QA patch parallel operator actions
 
 on:
-  push:
-    branches: [qa/operator-stress-audit]
+  pull_request:
+    branches: [main]
 
 permissions:
   contents: write
