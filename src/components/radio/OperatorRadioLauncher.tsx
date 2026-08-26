@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { CheckCircle2, Edit3, Loader2, RadioTower, Save, Send, Users, X } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { playVHFRadioChirp, speakVHFDispatch } from '../../lib/audioService';
@@ -18,11 +19,24 @@ export const OperatorRadioLauncher: React.FC = () => {
   const [sending, setSending] = useState(false);
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
+  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
 
   const allowed = ['operator', 'company_admin', 'super_admin'].includes(currentRole) && currentCompany.id !== 'network';
   const eligibleDrivers = useMemo(() => drivers
     .filter((driver) => Boolean(driver.userId) && driver.status !== 'offline')
     .sort((a, b) => a.unitNumber.localeCompare(b.unitNumber, 'es', { numeric: true })), [drivers]);
+
+  useEffect(() => {
+    if (!allowed) {
+      setPortalTarget(null);
+      return;
+    }
+    const locate = () => setPortalTarget(document.querySelector('.cg-map-panel .cg-live-map') as HTMLElement | null);
+    locate();
+    const observer = new MutationObserver(locate);
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, [allowed]);
 
   useEffect(() => {
     if (!allowed) return;
@@ -53,7 +67,7 @@ export const OperatorRadioLauncher: React.FC = () => {
     };
   }, [open]);
 
-  if (!allowed) return null;
+  if (!allowed || !portalTarget) return null;
 
   const savePreset = () => {
     const clean = presetDraft.trim();
@@ -95,8 +109,8 @@ export const OperatorRadioLauncher: React.FC = () => {
     }
   };
 
-  return (
-    <div className="absolute right-3 top-3 z-[1200] flex max-w-[calc(100%-1.5rem)] flex-col items-end">
+  return createPortal(
+    <div className="absolute right-3 top-14 z-[1200] flex max-w-[calc(100%-1.5rem)] flex-col items-end">
       {!open ? (
         <button
           type="button"
@@ -109,8 +123,8 @@ export const OperatorRadioLauncher: React.FC = () => {
           Radio
         </button>
       ) : (
-        <section className="w-[min(390px,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-cyan-400/30 bg-[#07131d]/97 shadow-2xl shadow-black/75 backdrop-blur-xl">
-          <header className="flex items-center justify-between border-b border-white/10 px-3 py-2.5">
+        <section className="w-[min(390px,calc(100vw-2rem))] max-h-[340px] overflow-y-auto rounded-2xl border border-cyan-400/30 bg-[#07131d]/97 shadow-2xl shadow-black/75 backdrop-blur-xl">
+          <header className="sticky top-0 z-10 flex items-center justify-between border-b border-white/10 bg-[#07131d]/98 px-3 py-2.5">
             <div className="flex items-center gap-2">
               <span className="grid h-8 w-8 place-items-center rounded-xl bg-cyan-400/10 text-cyan-200"><RadioTower className="h-4 w-4" /></span>
               <div>
@@ -173,6 +187,7 @@ export const OperatorRadioLauncher: React.FC = () => {
           </div>
         </section>
       )}
-    </div>
+    </div>,
+    portalTarget,
   );
 };
