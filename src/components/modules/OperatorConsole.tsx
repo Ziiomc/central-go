@@ -8,7 +8,7 @@ import { LiveMap } from '../map/LiveMap';
 
 const ACTIVE_STATUSES: TripStatus[] = ['pending', 'assigned', 'en_route', 'arrived', 'in_progress'];
 const DRIVER_BUSY_STATUSES: TripStatus[] = ['assigned', 'en_route', 'arrived', 'in_progress'];
-const PANEL_KEY = 'centralgo:operator-panel-widths:v1';
+const PANEL_KEY = 'centralgo:operator-panel-widths:v2';
 const MAP_PANEL_VIEW_KEY = 'centralgo:operator-map-panel-view:v1';
 const DRIVER_MIME = 'application/x-centralgo-driver';
 
@@ -34,23 +34,27 @@ const normalizeDriverSearch = (value: string) => value
   .toLowerCase()
   .trim();
 
-const driverSearchLabel = (driver: Driver) => `Móvil ${driver.unitNumber} · ${driver.name}`;
-
 const resolveDriverSearch = (value: string, drivers: Driver[]) => {
   const term = normalizeDriverSearch(value);
   if (!term) return '';
 
   const exact = drivers.find((driver) => [
-    driverSearchLabel(driver),
     driver.unitNumber,
     `Móvil ${driver.unitNumber}`,
     `Movil ${driver.unitNumber}`,
-    driver.name,
   ].some((candidate) => normalizeDriverSearch(candidate) === term));
   if (exact) return exact.id;
+  return '';
+};
 
-  const matches = drivers.filter((driver) => normalizeDriverSearch(`${driver.unitNumber} ${driver.name}`).includes(term));
-  return matches.length === 1 ? matches[0].id : '';
+const tripWaitMinutes = (createdAt: string, now: number) => Math.max(0, Math.floor((now - new Date(createdAt).getTime()) / 60000));
+
+const tripEntryTone = (trip: Trip, now: number) => {
+  if (trip.status !== 'pending') return 'border-zinc-700 bg-zinc-900 text-zinc-300';
+  const minutes = tripWaitMinutes(trip.createdAt, now);
+  if (minutes >= 10) return 'border-rose-400/40 bg-rose-500/15 text-rose-200';
+  if (minutes >= 5) return 'border-amber-400/40 bg-amber-500/15 text-amber-200';
+  return 'border-emerald-400/35 bg-emerald-500/[0.12] text-emerald-200';
 };
 
 const nextTripAction = (status: TripStatus): { status: TripStatus; label: string } | null => {
@@ -64,11 +68,11 @@ const readPanelWidths = () => {
   try {
     const parsed = JSON.parse(window.localStorage.getItem(PANEL_KEY) || '{}') as { left?: number; map?: number };
     return {
-      left: Math.min(420, Math.max(190, Number(parsed.left) || 240)),
-      map: Math.min(600, Math.max(280, Number(parsed.map) || 365)),
+      left: Math.min(300, Math.max(190, Number(parsed.left) || 210)),
+      map: Math.min(620, Math.max(380, Number(parsed.map) || 440)),
     };
   } catch {
-    return { left: 240, map: 365 };
+    return { left: 210, map: 440 };
   }
 };
 
@@ -343,11 +347,11 @@ export const OperatorConsole: React.FC = () => {
     const onMove = (moveEvent: PointerEvent) => {
       const delta = moveEvent.clientX - startX;
       if (side === 'left') {
-        const maxLeft = Math.min(420, containerWidth - startMap - minimumCenter - 20);
+        const maxLeft = Math.min(300, containerWidth - startMap - minimumCenter - 20);
         setLeftWidth(Math.max(190, Math.min(maxLeft, startLeft + delta)));
       } else {
-        const maxMap = Math.min(600, containerWidth - startLeft - minimumCenter - 20);
-        setMapWidth(Math.max(280, Math.min(maxMap, startMap - delta)));
+        const maxMap = Math.min(620, containerWidth - startLeft - minimumCenter - 20);
+        setMapWidth(Math.max(380, Math.min(maxMap, startMap - delta)));
       }
     };
 
@@ -374,7 +378,7 @@ export const OperatorConsole: React.FC = () => {
       <style>{`
         .cg-panel-resizer{display:none}
         @media (min-width:1280px){
-          .cg-operator-grid{grid-template-columns:var(--cg-left-panel) 10px minmax(390px,1fr) 10px var(--cg-map-panel)!important;gap:0!important}
+          .cg-operator-grid{grid-template-columns:var(--cg-left-panel) 10px minmax(390px,440px) 10px minmax(var(--cg-map-panel),1fr)!important;gap:0!important}
           .cg-panel-resizer{display:flex}
           .cg-map-panel{grid-column:auto!important}
         }
@@ -413,7 +417,7 @@ export const OperatorConsole: React.FC = () => {
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">
                 <h2 className="text-sm font-black text-white">Móviles disponibles</h2>
-                <p className="mt-0.5 truncate text-[10px] text-zinc-500">Orden de fila persistente · arrastra o usa Asignar</p>
+                <p className="mt-0.5 truncate text-[10px] text-zinc-500">Orden de fila · arrastra para asignar</p>
               </div>
               <div className="flex shrink-0 items-center gap-1.5">
                 <button
@@ -559,14 +563,12 @@ export const OperatorConsole: React.FC = () => {
                   className={`flex w-full cursor-grab items-center gap-2.5 px-3 py-2.5 text-left transition active:cursor-grabbing ${dragging ? 'opacity-45' : ''} ${focused ? 'bg-emerald-500/[0.10]' : 'hover:bg-zinc-900/70'}`}
                   title="Puedes arrastrar este móvil sobre una carrera pendiente"
                 >
-                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-emerald-500/10 text-sm font-black text-emerald-300">{driver.unitNumber}</span>
+                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-emerald-400/25 bg-emerald-500/10 text-base font-black text-emerald-300" title={`Posición ${index + 1} en la fila`}>{index + 1}</span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-xs font-black text-white">{driver.name}</span>
+                    <span className="block truncate text-sm font-black text-white">Móvil {driver.unitNumber}</span>
                     <span className="mt-0.5 block truncate text-[9px] text-zinc-500">{secondary}</span>
                   </span>
-                  <span className="rounded-md border border-amber-500/20 bg-amber-500/10 px-1.5 py-1 text-[8px] font-black text-amber-300" title="Posición actual en la fila">#{index + 1}</span>
                   <GripVertical className="h-4 w-4 shrink-0 text-zinc-700" />
-                  <span className="rounded-md border border-zinc-800 bg-zinc-950 px-1.5 py-1 text-[8px] font-black uppercase text-zinc-500">{driver.operationMode === 'traditional' ? 'Radio' : 'App'}</span>
                 </button>
               );
             })}
@@ -647,29 +649,31 @@ export const OperatorConsole: React.FC = () => {
                   >
                     {dropReady && <div className="mb-2 rounded-lg border border-emerald-400/25 bg-emerald-400/10 px-2 py-1.5 text-center text-[10px] font-black text-emerald-200">Suelta aquí para asignar el móvil</div>}
                     <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <strong className="text-sm text-white">{trip.code}</strong>
+                      <div className="flex items-center justify-between gap-2">
                         <span className={`rounded-md border px-2 py-0.5 text-[10px] font-black ${statusTone[trip.status]}`}>{TRIP_STATUS_LABELS[trip.status]}</span>
                         {trip.scheduledFor && <span className="rounded-md border border-sky-500/25 bg-sky-500/10 px-2 py-0.5 text-[9px] font-black text-sky-300">RESERVA · {formatTime(trip.scheduledFor)}</span>}
-                        <span className="text-[10px] font-bold text-zinc-600">{formatTime(trip.createdAt)}</span>
+                        <span className={`ml-auto rounded-lg border px-2 py-1 text-[10px] font-black tabular-nums ${tripEntryTone(trip, now)}`} title={`Ingresó a las ${formatTime(trip.createdAt)}`}>
+                          {formatTime(trip.createdAt)}{trip.status === 'pending' ? ` · ${tripWaitMinutes(trip.createdAt, now)} min` : ''}
+                        </span>
                       </div>
-                      <p className="mt-2 flex min-w-0 items-start gap-1.5 text-xs text-zinc-300">
-                        <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-300" />
-                        <span className="min-w-0"><strong>{trip.origin.address}</strong><span className="mx-1.5 text-zinc-600">→</span>{trip.destination.address}</span>
+                      <p className="mt-2.5 flex min-w-0 items-start gap-1.5 text-sm text-white" title={trip.origin.address}>
+                        <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
+                        <strong className="min-w-0 truncate">{trip.origin.address}</strong>
+                      </p>
+                      <p className="mt-1 flex min-w-0 items-start gap-1.5 pl-0.5 text-[11px] text-zinc-500" title={trip.destination.address}>
+                        <Navigation className="mt-0.5 h-3.5 w-3.5 shrink-0 text-sky-400" />
+                        <span className="min-w-0 truncate">{trip.destination.address}</span>
                       </p>
                       <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
-                        <p className="flex items-center gap-1.5 text-xs text-zinc-500"><UserRound className="h-3.5 w-3.5" />{trip.clientName} · {trip.clientPhone}</p>
-                        {trip.driverUnitNumber && <p className="flex items-center gap-1.5 text-xs font-black text-blue-300"><Car className="h-3.5 w-3.5" />Móvil {trip.driverUnitNumber}{trip.driverName ? ` · ${trip.driverName}` : ''}</p>}
+                        {trip.driverUnitNumber && <p className="flex items-center gap-1.5 text-xs font-black text-blue-300"><Car className="h-3.5 w-3.5" />Móvil {trip.driverUnitNumber}</p>}
                       </div>
                     </div>
 
                     <div className="mt-3 flex max-w-full flex-wrap items-center gap-2 sm:gap-1.5" onClick={(event) => event.stopPropagation()}>
                       {trip.status === 'pending' && (
                         <>
-                          <div className="relative min-w-[180px] max-w-full flex-1">
-                            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-500" />
+                          <div className="relative w-[116px] max-w-full shrink-0">
                             <input
-                              list={`driver-options-${trip.id}`}
                               value={driverQuery[trip.id] ?? ''}
                               onChange={(event) => {
                                 const value = event.target.value;
@@ -677,19 +681,19 @@ export const OperatorConsole: React.FC = () => {
                                 setDriverQuery((current) => ({ ...current, [trip.id]: value }));
                                 setDriverChoice((current) => ({ ...current, [trip.id]: driverId }));
                               }}
-                              onBlur={() => {
-                                const driverId = driverChoice[trip.id];
-                                const driver = availableDrivers.find((candidate) => candidate.id === driverId);
-                                if (driver) setDriverQuery((current) => ({ ...current, [trip.id]: driverSearchLabel(driver) }));
+                              onKeyDown={(event) => {
+                                if (event.key !== 'Enter' || isBusy) return;
+                                const driverId = resolveDriverSearch(event.currentTarget.value, availableDrivers);
+                                if (!driverId) return;
+                                event.preventDefault();
+                                assignDriverToTrip(trip, driverId);
                               }}
-                              placeholder="Escribe móvil o nombre"
+                              placeholder="N° móvil"
+                              inputMode="numeric"
                               autoComplete="off"
-                              className="h-11 w-full rounded-lg border border-zinc-700 bg-zinc-950 pl-8 pr-2 text-xs font-bold text-zinc-200 outline-none transition placeholder:text-zinc-600 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 sm:h-9"
-                              aria-label={`Buscar móvil para ${trip.code}`}
+                              className="h-11 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 text-center text-sm font-black text-zinc-100 outline-none transition placeholder:text-zinc-600 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 sm:h-9"
+                              aria-label={`Número de móvil para asignar la carrera de ${trip.origin.address}`}
                             />
-                            <datalist id={`driver-options-${trip.id}`}>
-                              {availableDrivers.map((driver) => <option key={driver.id} value={driverSearchLabel(driver)} />)}
-                            </datalist>
                           </div>
                           <button type="button" disabled={!driverChoice[trip.id] || isBusy} onClick={() => { const id = driverChoice[trip.id]; if (id) assignDriverToTrip(trip, id); }} className="h-11 touch-manipulation rounded-lg bg-blue-600 px-3 text-xs font-black text-white disabled:opacity-40 sm:h-9">Asignar</button>
                           <button type="button" disabled={!availableDrivers.length || isBusy} onClick={() => handleAutoAssign(trip)} className="flex h-11 touch-manipulation items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-900 px-2.5 text-xs font-black text-zinc-300 disabled:opacity-40 sm:h-9" title="Asignar automáticamente al móvil más cercano"><Wand2 className="h-3.5 w-3.5" />Auto</button>
