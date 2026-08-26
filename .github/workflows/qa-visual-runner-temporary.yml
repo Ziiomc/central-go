@@ -1,0 +1,72 @@
+name: QA visual runner Central GO
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  visual-e2e-runner:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Descargar código
+        uses: actions/checkout@v4
+
+      - name: Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Instalar navegador QA
+        run: |
+          npm ci
+          npm install --no-save @playwright/test@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Preparar guion QA sin imprimir credenciales
+        shell: python
+        run: |
+          from pathlib import Path
+
+          source = Path('.github/workflows/qa-visual-temporary.yml').read_text()
+          start_marker = "          cat > qa-visual.spec.cjs <<'TEST'\n"
+          end_marker = "\n          TEST\n"
+          start = source.index(start_marker) + len(start_marker)
+          end = source.index(end_marker, start)
+          spec = source[start:end]
+
+          # Cada viewport debe seguir corriendo aunque falle otro.
+          spec = spec.replace("test.describe.configure({ mode: 'serial' });", "// QA independiente por escenario")
+
+          # El menú lateral está cerrado por defecto: una persona real abre el
+          # hamburguesa antes de navegar a Operadores.
+          sidebar_action = "            await page.getByLabel('Abrir menú principal').click();\n"
+          if sidebar_action not in spec:
+              old = "            await page.getByLabel('Cerrar', { exact: true }).click();\n\n            const operatorsNav = page.getByText('Operadores', { exact: true }).first();"
+              new = "            await page.getByLabel('Cerrar', { exact: true }).click();\n\n            await page.getByLabel('Abrir menú principal').click();\n            const operatorsNav = page.getByText('Operadores', { exact: true }).first();"
+              if old not in spec:
+                  raise SystemExit('No se encontró la navegación esperada en el guion QA.')
+              spec = spec.replace(old, new, 1)
+
+          Path('qa-visual.spec.cjs').write_text(spec)
+
+      - name: Ejecutar Chromium
+        run: npx playwright test qa-visual.spec.cjs --workers=1 --reporter=line
+
+      - name: Guardar evidencia visual
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: central-go-visual-qa-runner
+          path: |
+            test-results/**/*.png
+            test-results/**/*.webm
+            test-results/**/*.md
+            playwright-report/**
+          if-no-files-found: warn
+          retention-days: 3
