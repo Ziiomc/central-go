@@ -27,6 +27,31 @@ const formatTime = (value: string) => new Date(value).toLocaleTimeString('es-CL'
   hour12: false,
 });
 
+const normalizeDriverSearch = (value: string) => value
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .toLowerCase()
+  .trim();
+
+const driverSearchLabel = (driver: Driver) => `Móvil ${driver.unitNumber} · ${driver.name}`;
+
+const resolveDriverSearch = (value: string, drivers: Driver[]) => {
+  const term = normalizeDriverSearch(value);
+  if (!term) return '';
+
+  const exact = drivers.find((driver) => [
+    driverSearchLabel(driver),
+    driver.unitNumber,
+    `Móvil ${driver.unitNumber}`,
+    `Movil ${driver.unitNumber}`,
+    driver.name,
+  ].some((candidate) => normalizeDriverSearch(candidate) === term));
+  if (exact) return exact.id;
+
+  const matches = drivers.filter((driver) => normalizeDriverSearch(`${driver.unitNumber} ${driver.name}`).includes(term));
+  return matches.length === 1 ? matches[0].id : '';
+};
+
 const nextTripAction = (status: TripStatus): { status: TripStatus; label: string } | null => {
   if (status === 'assigned') return { status: 'en_route', label: 'En camino' };
   if (status === 'en_route') return { status: 'arrived', label: 'Llegó' };
@@ -67,6 +92,7 @@ export const OperatorConsole: React.FC = () => {
   const [selectedTripId, setSelectedTripId] = useState<string | null>(null);
   const [focusDriverId, setFocusDriverId] = useState<string | null>(null);
   const [driverChoice, setDriverChoice] = useState<Record<string, string>>({});
+  const [driverQuery, setDriverQuery] = useState<Record<string, string>>({});
   const busyTripIdsRef = useRef<Set<string>>(new Set());
   const [busyTripIds, setBusyTripIds] = useState<Set<string>>(() => new Set());
   const [dragDriverId, setDragDriverId] = useState<string | null>(null);
@@ -233,6 +259,7 @@ export const OperatorConsole: React.FC = () => {
       setSelectedTripId(trip.id);
       setFocusDriverId(driverId);
       setDriverChoice((current) => ({ ...current, [trip.id]: '' }));
+      setDriverQuery((current) => ({ ...current, [trip.id]: '' }));
       setDragOverTripId(null);
     });
   };
@@ -554,15 +581,31 @@ export const OperatorConsole: React.FC = () => {
                     <div className="mt-3 flex max-w-full flex-wrap items-center gap-2 sm:gap-1.5" onClick={(event) => event.stopPropagation()}>
                       {trip.status === 'pending' && (
                         <>
-                          <select
-                            value={driverChoice[trip.id] ?? ''}
-                            onChange={(event) => setDriverChoice((current) => ({ ...current, [trip.id]: event.target.value }))}
-                            className="h-11 min-w-[150px] max-w-full flex-1 rounded-lg border border-zinc-700 bg-zinc-950 px-2 text-xs font-bold text-zinc-200 outline-none focus:border-blue-500 sm:h-9"
-                            aria-label={`Móvil para ${trip.code}`}
-                          >
-                            <option value="">Elegir móvil</option>
-                            {availableDrivers.map((driver) => <option key={driver.id} value={driver.id}>Móvil {driver.unitNumber} · {driver.name}</option>)}
-                          </select>
+                          <div className="relative min-w-[180px] max-w-full flex-1">
+                            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-500" />
+                            <input
+                              list={`driver-options-${trip.id}`}
+                              value={driverQuery[trip.id] ?? ''}
+                              onChange={(event) => {
+                                const value = event.target.value;
+                                const driverId = resolveDriverSearch(value, availableDrivers);
+                                setDriverQuery((current) => ({ ...current, [trip.id]: value }));
+                                setDriverChoice((current) => ({ ...current, [trip.id]: driverId }));
+                              }}
+                              onBlur={() => {
+                                const driverId = driverChoice[trip.id];
+                                const driver = availableDrivers.find((candidate) => candidate.id === driverId);
+                                if (driver) setDriverQuery((current) => ({ ...current, [trip.id]: driverSearchLabel(driver) }));
+                              }}
+                              placeholder="Escribe móvil o nombre"
+                              autoComplete="off"
+                              className="h-11 w-full rounded-lg border border-zinc-700 bg-zinc-950 pl-8 pr-2 text-xs font-bold text-zinc-200 outline-none transition placeholder:text-zinc-600 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 sm:h-9"
+                              aria-label={`Buscar móvil para ${trip.code}`}
+                            />
+                            <datalist id={`driver-options-${trip.id}`}>
+                              {availableDrivers.map((driver) => <option key={driver.id} value={driverSearchLabel(driver)} />)}
+                            </datalist>
+                          </div>
                           <button type="button" disabled={!driverChoice[trip.id] || isBusy} onClick={() => { const id = driverChoice[trip.id]; if (id) assignDriverToTrip(trip, id); }} className="h-11 touch-manipulation rounded-lg bg-blue-600 px-3 text-xs font-black text-white disabled:opacity-40 sm:h-9">Asignar</button>
                           <button type="button" disabled={!availableDrivers.length || isBusy} onClick={() => handleAutoAssign(trip)} className="flex h-11 touch-manipulation items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-900 px-2.5 text-xs font-black text-zinc-300 disabled:opacity-40 sm:h-9" title="Asignar automáticamente al móvil más cercano"><Wand2 className="h-3.5 w-3.5" />Auto</button>
                         </>
