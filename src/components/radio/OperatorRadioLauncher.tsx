@@ -1,10 +1,8 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { RealtimeChannel } from '@supabase/supabase-js';
-import { CheckCircle2, Loader2, Mic, RadioTower, Send, Users, X } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { playVHFRadioChirp, speakVHFDispatch } from '../../lib/audioService';
-import { sendDriverRadioBroadcast, sendDriverRadioMessage } from '../../lib/driverOperations';
+import { rememberAddressHistory, searchAddressHistory, seedAddressHistoryFromTrips } from '../../lib/addressHistoryCache';
 import { createPrivateRadioChannel, sendRadioVoiceFrame } from '../../lib/realtimeRadio';
 import { requireSupabase } from '../../lib/supabase';
 
@@ -36,33 +34,35 @@ const recordVoiceSegment = (stream: MediaStream, mimeType: string): Promise<Blob
   }
 });
 
+const isAddressInput = (target: EventTarget | null): target is HTMLInputElement => {
+  if (!(target instanceof HTMLInputElement)) return false;
+  return target.placeholder === 'Dirección de retiro'
+    || target.placeholder === 'Opcional · si queda vacío se usa taxímetro';
+};
+
+const setReactInputValue = (input: HTMLInputElement, value: string) => {
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+  setter?.call(input, value);
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+};
+
 export const OperatorRadioLauncher: React.FC = () => {
-  const { currentRole, currentCompany, drivers, addAuditLog, soundMuted } = useApp();
-  const [open, setOpen] = useState(false);
-  const [recipient, setRecipient] = useState('all');
-  const [message, setMessage] = useState('');
-  const [sending, setSending] = useState(false);
-  const [voiceConnected, setVoiceConnected] = useState(false);
-  const [voiceTransmitting, setVoiceTransmitting] = useState(false);
-  const [status, setStatus] = useState('');
-  const [error, setError] = useState('');
+  const { currentRole, currentCompany, trips, addAuditLog } = useApp();
   const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
+  const [voiceTransmitting, setVoiceTransmitting] = useState(false);
   const radioChannelRef = useRef<RealtimeChannel | null>(null);
   const microphoneRef = useRef<MediaStream | null>(null);
   const pttHeldRef = useRef(false);
   const sequenceRef = useRef(0);
 
   const allowed = ['operator', 'company_admin', 'super_admin'].includes(currentRole) && currentCompany.id !== 'network';
-  const eligibleDrivers = useMemo(() => drivers
-    .filter((driver) => Boolean(driver.userId) && driver.status !== 'offline')
-    .sort((a, b) => a.unitNumber.localeCompare(b.unitNumber, 'es', { numeric: true })), [drivers]);
 
   useEffect(() => {
     if (!allowed) {
       setPortalTarget(null);
       return;
     }
-    const locate = () => setPortalTarget(document.querySelector('.cg-map-panel .cg-live-map') as HTMLElement | null);
+    const locate = () => setPortalTarget(document.querySelector('.cg-map-panel > div:first-child') as HTMLElement | null);
     locate();
     const observer = new MutationObserver(locate);
     observer.observe(document.body, { childList: true, subtree: true });
@@ -71,13 +71,9 @@ export const OperatorRadioLauncher: React.FC = () => {
 
   useEffect(() => {
     if (!allowed || !currentCompany.id || currentCompany.id === 'network') return;
-    setVoiceConnected(false);
     const channel = createPrivateRadioChannel(currentCompany.id);
     radioChannelRef.current = channel;
-    channel.subscribe((channelStatus) => {
-      setVoiceConnected(channelStatus === 'SUBSCRIBED');
-      if (channelStatus === 'CHANNEL_ERROR') setError('La radio de voz no pudo abrir el canal seguro.');
-    });
+    channel.subscribe();
     return () => {
       pttHeldRef.current = false;
       microphoneRef.current?.getTracks().forEach((track) => track.stop());
@@ -88,21 +84,117 @@ export const OperatorRadioLauncher: React.FC = () => {
   }, [allowed, currentCompany.id]);
 
   useEffect(() => {
-    const close = () => { pttHeldRef.current = false; setOpen(false); };
-    const handleHardwareBack = (event: Event) => {
-      if (!open) return;
-      const detail = (event as CustomEvent<{ handled?: boolean }>).detail;
-      pttHeldRef.current = false;
-      setOpen(false);
-      if (detail) detail.handled = true;
+    if (!allowed || !currentCompany.id || currentCompany.id === 'network') return;
+    seedAddressHistoryFromTrips(currentCompany.id, trips);
+  }, [allowed, currentCompany.id, trips]);
+
+  useEffect(() => {
+    if (!allowed) return;
+    const styleId = 'centralgo-operator-layer-fix';
+    let style = document.getElementById(styleId) as HTMLStyleElement | null;
+    if (!style) {
+      style = document.createElement('style');
+      style.id = styleId;
+      style.textContent = '.cg-operator-grid>aside:first-child>div:first-child{position:relative;z-index:1600!important}.cg-operator-grid>aside:first-child>div:nth-child(2){position:relative;z-index:1}';
+      document.head.appendChild(style);
+    }
+    return () => style?.remove();
+  }, [allowed]);
+
+  useEffect(() => {
+    if (!allowed || !currentCompany.id || currentCompany.id === 'network') return;
+    const companyId = currentCompany.id;
+
+    const removePanels = (except?: HTMLElement | null) => {
+      document.querySelectorAll<HTMLElement>('[data-cg-address-cache-suggestions="1"]').forEach((panel) => {
+        if (panel !== except) panel.remove();
+      });
     };
-    window.addEventListener('centralgo:escape', close);
-    window.addEventListener('centralgo:hardware-back', handleHardwareBack);
+
+    const renderSuggestions = (input: HTMLInputElement) => {
+      const parent = input.parentElement;
+      if (!parent) return;
+      const existing = parent.querySelector<HTMLElement>('[data-cg-address-cache-suggestions="1"]');
+      const matches = searchAddressHistory(companyId, input.value, 6)
+        .filter((item) => item.address.trim().toLocaleLowerCase('es-CL') !== input.value.trim().toLocaleLowerCase('es-CL'));
+
+      if (!matches.length) {
+        existing?.remove();
+        return;
+      }
+
+      const panel = existing ?? document.createElement('div');
+      panel.dataset.cgAddressCacheSuggestions = '1';
+      panel.setAttribute('role', 'listbox');
+      Object.assign(panel.style, {
+        marginTop: '6px',
+        overflow: 'hidden',
+        border: '1px solid rgba(59,130,246,.22)',
+        borderRadius: '12px',
+        background: '#09090b',
+        boxShadow: '0 16px 38px rgba(0,0,0,.32)',
+      });
+      panel.replaceChildren();
+
+      matches.forEach((item) => {
+        const option = document.createElement('div');
+        option.setAttribute('role', 'option');
+        option.tabIndex = -1;
+        Object.assign(option.style, {
+          cursor: 'pointer',
+          padding: '9px 11px',
+          borderBottom: '1px solid rgba(63,63,70,.55)',
+          color: '#e4e4e7',
+          fontSize: '11px',
+          fontWeight: '700',
+          lineHeight: '1.3',
+        });
+        option.textContent = item.address;
+        option.title = `${item.uses} uso${item.uses === 1 ? '' : 's'} anterior${item.uses === 1 ? '' : 'es'}`;
+        option.addEventListener('mouseenter', () => { option.style.background = 'rgba(59,130,246,.10)'; });
+        option.addEventListener('mouseleave', () => { option.style.background = 'transparent'; });
+        option.addEventListener('pointerdown', (event) => {
+          event.preventDefault();
+          setReactInputValue(input, item.address);
+          rememberAddressHistory(companyId, [item.address]);
+          panel.remove();
+          input.focus();
+        });
+        panel.appendChild(option);
+      });
+
+      if (!existing) parent.appendChild(panel);
+      removePanels(panel);
+    };
+
+    const onInput = (event: Event) => { if (isAddressInput(event.target)) renderSuggestions(event.target); };
+    const onFocus = (event: FocusEvent) => { if (isAddressInput(event.target)) renderSuggestions(event.target); };
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest('[data-cg-address-cache-suggestions="1"]')) return;
+      if (target instanceof HTMLInputElement && isAddressInput(target)) return;
+      removePanels();
+    };
+    const onSubmit = (event: SubmitEvent) => {
+      const form = event.target as HTMLFormElement | null;
+      if (!form) return;
+      const origin = form.querySelector<HTMLInputElement>('input[placeholder="Dirección de retiro"]');
+      const destination = form.querySelector<HTMLInputElement>('input[placeholder="Opcional · si queda vacío se usa taxímetro"]');
+      rememberAddressHistory(companyId, [origin?.value ?? '', destination?.value ?? '']);
+    };
+
+    document.addEventListener('input', onInput);
+    document.addEventListener('focusin', onFocus);
+    document.addEventListener('pointerdown', onPointerDown, true);
+    document.addEventListener('submit', onSubmit, true);
     return () => {
-      window.removeEventListener('centralgo:escape', close);
-      window.removeEventListener('centralgo:hardware-back', handleHardwareBack);
+      document.removeEventListener('input', onInput);
+      document.removeEventListener('focusin', onFocus);
+      document.removeEventListener('pointerdown', onPointerDown, true);
+      document.removeEventListener('submit', onSubmit, true);
+      removePanels();
     };
-  }, [open]);
+  }, [allowed, currentCompany.id]);
 
   useEffect(() => {
     if (!voiceTransmitting) return;
@@ -117,75 +209,28 @@ export const OperatorRadioLauncher: React.FC = () => {
     };
   }, [voiceTransmitting]);
 
-  if (!allowed || !portalTarget) return null;
-
-  const transmitText = async () => {
-    const clean = message.trim();
-    if (!clean || sending) return;
-    setSending(true);
-    setError('');
-    setStatus('');
-    try {
-      let delivered = 1;
-      let destination = '';
-      if (recipient === 'all') {
-        delivered = await sendDriverRadioBroadcast(currentCompany.id, eligibleDrivers, clean);
-        destination = `todos los móviles con app (${delivered})`;
-      } else {
-        const driver = eligibleDrivers.find((item) => item.id === recipient);
-        if (!driver) throw new Error('El móvil seleccionado ya no está disponible para radio digital.');
-        await sendDriverRadioMessage(currentCompany.id, driver, clean);
-        destination = `Móvil ${driver.unitNumber}`;
-      }
-      playVHFRadioChirp();
-      if (!soundMuted) void speakVHFDispatch(clean);
-      addAuditLog('TRANSMISION_VHF', `Radio digital enviada a ${destination}: "${clean}"`);
-      setStatus(recipient === 'all' ? `Mensaje enviado a ${delivered} móvil${delivered === 1 ? '' : 'es'}.` : 'Mensaje enviado.');
-      setMessage('');
-      window.setTimeout(() => setStatus(''), 3200);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'No fue posible enviar el mensaje de radio.');
-    } finally {
-      setSending(false);
-    }
-  };
-
   const stopPtt = () => { pttHeldRef.current = false; };
 
   const startPtt = async (event: React.PointerEvent<HTMLButtonElement>) => {
     event.preventDefault();
-    if (voiceTransmitting || !voiceConnected) return;
-    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
-      setError('Este navegador no permite usar el micrófono como radio en tiempo real.');
-      return;
-    }
-    const selectedDriver = recipient === 'all' ? null : eligibleDrivers.find((item) => item.id === recipient);
-    if (recipient !== 'all' && !selectedDriver) {
-      setError('El móvil seleccionado ya no está conectado.');
-      return;
-    }
-    const channel = radioChannelRef.current;
-    if (!channel) {
-      setError('La radio todavía está reconectando.');
-      return;
-    }
-
-    setError('');
-    setStatus('');
+    if (voiceTransmitting || !navigator.mediaDevices?.getUserMedia) return;
     pttHeldRef.current = true;
-    setVoiceTransmitting(true);
-    const streamId = crypto.randomUUID();
-    sequenceRef.current = 0;
-    const targetDriverId = selectedDriver?.id ?? null;
-    const destination = selectedDriver ? `Móvil ${selectedDriver.unitNumber}` : 'todos los móviles conectados';
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 },
       });
       microphoneRef.current = stream;
-      if (!pttHeldRef.current) return;
+
+      if (!pttHeldRef.current || typeof MediaRecorder === 'undefined') return;
+      const channel = radioChannelRef.current;
+      if (!channel) return;
+
+      setVoiceTransmitting(true);
+      const streamId = crypto.randomUUID();
+      sequenceRef.current = 0;
       const preferredMime = supportedVoiceMime();
+
       while (pttHeldRef.current) {
         const segment = await recordVoiceSegment(stream, preferredMime);
         if (!segment.size) continue;
@@ -194,14 +239,13 @@ export const OperatorRadioLauncher: React.FC = () => {
           sequence: sequenceRef.current++,
           sentAt: Date.now(),
           mimeType: segment.type || preferredMime || 'audio/webm',
-          targetDriverId,
+          targetDriverId: null,
         }, await segment.arrayBuffer());
       }
-      addAuditLog('RADIO_VOZ_PTT', `Transmitió audio en vivo a ${destination}.`);
-      setStatus(`Transmisión finalizada · ${destination}.`);
-      window.setTimeout(() => setStatus(''), 2600);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'No fue posible transmitir audio en vivo.');
+
+      addAuditLog('RADIO_VOZ_PTT', 'Transmitió audio PTT a los móviles conectados.');
+    } catch (error) {
+      console.warn('[Central GO] PTT no disponible:', error);
     } finally {
       pttHeldRef.current = false;
       microphoneRef.current?.getTracks().forEach((track) => track.stop());
@@ -210,57 +254,21 @@ export const OperatorRadioLauncher: React.FC = () => {
     }
   };
 
+  if (!allowed || !portalTarget) return null;
+
   return createPortal(
-    <div className="absolute bottom-3 right-3 z-[1200] flex max-w-[calc(100%-1.5rem)] flex-col items-end gap-2">
-      {open && <section className="w-[min(400px,calc(100vw-2rem))] max-h-[355px] overflow-y-auto rounded-2xl border border-cyan-400/30 bg-[#07131d]/97 shadow-2xl shadow-black/75 backdrop-blur-xl">
-        <header className="sticky top-0 z-10 flex items-center justify-between border-b border-white/10 bg-[#07131d]/98 px-3 py-2.5">
-          <div className="flex items-center gap-2">
-            <span className="grid h-8 w-8 place-items-center rounded-xl bg-cyan-400/10 text-cyan-200"><RadioTower className="h-4 w-4" /></span>
-            <div><p className="text-[9px] font-black uppercase tracking-[.16em] text-cyan-300">Central → móviles</p><p className="text-xs font-black text-white">Radio en tiempo real</p></div>
-          </div>
-          <button type="button" onClick={() => { stopPtt(); setOpen(false); }} className="grid h-8 w-8 place-items-center rounded-lg text-zinc-500 hover:bg-white/10 hover:text-white" aria-label="Cerrar radio"><X className="h-4 w-4" /></button>
-        </header>
-
-        <div className="space-y-3 p-3">
-          <label className="block space-y-1.5">
-            <span className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-[.14em] text-zinc-400"><Users className="h-3.5 w-3.5" />Destinatario</span>
-            <select value={recipient} disabled={voiceTransmitting} onChange={(event) => setRecipient(event.target.value)} className="h-9 w-full rounded-xl border border-white/10 bg-black/25 px-2.5 text-[10px] font-bold text-white outline-none focus:border-cyan-300/40 disabled:opacity-50">
-              <option value="all">Todos los móviles con app ({eligibleDrivers.length})</option>
-              {eligibleDrivers.map((driver) => <option key={driver.id} value={driver.id}>Móvil {driver.unitNumber} · {driver.name}</option>)}
-            </select>
-          </label>
-
-          <div className="rounded-2xl border border-rose-400/20 bg-rose-400/[.06] p-3 text-center">
-            <p className="text-[9px] font-black uppercase tracking-[.15em] text-rose-200">Push to talk · voz directa</p>
-            <button
-              type="button"
-              onPointerDown={(event) => void startPtt(event)}
-              onPointerUp={stopPtt}
-              onPointerCancel={stopPtt}
-              onContextMenu={(event) => event.preventDefault()}
-              disabled={!voiceConnected && !voiceTransmitting}
-              className={`mx-auto mt-2 flex h-20 w-20 touch-none select-none items-center justify-center rounded-full border-4 shadow-xl transition disabled:opacity-40 ${voiceTransmitting ? 'scale-110 border-rose-200 bg-rose-500 text-white shadow-rose-900/40' : 'border-rose-400/40 bg-rose-500/15 text-rose-200 active:scale-110 active:bg-rose-500 active:text-white'}`}
-              aria-label="Mantén presionado para hablar"
-            >
-              <Mic className={`h-8 w-8 ${voiceTransmitting ? 'animate-pulse' : ''}`} />
-            </button>
-            <p className="mt-2 text-[10px] font-black text-white">{voiceTransmitting ? 'HABLANDO · suelta para cortar' : voiceConnected ? 'Mantén presionado para hablar' : 'Conectando radio segura…'}</p>
-            <p className="mt-1 text-[9px] text-zinc-500">El audio llega a los choferes como una radio, sin convertirlo en texto.</p>
-          </div>
-
-          <label className="block space-y-1.5"><span className="text-[9px] font-black uppercase tracking-[.14em] text-zinc-400">Mensaje escrito opcional</span><textarea value={message} onChange={(event) => setMessage(event.target.value)} rows={2} placeholder="También puedes enviar un mensaje escrito…" className="w-full resize-none rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-[11px] leading-relaxed text-white outline-none placeholder:text-zinc-600 focus:border-cyan-300/40" /></label>
-
-          {error && <div className="rounded-xl border border-rose-400/20 bg-rose-400/10 px-3 py-2 text-[10px] font-semibold text-rose-100">{error}</div>}
-          {status && <div className="flex items-center gap-2 rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-3 py-2 text-[10px] font-bold text-emerald-100"><CheckCircle2 className="h-4 w-4" />{status}</div>}
-
-          <button type="button" onClick={() => void transmitText()} disabled={sending || !message.trim() || (recipient === 'all' && eligibleDrivers.length === 0)} className="flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-cyan-300/25 bg-cyan-300/10 text-[10px] font-black text-cyan-100 transition hover:bg-cyan-300/15 disabled:opacity-40">
-            {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}{sending ? 'Enviando…' : recipient === 'all' ? 'Enviar escrito a todos' : 'Enviar mensaje escrito'}
-          </button>
-        </div>
-      </section>}
-
-      <button type="button" onClick={() => setOpen((value) => !value)} className={`flex h-11 items-center gap-2 rounded-xl border px-3 text-[10px] font-black shadow-xl shadow-black/50 backdrop-blur-xl transition active:scale-[.98] ${open ? 'border-cyan-300/50 bg-cyan-300 text-slate-950' : 'border-cyan-200/35 bg-[#07131d]/95 text-cyan-100 hover:bg-cyan-400/15'}`} aria-expanded={open} title="Abrir radio de la central"><RadioTower className="h-4 w-4" />Radio</button>
-    </div>,
+    <button
+      type="button"
+      onPointerDown={(event) => void startPtt(event)}
+      onPointerUp={stopPtt}
+      onPointerCancel={stopPtt}
+      onContextMenu={(event) => event.preventDefault()}
+      className={`h-9 min-w-12 touch-none select-none rounded-xl border px-3 text-[10px] font-black tracking-[.08em] text-white shadow-lg transition active:scale-95 ${voiceTransmitting ? 'border-red-200 bg-red-500 shadow-red-950/50' : 'border-red-400/45 bg-red-600 hover:bg-red-500'}`}
+      title="Mantén presionado para hablar. La primera vez el navegador pedirá permiso de micrófono."
+      aria-label="PTT: mantén presionado para hablar"
+    >
+      PTT
+    </button>,
     portalTarget,
   );
 };
