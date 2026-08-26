@@ -277,8 +277,8 @@ const assignDriverToTrip = (trip: Trip, driverId: string) => {
       `}</style>
 
       <section className="rounded-2xl border border-zinc-800 bg-[#0d0d0f] p-3 shadow-xl shadow-black/20">
-        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-          <div className="min-w-0 sm:flex-1">
+        <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center">
+          <div className="min-w-0 lg:flex-1">
             <p className="text-[10px] font-black uppercase tracking-[.18em] text-zinc-500">Central GO</p>
             <h1 className="text-xl font-black text-white">Despacho</h1>
           </div>
@@ -287,7 +287,7 @@ const assignDriverToTrip = (trip: Trip, driverId: string) => {
             <span className="rounded-lg border border-blue-500/25 bg-blue-500/10 px-2.5 py-1.5 text-blue-300">{activeCount} activas</span>
             <span className="rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-1.5 text-emerald-300">{availableDrivers.length} libres</span>
           </div>
-          <div className="relative w-full sm:min-w-[220px] sm:flex-[0_1_340px]">
+          <div className="relative w-full lg:min-w-[220px] lg:flex-[0_1_340px]">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
             <input
               value={search}
@@ -296,7 +296,7 @@ const assignDriverToTrip = (trip: Trip, driverId: string) => {
               className="h-10 w-full rounded-xl border border-zinc-800 bg-zinc-950 pl-9 pr-3 text-sm text-white outline-none transition focus:border-blue-500"
             />
           </div>
-          <button type="button" onClick={() => setNewTripModalOpen(true)} className="flex h-11 w-full touch-manipulation items-center justify-center gap-2 rounded-xl bg-amber-400 px-4 text-sm font-black text-zinc-950 sm:h-10 sm:w-auto">
+          <button type="button" onClick={() => setNewTripModalOpen(true)} className="flex h-11 w-full touch-manipulation items-center justify-center gap-2 rounded-xl bg-amber-400 px-4 text-sm font-black text-zinc-950 lg:h-10 lg:w-auto">
             <Plus className="h-4 w-4" strokeWidth={3} />
             Nueva carrera
           </button>
