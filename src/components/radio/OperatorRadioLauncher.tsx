@@ -1,274 +1,63 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { RealtimeChannel } from '@supabase/supabase-js';
+import { MessageSquareText, Send, X } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { rememberAddressHistory, searchAddressHistory, seedAddressHistoryFromTrips } from '../../lib/addressHistoryCache';
+import { sendDriverRadioBroadcast, sendDriverRadioMessage } from '../../lib/driverOperations';
 import { createPrivateRadioChannel, sendRadioVoiceFrame } from '../../lib/realtimeRadio';
 import { requireSupabase } from '../../lib/supabase';
 
 const VOICE_SEGMENT_MS = 720;
-const VOICE_MIME_TYPES = [
-  'audio/webm;codecs=opus',
-  'audio/mp4;codecs=mp4a.40.2',
-  'audio/mp4',
-  'audio/webm',
-];
+const VOICE_MIME_TYPES = ['audio/webm;codecs=opus','audio/mp4;codecs=mp4a.40.2','audio/mp4','audio/webm'];
+const supportedVoiceMime=()=>typeof MediaRecorder==='undefined'?'':VOICE_MIME_TYPES.find(type=>MediaRecorder.isTypeSupported(type))??'';
+const recordVoiceSegment=(stream:MediaStream,mimeType:string):Promise<Blob>=>new Promise((resolve,reject)=>{try{const options:MediaRecorderOptions=mimeType?{mimeType,audioBitsPerSecond:24000}:{audioBitsPerSecond:24000};const recorder=new MediaRecorder(stream,options);const parts:BlobPart[]=[];recorder.ondataavailable=event=>{if(event.data.size)parts.push(event.data);};recorder.onerror=()=>reject(new Error('El micrófono interrumpió la transmisión.'));recorder.onstop=()=>resolve(new Blob(parts,{type:recorder.mimeType||mimeType||'audio/webm'}));recorder.start();window.setTimeout(()=>{if(recorder.state!=='inactive')recorder.stop();},VOICE_SEGMENT_MS);}catch(error){reject(error);}});
+const isAddressInput=(target:EventTarget|null):target is HTMLInputElement=>target instanceof HTMLInputElement&&(target.placeholder==='Dirección de retiro'||target.placeholder==='Opcional · si queda vacío se usa taxímetro');
+const setReactInputValue=(input:HTMLInputElement,value:string)=>{const setter=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')?.set;setter?.call(input,value);input.dispatchEvent(new Event('input',{bubbles:true}));};
 
-const supportedVoiceMime = () => {
-  if (typeof MediaRecorder === 'undefined') return '';
-  return VOICE_MIME_TYPES.find((type) => MediaRecorder.isTypeSupported(type)) ?? '';
-};
+export const OperatorRadioLauncher:React.FC=()=>{
+ const{currentRole,currentCompany,trips,drivers,addAuditLog}=useApp();
+ const[portalTarget,setPortalTarget]=useState<HTMLElement|null>(null);
+ const[voiceTransmitting,setVoiceTransmitting]=useState(false);
+ const[messageOpen,setMessageOpen]=useState(false);
+ const[recipient,setRecipient]=useState('all');
+ const[message,setMessage]=useState('');
+ const[sending,setSending]=useState(false);
+ const[messageStatus,setMessageStatus]=useState('');
+ const[messageError,setMessageError]=useState('');
+ const radioChannelRef=useRef<RealtimeChannel|null>(null);
+ const microphoneRef=useRef<MediaStream|null>(null);
+ const pttHeldRef=useRef(false);
+ const sequenceRef=useRef(0);
+ const allowed=['operator','company_admin','super_admin'].includes(currentRole)&&currentCompany.id!=='network';
+ const eligibleDrivers=useMemo(()=>drivers.filter(driver=>Boolean(driver.userId)&&driver.status!=='offline').slice().sort((a,b)=>a.unitNumber.localeCompare(b.unitNumber,'es',{numeric:true})),[drivers]);
 
-const recordVoiceSegment = (stream: MediaStream, mimeType: string): Promise<Blob> => new Promise((resolve, reject) => {
-  try {
-    const options: MediaRecorderOptions = mimeType ? { mimeType, audioBitsPerSecond: 24000 } : { audioBitsPerSecond: 24000 };
-    const recorder = new MediaRecorder(stream, options);
-    const parts: BlobPart[] = [];
-    recorder.ondataavailable = (event) => { if (event.data.size) parts.push(event.data); };
-    recorder.onerror = () => reject(new Error('El micrófono interrumpió la transmisión.'));
-    recorder.onstop = () => resolve(new Blob(parts, { type: recorder.mimeType || mimeType || 'audio/webm' }));
-    recorder.start();
-    window.setTimeout(() => { if (recorder.state !== 'inactive') recorder.stop(); }, VOICE_SEGMENT_MS);
-  } catch (error) {
-    reject(error);
-  }
-});
+ useEffect(()=>{if(!allowed){setPortalTarget(null);return;}const locate=()=>setPortalTarget(document.querySelector('.cg-map-panel > div:first-child')as HTMLElement|null);locate();const observer=new MutationObserver(locate);observer.observe(document.body,{childList:true,subtree:true});return()=>observer.disconnect();},[allowed]);
+ useEffect(()=>{if(!allowed||!currentCompany.id||currentCompany.id==='network')return;const channel=createPrivateRadioChannel(currentCompany.id);radioChannelRef.current=channel;channel.subscribe();return()=>{pttHeldRef.current=false;microphoneRef.current?.getTracks().forEach(track=>track.stop());microphoneRef.current=null;if(radioChannelRef.current===channel)radioChannelRef.current=null;void requireSupabase().removeChannel(channel);};},[allowed,currentCompany.id]);
+ useEffect(()=>{if(!allowed||!currentCompany.id||currentCompany.id==='network')return;seedAddressHistoryFromTrips(currentCompany.id,trips);},[allowed,currentCompany.id,trips]);
 
-const isAddressInput = (target: EventTarget | null): target is HTMLInputElement => {
-  if (!(target instanceof HTMLInputElement)) return false;
-  return target.placeholder === 'Dirección de retiro'
-    || target.placeholder === 'Opcional · si queda vacío se usa taxímetro';
-};
+ useEffect(()=>{if(!allowed)return;const styleId='centralgo-operator-layer-fix';let style=document.getElementById(styleId)as HTMLStyleElement|null;if(!style){style=document.createElement('style');style.id=styleId;style.textContent=`
+.cg-operator-grid>aside:first-child>div:first-child{position:relative;z-index:1600!important}.cg-operator-grid>aside:first-child>div:nth-child(2){position:relative;z-index:1}
+.cg-map-panel .cg-live-map .absolute.top-3.inset-x-3{top:.45rem!important;left:.45rem!important;right:.45rem!important;gap:.3rem!important}.cg-map-panel .cg-live-map .absolute.top-3.inset-x-3>div:first-child{padding:3px!important;gap:2px!important;border-radius:9px!important}.cg-map-panel .cg-live-map .absolute.top-3.inset-x-3 button{padding:.25rem .45rem!important;font-size:9px!important;line-height:1.05!important;border-radius:7px!important}.cg-map-panel .cg-live-map .absolute.top-3.inset-x-3 button svg{width:12px!important;height:12px!important}
+.cg-map-panel .cg-live-map .absolute.bottom-4.left-4{bottom:.45rem!important;left:.45rem!important;gap:.45rem!important;padding:.3rem .55rem!important;border-radius:8px!important;font-size:9px!important}.cg-map-panel .cg-live-map .absolute.bottom-4.left-4 span{gap:.2rem!important}.cg-map-panel .cg-live-map .absolute.bottom-4.left-4 span>span{width:6px!important;height:6px!important}
+.cg-map-popup{min-width:205px!important;max-width:232px!important;padding:7px!important;border-radius:11px!important}.cg-map-popup__head{gap:6px!important}.cg-map-popup__unit{width:26px!important;height:26px!important;font-size:12px!important;border-radius:8px!important}.cg-map-popup__person strong{font-size:10px!important}.cg-map-popup__person span{font-size:7px!important}.cg-map-popup__status{padding:3px 5px!important;font-size:6px!important}.cg-map-popup__metrics{margin-top:6px!important;padding:4px!important;gap:3px!important}.cg-map-popup__metrics strong{font-size:9px!important}.cg-map-popup__metrics span{font-size:6px!important}.cg-map-popup__trip{margin-top:5px!important;padding:5px!important;border-radius:8px!important}.cg-map-popup__trip strong{font-size:8px!important}.cg-map-popup__trip span{font-size:7px!important}.cg-map-popup__actions{margin-top:6px!important;gap:5px!important}.cg-map-popup__action{min-height:26px!important;font-size:8px!important;border-radius:8px!important}
+`;document.head.appendChild(style);}return()=>style?.remove();},[allowed]);
 
-const setReactInputValue = (input: HTMLInputElement, value: string) => {
-  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
-  setter?.call(input, value);
-  input.dispatchEvent(new Event('input', { bubbles: true }));
-};
+ useEffect(()=>{if(!allowed||!currentCompany.id||currentCompany.id==='network')return;const companyId=currentCompany.id;const removePanels=(except?:HTMLElement|null)=>{document.querySelectorAll<HTMLElement>('[data-cg-address-cache-suggestions="1"]').forEach(panel=>{if(panel!==except)panel.remove();});};const renderSuggestions=(input:HTMLInputElement)=>{const parent=input.parentElement;if(!parent)return;const existing=parent.querySelector<HTMLElement>('[data-cg-address-cache-suggestions="1"]');const matches=searchAddressHistory(companyId,input.value,6).filter(item=>item.address.trim().toLocaleLowerCase('es-CL')!==input.value.trim().toLocaleLowerCase('es-CL'));if(!matches.length){existing?.remove();return;}const panel=existing??document.createElement('div');panel.dataset.cgAddressCacheSuggestions='1';panel.setAttribute('role','listbox');Object.assign(panel.style,{marginTop:'6px',overflow:'hidden',border:'1px solid rgba(59,130,246,.22)',borderRadius:'12px',background:'#09090b',boxShadow:'0 16px 38px rgba(0,0,0,.32)'});panel.replaceChildren();matches.forEach(item=>{const option=document.createElement('div');option.setAttribute('role','option');option.tabIndex=-1;Object.assign(option.style,{cursor:'pointer',padding:'9px 11px',borderBottom:'1px solid rgba(63,63,70,.55)',color:'#e4e4e7',fontSize:'11px',fontWeight:'700',lineHeight:'1.3'});option.textContent=item.address;option.title=`${item.uses} uso${item.uses===1?'':'s'} anterior${item.uses===1?'':'es'}`;option.addEventListener('mouseenter',()=>{option.style.background='rgba(59,130,246,.10)';});option.addEventListener('mouseleave',()=>{option.style.background='transparent';});option.addEventListener('pointerdown',event=>{event.preventDefault();setReactInputValue(input,item.address);rememberAddressHistory(companyId,[item.address]);panel.remove();input.focus();});panel.appendChild(option);});if(!existing)parent.appendChild(panel);removePanels(panel);};const onInput=(event:Event)=>{if(isAddressInput(event.target))renderSuggestions(event.target);};const onFocus=(event:FocusEvent)=>{if(isAddressInput(event.target))renderSuggestions(event.target);};const onPointerDown=(event:PointerEvent)=>{const target=event.target as HTMLElement|null;if(target?.closest('[data-cg-address-cache-suggestions="1"]'))return;if(target instanceof HTMLInputElement&&isAddressInput(target))return;removePanels();};const onSubmit=(event:SubmitEvent)=>{const form=event.target as HTMLFormElement|null;if(!form)return;const origin=form.querySelector<HTMLInputElement>('input[placeholder="Dirección de retiro"]');const destination=form.querySelector<HTMLInputElement>('input[placeholder="Opcional · si queda vacío se usa taxímetro"]');rememberAddressHistory(companyId,[origin?.value??'',destination?.value??'']);};document.addEventListener('input',onInput);document.addEventListener('focusin',onFocus);document.addEventListener('pointerdown',onPointerDown,true);document.addEventListener('submit',onSubmit,true);return()=>{document.removeEventListener('input',onInput);document.removeEventListener('focusin',onFocus);document.removeEventListener('pointerdown',onPointerDown,true);document.removeEventListener('submit',onSubmit,true);removePanels();};},[allowed,currentCompany.id]);
 
-export const OperatorRadioLauncher: React.FC = () => {
-  const { currentRole, currentCompany, trips, addAuditLog } = useApp();
-  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
-  const [voiceTransmitting, setVoiceTransmitting] = useState(false);
-  const radioChannelRef = useRef<RealtimeChannel | null>(null);
-  const microphoneRef = useRef<MediaStream | null>(null);
-  const pttHeldRef = useRef(false);
-  const sequenceRef = useRef(0);
+ useEffect(()=>{if(!voiceTransmitting)return;const release=()=>{pttHeldRef.current=false;};window.addEventListener('pointerup',release,true);window.addEventListener('pointercancel',release,true);window.addEventListener('blur',release);return()=>{window.removeEventListener('pointerup',release,true);window.removeEventListener('pointercancel',release,true);window.removeEventListener('blur',release);};},[voiceTransmitting]);
 
-  const allowed = ['operator', 'company_admin', 'super_admin'].includes(currentRole) && currentCompany.id !== 'network';
+ const sendText=async()=>{const clean=message.trim();if(!clean||sending)return;setSending(true);setMessageError('');setMessageStatus('');try{if(recipient==='all'){const delivered=await sendDriverRadioBroadcast(currentCompany.id,eligibleDrivers,clean);setMessageStatus(`Enviado a ${delivered} móvil${delivered===1?'':'es'}.`);addAuditLog('RADIO_TEXTO',`Mensaje escrito enviado a ${delivered} móviles.`);}else{const driver=eligibleDrivers.find(item=>item.id===recipient);if(!driver)throw new Error('El móvil seleccionado ya no está disponible.');await sendDriverRadioMessage(currentCompany.id,driver,clean);setMessageStatus(`Enviado a Móvil ${driver.unitNumber}.`);addAuditLog('RADIO_TEXTO',`Mensaje escrito enviado al móvil ${driver.unitNumber}.`);}setMessage('');window.setTimeout(()=>setMessageStatus(''),2600);}catch(error){setMessageError(error instanceof Error?error.message:'No fue posible enviar el mensaje.');}finally{setSending(false);}};
+ const stopPtt=()=>{pttHeldRef.current=false;};
+ const startPtt=async(event:React.PointerEvent<HTMLButtonElement>)=>{event.preventDefault();if(voiceTransmitting||!navigator.mediaDevices?.getUserMedia)return;pttHeldRef.current=true;try{const stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true,channelCount:1}});microphoneRef.current=stream;if(!pttHeldRef.current||typeof MediaRecorder==='undefined')return;const channel=radioChannelRef.current;if(!channel)return;setVoiceTransmitting(true);const streamId=crypto.randomUUID();sequenceRef.current=0;const preferredMime=supportedVoiceMime();while(pttHeldRef.current){const segment=await recordVoiceSegment(stream,preferredMime);if(!segment.size)continue;await sendRadioVoiceFrame(channel,{streamId,sequence:sequenceRef.current++,sentAt:Date.now(),mimeType:segment.type||preferredMime||'audio/webm',targetDriverId:null},await segment.arrayBuffer());}addAuditLog('RADIO_VOZ_PTT','Transmitió audio PTT a los móviles conectados.');}catch(error){console.warn('[Central GO] PTT no disponible:',error);}finally{pttHeldRef.current=false;microphoneRef.current?.getTracks().forEach(track=>track.stop());microphoneRef.current=null;setVoiceTransmitting(false);}};
 
-  useEffect(() => {
-    if (!allowed) {
-      setPortalTarget(null);
-      return;
-    }
-    const locate = () => setPortalTarget(document.querySelector('.cg-map-panel > div:first-child') as HTMLElement | null);
-    locate();
-    const observer = new MutationObserver(locate);
-    observer.observe(document.body, { childList: true, subtree: true });
-    return () => observer.disconnect();
-  }, [allowed]);
-
-  useEffect(() => {
-    if (!allowed || !currentCompany.id || currentCompany.id === 'network') return;
-    const channel = createPrivateRadioChannel(currentCompany.id);
-    radioChannelRef.current = channel;
-    channel.subscribe();
-    return () => {
-      pttHeldRef.current = false;
-      microphoneRef.current?.getTracks().forEach((track) => track.stop());
-      microphoneRef.current = null;
-      if (radioChannelRef.current === channel) radioChannelRef.current = null;
-      void requireSupabase().removeChannel(channel);
-    };
-  }, [allowed, currentCompany.id]);
-
-  useEffect(() => {
-    if (!allowed || !currentCompany.id || currentCompany.id === 'network') return;
-    seedAddressHistoryFromTrips(currentCompany.id, trips);
-  }, [allowed, currentCompany.id, trips]);
-
-  useEffect(() => {
-    if (!allowed) return;
-    const styleId = 'centralgo-operator-layer-fix';
-    let style = document.getElementById(styleId) as HTMLStyleElement | null;
-    if (!style) {
-      style = document.createElement('style');
-      style.id = styleId;
-      style.textContent = '.cg-operator-grid>aside:first-child>div:first-child{position:relative;z-index:1600!important}.cg-operator-grid>aside:first-child>div:nth-child(2){position:relative;z-index:1}';
-      document.head.appendChild(style);
-    }
-    return () => style?.remove();
-  }, [allowed]);
-
-  useEffect(() => {
-    if (!allowed || !currentCompany.id || currentCompany.id === 'network') return;
-    const companyId = currentCompany.id;
-
-    const removePanels = (except?: HTMLElement | null) => {
-      document.querySelectorAll<HTMLElement>('[data-cg-address-cache-suggestions="1"]').forEach((panel) => {
-        if (panel !== except) panel.remove();
-      });
-    };
-
-    const renderSuggestions = (input: HTMLInputElement) => {
-      const parent = input.parentElement;
-      if (!parent) return;
-      const existing = parent.querySelector<HTMLElement>('[data-cg-address-cache-suggestions="1"]');
-      const matches = searchAddressHistory(companyId, input.value, 6)
-        .filter((item) => item.address.trim().toLocaleLowerCase('es-CL') !== input.value.trim().toLocaleLowerCase('es-CL'));
-
-      if (!matches.length) {
-        existing?.remove();
-        return;
-      }
-
-      const panel = existing ?? document.createElement('div');
-      panel.dataset.cgAddressCacheSuggestions = '1';
-      panel.setAttribute('role', 'listbox');
-      Object.assign(panel.style, {
-        marginTop: '6px',
-        overflow: 'hidden',
-        border: '1px solid rgba(59,130,246,.22)',
-        borderRadius: '12px',
-        background: '#09090b',
-        boxShadow: '0 16px 38px rgba(0,0,0,.32)',
-      });
-      panel.replaceChildren();
-
-      matches.forEach((item) => {
-        const option = document.createElement('div');
-        option.setAttribute('role', 'option');
-        option.tabIndex = -1;
-        Object.assign(option.style, {
-          cursor: 'pointer',
-          padding: '9px 11px',
-          borderBottom: '1px solid rgba(63,63,70,.55)',
-          color: '#e4e4e7',
-          fontSize: '11px',
-          fontWeight: '700',
-          lineHeight: '1.3',
-        });
-        option.textContent = item.address;
-        option.title = `${item.uses} uso${item.uses === 1 ? '' : 's'} anterior${item.uses === 1 ? '' : 'es'}`;
-        option.addEventListener('mouseenter', () => { option.style.background = 'rgba(59,130,246,.10)'; });
-        option.addEventListener('mouseleave', () => { option.style.background = 'transparent'; });
-        option.addEventListener('pointerdown', (event) => {
-          event.preventDefault();
-          setReactInputValue(input, item.address);
-          rememberAddressHistory(companyId, [item.address]);
-          panel.remove();
-          input.focus();
-        });
-        panel.appendChild(option);
-      });
-
-      if (!existing) parent.appendChild(panel);
-      removePanels(panel);
-    };
-
-    const onInput = (event: Event) => { if (isAddressInput(event.target)) renderSuggestions(event.target); };
-    const onFocus = (event: FocusEvent) => { if (isAddressInput(event.target)) renderSuggestions(event.target); };
-    const onPointerDown = (event: PointerEvent) => {
-      const target = event.target as HTMLElement | null;
-      if (target?.closest('[data-cg-address-cache-suggestions="1"]')) return;
-      if (target instanceof HTMLInputElement && isAddressInput(target)) return;
-      removePanels();
-    };
-    const onSubmit = (event: SubmitEvent) => {
-      const form = event.target as HTMLFormElement | null;
-      if (!form) return;
-      const origin = form.querySelector<HTMLInputElement>('input[placeholder="Dirección de retiro"]');
-      const destination = form.querySelector<HTMLInputElement>('input[placeholder="Opcional · si queda vacío se usa taxímetro"]');
-      rememberAddressHistory(companyId, [origin?.value ?? '', destination?.value ?? '']);
-    };
-
-    document.addEventListener('input', onInput);
-    document.addEventListener('focusin', onFocus);
-    document.addEventListener('pointerdown', onPointerDown, true);
-    document.addEventListener('submit', onSubmit, true);
-    return () => {
-      document.removeEventListener('input', onInput);
-      document.removeEventListener('focusin', onFocus);
-      document.removeEventListener('pointerdown', onPointerDown, true);
-      document.removeEventListener('submit', onSubmit, true);
-      removePanels();
-    };
-  }, [allowed, currentCompany.id]);
-
-  useEffect(() => {
-    if (!voiceTransmitting) return;
-    const release = () => { pttHeldRef.current = false; };
-    window.addEventListener('pointerup', release, true);
-    window.addEventListener('pointercancel', release, true);
-    window.addEventListener('blur', release);
-    return () => {
-      window.removeEventListener('pointerup', release, true);
-      window.removeEventListener('pointercancel', release, true);
-      window.removeEventListener('blur', release);
-    };
-  }, [voiceTransmitting]);
-
-  const stopPtt = () => { pttHeldRef.current = false; };
-
-  const startPtt = async (event: React.PointerEvent<HTMLButtonElement>) => {
-    event.preventDefault();
-    if (voiceTransmitting || !navigator.mediaDevices?.getUserMedia) return;
-    pttHeldRef.current = true;
-
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 },
-      });
-      microphoneRef.current = stream;
-
-      if (!pttHeldRef.current || typeof MediaRecorder === 'undefined') return;
-      const channel = radioChannelRef.current;
-      if (!channel) return;
-
-      setVoiceTransmitting(true);
-      const streamId = crypto.randomUUID();
-      sequenceRef.current = 0;
-      const preferredMime = supportedVoiceMime();
-
-      while (pttHeldRef.current) {
-        const segment = await recordVoiceSegment(stream, preferredMime);
-        if (!segment.size) continue;
-        await sendRadioVoiceFrame(channel, {
-          streamId,
-          sequence: sequenceRef.current++,
-          sentAt: Date.now(),
-          mimeType: segment.type || preferredMime || 'audio/webm',
-          targetDriverId: null,
-        }, await segment.arrayBuffer());
-      }
-
-      addAuditLog('RADIO_VOZ_PTT', 'Transmitió audio PTT a los móviles conectados.');
-    } catch (error) {
-      console.warn('[Central GO] PTT no disponible:', error);
-    } finally {
-      pttHeldRef.current = false;
-      microphoneRef.current?.getTracks().forEach((track) => track.stop());
-      microphoneRef.current = null;
-      setVoiceTransmitting(false);
-    }
-  };
-
-  if (!allowed || !portalTarget) return null;
-
-  return createPortal(
-    <button
-      type="button"
-      onPointerDown={(event) => void startPtt(event)}
-      onPointerUp={stopPtt}
-      onPointerCancel={stopPtt}
-      onContextMenu={(event) => event.preventDefault()}
-      className={`h-9 min-w-12 touch-none select-none rounded-xl border px-3 text-[10px] font-black tracking-[.08em] text-white shadow-lg transition active:scale-95 ${voiceTransmitting ? 'border-red-200 bg-red-500 shadow-red-950/50' : 'border-red-400/45 bg-red-600 hover:bg-red-500'}`}
-      title="Mantén presionado para hablar. La primera vez el navegador pedirá permiso de micrófono."
-      aria-label="PTT: mantén presionado para hablar"
-    >
-      PTT
-    </button>,
-    portalTarget,
-  );
+ if(!allowed||!portalTarget)return null;
+ return createPortal(<div className="relative flex items-center gap-1.5">
+  {messageOpen&&<section className="absolute right-0 top-11 z-[1900] w-[min(330px,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-zinc-700 bg-[#0b1017]/98 shadow-2xl shadow-black/70 backdrop-blur-xl">
+   <header className="flex items-center justify-between border-b border-zinc-800 px-3 py-2.5"><div><p className="text-[8px] font-black uppercase tracking-[.15em] text-cyan-300">Central → conductores</p><p className="text-xs font-black text-white">Mensaje escrito</p></div><button type="button" onClick={()=>setMessageOpen(false)} className="grid h-7 w-7 place-items-center rounded-lg text-zinc-500 hover:bg-white/10 hover:text-white" aria-label="Cerrar mensajes"><X className="h-3.5 w-3.5"/></button></header>
+   <div className="space-y-2.5 p-3"><select value={recipient} onChange={event=>setRecipient(event.target.value)} className="h-9 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-2.5 text-[10px] font-bold text-white outline-none"><option value="all">Todos los móviles con app ({eligibleDrivers.length})</option>{eligibleDrivers.map(driver=><option key={driver.id} value={driver.id}>Móvil {driver.unitNumber} · {driver.name}</option>)}</select><textarea value={message} onChange={event=>setMessage(event.target.value)} rows={3} placeholder="Escribe el mensaje para el conductor…" className="w-full resize-none rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-[11px] text-white outline-none placeholder:text-zinc-600 focus:border-cyan-500/50"/>{messageError&&<p className="rounded-lg border border-rose-500/20 bg-rose-500/10 px-2.5 py-2 text-[9px] font-bold text-rose-200">{messageError}</p>}{messageStatus&&<p className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-2 text-[9px] font-bold text-emerald-200">{messageStatus}</p>}<button type="button" disabled={sending||!message.trim()} onClick={()=>void sendText()} className="flex h-9 w-full items-center justify-center gap-2 rounded-xl bg-cyan-500 text-[9px] font-black text-slate-950 disabled:opacity-40"><Send className="h-3.5 w-3.5"/>{sending?'Enviando…':'Enviar texto'}</button></div>
+  </section>}
+  <button type="button" onClick={()=>{setMessageOpen(open=>!open);setMessageError('');}} className={`flex h-9 items-center gap-1.5 rounded-xl border px-2.5 text-[9px] font-black shadow-lg transition active:scale-95 ${messageOpen?'border-cyan-300 bg-cyan-400 text-slate-950':'border-cyan-500/35 bg-[#07131d]/95 text-cyan-200 hover:bg-cyan-500/15'}`} title="Enviar mensaje escrito a conductores"><MessageSquareText className="h-3.5 w-3.5"/>Mensaje</button>
+  <button type="button" onPointerDown={event=>void startPtt(event)} onPointerUp={stopPtt} onPointerCancel={stopPtt} onContextMenu={event=>event.preventDefault()} className={`h-9 min-w-12 touch-none select-none rounded-xl border px-3 text-[10px] font-black tracking-[.08em] text-white shadow-lg transition active:scale-95 ${voiceTransmitting?'border-red-200 bg-red-500 shadow-red-950/50':'border-red-400/45 bg-red-600 hover:bg-red-500'}`} title="Mantén presionado para hablar. La primera vez el navegador pedirá permiso de micrófono." aria-label="PTT: mantén presionado para hablar">PTT</button>
+ </div>,portalTarget);
 };
