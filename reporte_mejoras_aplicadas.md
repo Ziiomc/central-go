@@ -29,7 +29,7 @@ Fecha de auditoría: 2026-08-26
 | Responsive tablet | Diseño UX | El encabezado permanece apilado hasta `lg`, evitando compresión de “Central GO / Despacho”; desktop amplio conserva alta densidad. | VERIFICADO: `npm test` completo; captura post-refinamiento bloqueada por runner |
 | App conductor | Diseño UX / Microfallo | Aumentados objetivos táctiles y jerarquía de aceptación, GPS, llamada, llegada, inicio, finalización, perfil y cierre de errores; oferta marcada como actualización prioritaria accesible. | VERIFICADO: TypeScript/reglas comerciales/build; pendiente E2E visual autenticado específico |
 | Vercel producción | Operación | Despliegues posteriores al hardening publicados y chequeados. | VERIFICADO: sitio responde y sin errores/fatales en ventana revisada |
-| QA temporal | Seguridad / Mantenimiento | Workflows y scripts de aplicación son de un solo uso y se eliminan al finalizar la auditoría. | EN LIMPIEZA FINAL |
+| QA temporal | Seguridad / Mantenimiento | Eliminados de `main` los workflows y scripts de un solo uso empleados para aplicar/verificar la auditoría. | VERIFICADO: limpieza final completada |
 
 ## Hallazgos controlados
 
@@ -49,4 +49,5 @@ Se alcanzaron tres intentos únicamente en la reconstrucción automática del fi
 - PTT habilitado para micrófono del mismo origen.
 - Stress, concurrencia, aislamiento GPS/SOS, reglas comerciales, TypeScript y build superados.
 - No se detectaron errores/fatales de runtime en Vercel durante la revisión posterior al release.
+- Workflows y scripts temporales de esta ejecución eliminados de `main`.
 - Único endurecimiento pendiente deliberadamente: evaluar RLS de `centralgo_private_settings` junto con una regresión completa de pagos.
