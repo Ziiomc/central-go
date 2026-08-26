@@ -25,25 +25,27 @@ jobs:
         shell: python
         run: |
           from pathlib import Path
+          import re
 
           path = Path('src/components/modules/OperatorConsole.tsx')
           text = path.read_text()
 
-          old_state = "  const [busyTripId, setBusyTripId] = useState<string | null>(null);"
-          new_state = "  const busyTripIdsRef = useRef<Set<string>>(new Set());\n  const [busyTripIds, setBusyTripIds] = useState<Set<string>>(() => new Set());"
+          if 'busyTripIdsRef' in text:
+              print('La corrección ya estaba aplicada.')
+              raise SystemExit(0)
 
-          old_action = """  const runTripAction = async (tripId: string, action: () => Promise<unknown> | unknown) => {
-            if (busyTripId) return;
-            setBusyTripId(tripId);
-            try {
-              await Promise.resolve(action());
-            } catch (error) {
-              window.alert(error instanceof Error ? error.message : 'No fue posible completar la operación.');
-            } finally {
-              setBusyTripId(null);
-            }
-          };"""
-          new_action = """  const runTripAction = async (tripId: string, action: () => Promise<unknown> | unknown) => {
+          text, state_count = re.subn(
+              r"  const \[busyTripId, setBusyTripId\] = useState<string \| null>\(null\);",
+              "  const busyTripIdsRef = useRef<Set<string>>(new Set());\n  const [busyTripIds, setBusyTripIds] = useState<Set<string>>(() => new Set());",
+              text,
+              count=1,
+          )
+
+          action_pattern = re.compile(
+              r"  const runTripAction = async \(tripId: string, action: \(\) => Promise<unknown> \| unknown\) => \{.*?\n  \};\n\n  const assignDriverToTrip",
+              re.S,
+          )
+          action_replacement = """  const runTripAction = async (tripId: string, action: () => Promise<unknown> | unknown) => {
             if (busyTripIdsRef.current.has(tripId)) return;
             busyTripIdsRef.current.add(tripId);
             setBusyTripIds(new Set(busyTripIdsRef.current));
@@ -55,23 +57,20 @@ jobs:
               busyTripIdsRef.current.delete(tripId);
               setBusyTripIds(new Set(busyTripIdsRef.current));
             }
-          };"""
+          };
 
-          old_render = "                const isBusy = busyTripId === trip.id;"
-          new_render = "                const isBusy = busyTripIds.has(trip.id);"
+          const assignDriverToTrip"""
+          text, action_count = action_pattern.subn(action_replacement, text, count=1)
 
-          if old_state not in text and 'busyTripIdsRef' in text:
-              print('La corrección ya estaba aplicada.')
-              raise SystemExit(0)
+          text, render_count = re.subn(
+              r"const isBusy = busyTripId === trip\.id;",
+              "const isBusy = busyTripIds.has(trip.id);",
+              text,
+              count=1,
+          )
 
-          for old, new, label in [
-              (old_state, new_state, 'estado busy'),
-              (old_action, new_action, 'acción por carrera'),
-              (old_render, new_render, 'render busy'),
-          ]:
-              if old not in text:
-                  raise SystemExit(f'No se encontró el bloque esperado: {label}')
-              text = text.replace(old, new, 1)
+          if (state_count, action_count, render_count) != (1, 1, 1):
+              raise SystemExit(f'Parche incompleto: state={state_count}, action={action_count}, render={render_count}')
 
           path.write_text(text)
 
