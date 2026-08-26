@@ -3,7 +3,7 @@ import { Car, Eye, GripVertical, MapPin, Navigation, Plus, Search, UserRound, Wa
 import { useApp } from '../../context/AppContext';
 import { DRIVER_STATUS_LABELS, TRIP_STATUS_LABELS } from '../../lib/labels';
 import { loadDispatchQueue, subscribeDispatchQueue } from '../../lib/dispatchPriorityRepository';
-import { Driver, Trip, TripStatus } from '../../types';
+import type { Driver, Trip, TripStatus } from '../../types';
 import { LiveMap } from '../map/LiveMap';
 
 const ACTIVE_STATUSES: TripStatus[] = ['pending', 'assigned', 'en_route', 'arrived', 'in_progress'];
@@ -79,7 +79,11 @@ export const OperatorConsole: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    try { window.localStorage.setItem(PANEL_KEY, JSON.stringify({ left: leftWidth, map: mapWidth })); } catch { /* noop */ }
+    try {
+      window.localStorage.setItem(PANEL_KEY, JSON.stringify({ left: leftWidth, map: mapWidth }));
+    } catch {
+      // Panel resizing remains available for the current session.
+    }
   }, [leftWidth, mapWidth]);
 
   useEffect(() => {
@@ -87,6 +91,7 @@ export const OperatorConsole: React.FC = () => {
       setQueueOrder({});
       return;
     }
+
     let active = true;
     const refresh = async () => {
       try {
@@ -97,6 +102,7 @@ export const OperatorConsole: React.FC = () => {
         if (active) setQueueOrder({});
       }
     };
+
     void refresh();
     const unsubscribe = subscribeDispatchQueue(currentCompany.id, () => { void refresh(); });
     return () => {
@@ -105,16 +111,13 @@ export const OperatorConsole: React.FC = () => {
     };
   }, [currentCompany.id]);
 
-  const availableDrivers = useMemo(
-    () => drivers
-      .filter((driver) => driver.status === 'available')
-      .sort((a, b) => {
-        const aPriority = queueOrder[a.id] ?? Number.MAX_SAFE_INTEGER;
-        const bPriority = queueOrder[b.id] ?? Number.MAX_SAFE_INTEGER;
-        return aPriority - bPriority || a.unitNumber.localeCompare(b.unitNumber, 'es', { numeric: true });
-      }),
-    [drivers, queueOrder],
-  );
+  const availableDrivers = useMemo(() => drivers
+    .filter((driver) => driver.status === 'available')
+    .sort((a, b) => {
+      const aPriority = queueOrder[a.id] ?? Number.MAX_SAFE_INTEGER;
+      const bPriority = queueOrder[b.id] ?? Number.MAX_SAFE_INTEGER;
+      return aPriority - bPriority || a.unitNumber.localeCompare(b.unitNumber, 'es', { numeric: true });
+    }), [drivers, queueOrder]);
 
   const activeTrips = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -168,11 +171,6 @@ export const OperatorConsole: React.FC = () => {
     });
   };
 
-  const handleAssign = (trip: Trip) => {
-    const driverId = driverChoice[trip.id];
-    if (driverId) assignDriverToTrip(trip, driverId);
-  };
-
   const handleAutoAssign = (trip: Trip) => {
     void runTripAction(trip.id, async () => {
       const driver = await Promise.resolve(autoAssignClosestDriver(trip.id));
@@ -206,18 +204,20 @@ export const OperatorConsole: React.FC = () => {
       const delta = moveEvent.clientX - startX;
       if (side === 'left') {
         const maxLeft = Math.min(420, containerWidth - startMap - minimumCenter - 20);
-        setLeftWidth(Math.max(190, Math.min(maxLeft, startLeft + delta));
+        setLeftWidth(Math.max(190, Math.min(maxLeft, startLeft + delta)));
       } else {
         const maxMap = Math.min(600, containerWidth - startLeft - minimumCenter - 20);
         setMapWidth(Math.max(280, Math.min(maxMap, startMap - delta)));
       }
     };
+
     const stop = () => {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', stop);
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
     };
+
     document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
     window.addEventListener('pointermove', onMove);
@@ -260,11 +260,7 @@ export const OperatorConsole: React.FC = () => {
               className="h-10 w-full rounded-xl border border-zinc-800 bg-zinc-950 pl-9 pr-3 text-sm text-white outline-none transition focus:border-blue-500"
             />
           </div>
-          <button
-            type="button"
-            onClick={() => setNewTripModalOpen(true)}
-            className="flex h-10 items-center gap-2 rounded-xl bg-amber-400 px-4 text-sm font-black text-zinc-950"
-          >
+          <button type="button" onClick={() => setNewTripModalOpen(true)} className="flex h-10 items-center gap-2 rounded-xl bg-amber-400 px-4 text-sm font-black text-zinc-950">
             <Plus className="h-4 w-4" strokeWidth={3} />
             Nueva carrera
           </button>
@@ -285,7 +281,7 @@ export const OperatorConsole: React.FC = () => {
           <div className="max-h-[540px] divide-y divide-zinc-800/80 overflow-y-auto">
             {availableDrivers.length === 0 ? (
               <p className="px-4 py-10 text-center text-xs text-zinc-500">No hay móviles libres.</p>
-            ) : availableDrivers.map((driver: Driver) => {
+            ) : availableDrivers.map((driver: Driver, index) => {
               const focused = focusDriverId === driver.id;
               const dragging = dragDriverId === driver.id;
               return (
@@ -309,7 +305,7 @@ export const OperatorConsole: React.FC = () => {
                     <span className="block truncate text-xs font-black text-white">{driver.name}</span>
                     <span className="mt-0.5 block truncate text-[9px] text-zinc-500">{driver.currentLocation.address || DRIVER_STATUS_LABELS[driver.status]}</span>
                   </span>
-                  {queueOrder[driver.id] != null && <span className="rounded-md border border-amber-500/20 bg-amber-500/10 px-1.5 py-1 text-[8px] font-black text-amber-300" title="Posición persistida en la fila">P{queueOrder[driver.id]}</span>}
+                  <span className="rounded-md border border-amber-500/20 bg-amber-500/10 px-1.5 py-1 text-[8px] font-black text-amber-300" title="Posición actual en la fila">#{index + 1}</span>
                   <GripVertical className="h-4 w-4 shrink-0 text-zinc-700" />
                   <span className="rounded-md border border-zinc-800 bg-zinc-950 px-1.5 py-1 text-[8px] font-black uppercase text-zinc-500">{driver.operationMode === 'traditional' ? 'Radio' : 'App'}</span>
                 </button>
@@ -318,11 +314,7 @@ export const OperatorConsole: React.FC = () => {
           </div>
         </aside>
 
-        <div
-          className="cg-panel-resizer h-[540px] cursor-col-resize items-center justify-center text-zinc-700 hover:bg-blue-500/10 hover:text-blue-400"
-          onPointerDown={(event) => startResize('left', event)}
-          title="Arrastra para cambiar el ancho de móviles"
-        >
+        <div className="cg-panel-resizer h-[540px] cursor-col-resize items-center justify-center text-zinc-700 hover:bg-blue-500/10 hover:text-blue-400" onPointerDown={(event) => startResize('left', event)} title="Arrastra para cambiar el ancho de móviles">
           <GripVertical className="h-5 w-5" />
         </div>
 
@@ -404,17 +396,14 @@ export const OperatorConsole: React.FC = () => {
                             <option value="">Elegir móvil</option>
                             {availableDrivers.map((driver) => <option key={driver.id} value={driver.id}>Móvil {driver.unitNumber} · {driver.name}</option>)}
                           </select>
-                          <button type="button" disabled={!driverChoice[trip.id] || isBusy} onClick={() => handleAssign(trip)} className="h-9 rounded-lg bg-blue-600 px-3 text-xs font-black text-white disabled:opacity-40">Asignar</button>
+                          <button type="button" disabled={!driverChoice[trip.id] || isBusy} onClick={() => { const id = driverChoice[trip.id]; if (id) assignDriverToTrip(trip, id); }} className="h-9 rounded-lg bg-blue-600 px-3 text-xs font-black text-white disabled:opacity-40">Asignar</button>
                           <button type="button" disabled={!availableDrivers.length || isBusy} onClick={() => handleAutoAssign(trip)} className="flex h-9 items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-900 px-2.5 text-xs font-black text-zinc-300 disabled:opacity-40" title="Asignar automáticamente al móvil más cercano"><Wand2 className="h-3.5 w-3.5" />Auto</button>
                         </>
                       )}
 
                       {next && <button type="button" disabled={isBusy} onClick={() => void runTripAction(trip.id, () => updateTripStatus(trip.id, next.status))} className="h-9 rounded-lg bg-emerald-600 px-3 text-xs font-black text-white disabled:opacity-40">{next.label}</button>}
-
                       {trip.status === 'assigned' && <button type="button" disabled={isBusy} onClick={() => void runTripAction(trip.id, () => unassignTrip(trip.id))} className="h-9 rounded-lg border border-zinc-700 bg-zinc-900 px-2.5 text-xs font-black text-zinc-300 disabled:opacity-40">Liberar</button>}
-
                       {trip.status === 'in_progress' && <button type="button" onClick={() => setSelectedTripForDetail(trip)} className="h-9 rounded-lg bg-emerald-600 px-3 text-xs font-black text-white">Finalizar</button>}
-
                       <button type="button" onClick={() => setSelectedTripForDetail(trip)} className="grid h-9 w-9 place-items-center rounded-lg border border-zinc-700 bg-zinc-900 text-zinc-400 hover:text-white" title="Ver detalle"><Eye className="h-4 w-4" /></button>
                       <button type="button" disabled={isBusy} onClick={() => handleCancel(trip)} className="grid h-9 w-9 place-items-center rounded-lg border border-rose-500/20 bg-rose-500/10 text-rose-300 disabled:opacity-40" title="Cancelar carrera"><XCircle className="h-4 w-4" /></button>
                     </div>
@@ -425,11 +414,7 @@ export const OperatorConsole: React.FC = () => {
           )}
         </div>
 
-        <div
-          className="cg-panel-resizer h-[540px] cursor-col-resize items-center justify-center text-zinc-700 hover:bg-blue-500/10 hover:text-blue-400"
-          onPointerDown={(event) => startResize('map', event)}
-          title="Arrastra para cambiar el ancho del mapa"
-        >
+        <div className="cg-panel-resizer h-[540px] cursor-col-resize items-center justify-center text-zinc-700 hover:bg-blue-500/10 hover:text-blue-400" onPointerDown={(event) => startResize('map', event)} title="Arrastra para cambiar el ancho del mapa">
           <GripVertical className="h-5 w-5" />
         </div>
 
@@ -441,12 +426,7 @@ export const OperatorConsole: React.FC = () => {
             </div>
             {selectedTrip && <span className="max-w-[45%] truncate text-[10px] font-black text-blue-300">{selectedTrip.code}</span>}
           </div>
-          <LiveMap
-            height="h-[410px]"
-            selectedTrip={selectedTrip}
-            focusDriverId={focusDriverId}
-            onSelectDriver={(driver) => setFocusDriverId(driver?.id ?? null)}
-          />
+          <LiveMap height="h-[410px]" selectedTrip={selectedTrip} focusDriverId={focusDriverId} onSelectDriver={(driver) => setFocusDriverId(driver?.id ?? null)} />
         </aside>
       </section>
     </div>
