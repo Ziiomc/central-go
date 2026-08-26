@@ -1,0 +1,175 @@
+name: Concurrencia operadora Central GO
+
+on:
+  pull_request:
+    branches: [main, commercial]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  operator-concurrency:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: centralgo_concurrency
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d centralgo_concurrency"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGDATABASE: centralgo_concurrency
+      PGUSER: postgres
+      PGPASSWORD: postgres
+
+    steps:
+      - name: Descargar código
+        uses: actions/checkout@v4
+
+      - name: Preparar compatibilidad Supabase
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          create role anon nologin;
+          create role authenticated nologin;
+          create role service_role nologin;
+          create schema auth;
+          create table auth.users (
+            id uuid primary key,
+            email text,
+            email_confirmed_at timestamptz,
+            raw_user_meta_data jsonb not null default '{}'::jsonb
+          );
+          create or replace function auth.uid()
+          returns uuid
+          language sql
+          stable
+          as $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
+          grant usage on schema auth to anon, authenticated;
+          grant execute on function auth.uid() to anon, authenticated;
+          create publication supabase_realtime;
+          SQL
+          psql -v ON_ERROR_STOP=1 -f supabase/tests/storage-compat.sql
+
+      - name: Reconstruir base desde migraciones
+        shell: bash
+        run: |
+          set -euo pipefail
+          for migration in supabase/migrations/*.sql; do
+            psql -q -v ON_ERROR_STOP=1 -f "$migration"
+          done
+
+      - name: Preparar central y móvil concurrentes
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          insert into auth.users(id,email,email_confirmed_at,raw_user_meta_data)
+          values('c1000000-0000-4000-8000-000000000001','concurrency-operator@centralgo.test',now(),'{"name":"Operadora Concurrencia"}');
+
+          insert into public.companies(id,name,code,active)
+          values('c2000000-0000-4000-8000-000000000001','Central Concurrencia','CONCUR',true);
+
+          insert into public.company_memberships(company_id,user_id,role,active)
+          values('c2000000-0000-4000-8000-000000000001','c1000000-0000-4000-8000-000000000001','operator',true);
+
+          insert into public.vehicles(id,company_id,unit_number,license_plate,brand,model,year,status)
+          values('c3000000-0000-4000-8000-000000000001','c2000000-0000-4000-8000-000000000001','C-01','QA-CC-01','Toyota','Yaris',2024,'active');
+
+          insert into public.drivers(id,company_id,vehicle_id,unit_number,display_name,license_number,status,operation_mode,service_enabled)
+          values('c4000000-0000-4000-8000-000000000001','c2000000-0000-4000-8000-000000000001','c3000000-0000-4000-8000-000000000001','C-01','Conductor Concurrente','LIC-CONCUR','available','traditional',true);
+          SQL
+
+      - name: Reintentar una misma carrera desde ocho sesiones
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f /tmp/create-*.out
+          pids=()
+          for i in $(seq 1 8); do
+            (
+              psql -qAt -v ON_ERROR_STOP=1 <<'SQL'
+          set role authenticated;
+          set request.jwt.claim.sub='c1000000-0000-4000-8000-000000000001';
+          select id from public.centralgo_operator_create_trip(
+            p_company_id=>'c2000000-0000-4000-8000-000000000001',
+            p_operator_request_id=>'c5000000-0000-4000-8000-000000000001',
+            p_client_id=>null,p_client_name=>'Cliente concurrente',p_client_phone=>'+56955555555',
+            p_origin_address=>'Origen concurrente',p_origin_lat=>-35.8454,p_origin_lng=>-71.5979,p_origin_notes=>null,
+            p_destination_address=>'Destino concurrente',p_destination_lat=>-35.8490,p_destination_lng=>-71.6030,p_destination_notes=>null,
+            p_driver_id=>null,p_vehicle_type_requested=>'standard',p_estimated_distance_km=>2.5,
+            p_estimated_duration_mins=>8,p_estimated_fare=>5000,p_is_fixed_fare=>false,p_fixed_fare_amount=>null,
+            p_payment_method=>'efectivo',p_notes=>'CONCURRENCY_IDEMPOTENCY',p_scheduled_for=>null,p_dispatch_mode=>'manual'
+          );
+          SQL
+            ) >"/tmp/create-$i.out" 2>&1 &
+            pids+=("$!")
+          done
+
+          failures=0
+          for pid in "${pids[@]}"; do
+            if ! wait "$pid"; then failures=$((failures+1)); fi
+          done
+          if [ "$failures" -ne 0 ]; then
+            cat /tmp/create-*.out
+            echo "CONCURRENCY FAIL: $failures reintentos idempotentes fallaron"
+            exit 1
+          fi
+
+          rows=$(psql -qAt -v ON_ERROR_STOP=1 -c "select count(*) from public.trips where operator_request_id='c5000000-0000-4000-8000-000000000001';")
+          test "$rows" = "1" || { echo "CONCURRENCY FAIL: se crearon $rows carreras para una sola solicitud"; exit 1; }
+
+      - name: Impedir doble despacho simultáneo al mismo móvil
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          insert into public.trips(id,company_id,code,client_name,client_phone,origin_address,origin_lat,origin_lng,destination_address,destination_lat,destination_lng,status,operator_name,dispatch_mode)
+          values
+            ('c6000000-0000-4000-8000-000000000001','c2000000-0000-4000-8000-000000000001','CONCUR-A','Cliente A','+56960000001','Origen A',-35.84,-71.59,'Destino A',-35.85,-71.60,'pending','Operadora Concurrencia','manual'),
+            ('c6000000-0000-4000-8000-000000000002','c2000000-0000-4000-8000-000000000001','CONCUR-B','Cliente B','+56960000002','Origen B',-35.84,-71.59,'Destino B',-35.85,-71.60,'pending','Operadora Concurrencia','manual');
+          SQL
+
+          set +e
+          psql -qAt -v ON_ERROR_STOP=1 <<'SQL' >/tmp/assign-a.out 2>&1 &
+          set role authenticated;
+          set request.jwt.claim.sub='c1000000-0000-4000-8000-000000000001';
+          select id from public.centralgo_operator_assign_trip('c6000000-0000-4000-8000-000000000001','c4000000-0000-4000-8000-000000000001');
+          SQL
+          pid_a=$!
+
+          psql -qAt -v ON_ERROR_STOP=1 <<'SQL' >/tmp/assign-b.out 2>&1 &
+          set role authenticated;
+          set request.jwt.claim.sub='c1000000-0000-4000-8000-000000000001';
+          select id from public.centralgo_operator_assign_trip('c6000000-0000-4000-8000-000000000002','c4000000-0000-4000-8000-000000000001');
+          SQL
+          pid_b=$!
+
+          wait "$pid_a"; status_a=$?
+          wait "$pid_b"; status_b=$?
+          set -e
+
+          successes=0
+          [ "$status_a" -eq 0 ] && successes=$((successes+1))
+          [ "$status_b" -eq 0 ] && successes=$((successes+1))
+          if [ "$successes" -ne 1 ]; then
+            cat /tmp/assign-a.out /tmp/assign-b.out
+            echo "CONCURRENCY FAIL: se esperó exactamente un despacho exitoso y hubo $successes"
+            exit 1
+          fi
+
+          active=$(psql -qAt -v ON_ERROR_STOP=1 -c "select count(*) from public.trips where driver_id='c4000000-0000-4000-8000-000000000001' and status in ('assigned','en_route','arrived','in_progress');")
+          pending=$(psql -qAt -v ON_ERROR_STOP=1 -c "select count(*) from public.trips where id in ('c6000000-0000-4000-8000-000000000001','c6000000-0000-4000-8000-000000000002') and status='pending' and driver_id is null;")
+          test "$active" = "1" || { echo "CONCURRENCY FAIL: móvil con $active carreras activas"; exit 1; }
+          test "$pending" = "1" || { echo "CONCURRENCY FAIL: carrera perdedora no quedó pendiente (pending=$pending)"; exit 1; }
