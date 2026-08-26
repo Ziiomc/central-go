@@ -83,6 +83,7 @@ END;
 $function$;
 
 REVOKE ALL ON FUNCTION public.centralgo_operator_reserve_scheduled_trip(uuid,uuid) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.centralgo_operator_reserve_scheduled_trip(uuid,uuid) FROM anon;
 GRANT EXECUTE ON FUNCTION public.centralgo_operator_reserve_scheduled_trip(uuid,uuid) TO authenticated;
 
 DROP POLICY IF EXISTS centralgo_radio_company_read ON realtime.messages;
