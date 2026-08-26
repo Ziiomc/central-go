@@ -36,7 +36,8 @@ jobs:
 
           test.describe.configure({ mode: 'serial' });
 
-          const BASE = 'https://central-go-git-qa-operator-stress-audit-ignacio-s-ziio.vercel.app/?_vercel_share=4FXpum7577h7PyRNQthCceqQIy7KVNjK';
+          const APP = 'https://central-go-git-qa-operator-stress-audit-ignacio-s-ziio.vercel.app/';
+          const SHARE = `${APP}?_vercel_share=4FXpum7577h7PyRNQthCceqQIy7KVNjK`;
           const ADMIN_EMAIL = 'qa-central-visual-20260826@centralgo.test';
           const ADMIN_PASSWORD = 'CentralGo-QA-20260826!Visual7';
           const OPERATOR_NAME = 'Operadora QA E2E';
@@ -44,7 +45,10 @@ jobs:
           const OPERATOR_PASSWORD = 'QaOperator!260826';
 
           async function loginAdmin(page) {
-            const response = await page.goto(BASE, { waitUntil: 'domcontentloaded', timeout: 45000 });
+            const shareResponse = await page.goto(SHARE, { waitUntil: 'domcontentloaded', timeout: 45000 });
+            expect(shareResponse && shareResponse.ok()).toBeTruthy();
+            await page.waitForTimeout(800);
+            const response = await page.goto(APP, { waitUntil: 'domcontentloaded', timeout: 45000 });
             expect(response && response.ok()).toBeTruthy();
             const policy = response.headers()['permissions-policy'] || '';
             expect(policy).toContain('microphone=(self)');
