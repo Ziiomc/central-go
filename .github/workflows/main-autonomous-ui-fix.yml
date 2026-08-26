@@ -1,0 +1,37 @@
+name: Main autonomous UI hardening
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/main-autonomous-ui-fix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Apply audited UX patch
+        run: python3 scripts/apply-autonomous-ui-hardening.py
+      - name: Install dependencies
+        run: npm ci
+      - name: Verify full app
+        run: npm test
+      - name: Commit verified app changes
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/components/modules/OperatorConsole.tsx src/components/pwa/DriverMobileView.tsx reporte_mejoras_aplicadas.md
+          git commit -m 'feat: harden mobile dispatch and driver touch UX'
+          git push origin HEAD:main
