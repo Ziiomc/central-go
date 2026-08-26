@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Car, Eye, GripVertical, MapPin, Navigation, Plus, Search, UserRound, Wand2, XCircle } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { DRIVER_STATUS_LABELS, TRIP_STATUS_LABELS } from '../../lib/labels';
+import { loadDispatchQueue, subscribeDispatchQueue } from '../../lib/dispatchPriorityRepository';
 import { Driver, Trip, TripStatus } from '../../types';
 import { LiveMap } from '../map/LiveMap';
 
@@ -48,6 +49,7 @@ export const OperatorConsole: React.FC = () => {
   const {
     trips,
     drivers,
+    currentCompany,
     setNewTripModalOpen,
     setSelectedTripForDetail,
     assignTrip,
@@ -65,6 +67,7 @@ export const OperatorConsole: React.FC = () => {
   const [busyTripId, setBusyTripId] = useState<string | null>(null);
   const [dragDriverId, setDragDriverId] = useState<string | null>(null);
   const [dragOverTripId, setDragOverTripId] = useState<string | null>(null);
+  const [queueOrder, setQueueOrder] = useState<Record<string, number>>({});
   const [now, setNow] = useState(Date.now());
   const initialWidths = useMemo(readPanelWidths, []);
   const [leftWidth, setLeftWidth] = useState(initialWidths.left);
@@ -79,11 +82,38 @@ export const OperatorConsole: React.FC = () => {
     try { window.localStorage.setItem(PANEL_KEY, JSON.stringify({ left: leftWidth, map: mapWidth })); } catch { /* noop */ }
   }, [leftWidth, mapWidth]);
 
+  useEffect(() => {
+    if (currentCompany.id === 'network') {
+      setQueueOrder({});
+      return;
+    }
+    let active = true;
+    const refresh = async () => {
+      try {
+        const queue = await loadDispatchQueue(currentCompany.id);
+        if (!active) return;
+        setQueueOrder(Object.fromEntries(queue.map((item) => [item.driverId, item.queueOrder])));
+      } catch {
+        if (active) setQueueOrder({});
+      }
+    };
+    void refresh();
+    const unsubscribe = subscribeDispatchQueue(currentCompany.id, () => { void refresh(); });
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [currentCompany.id]);
+
   const availableDrivers = useMemo(
     () => drivers
       .filter((driver) => driver.status === 'available')
-      .sort((a, b) => a.unitNumber.localeCompare(b.unitNumber, 'es', { numeric: true })),
-    [drivers],
+      .sort((a, b) => {
+        const aPriority = queueOrder[a.id] ?? Number.MAX_SAFE_INTEGER;
+        const bPriority = queueOrder[b.id] ?? Number.MAX_SAFE_INTEGER;
+        return aPriority - bPriority || a.unitNumber.localeCompare(b.unitNumber, 'es', { numeric: true });
+      }),
+    [drivers, queueOrder],
   );
 
   const activeTrips = useMemo(() => {
@@ -176,7 +206,7 @@ export const OperatorConsole: React.FC = () => {
       const delta = moveEvent.clientX - startX;
       if (side === 'left') {
         const maxLeft = Math.min(420, containerWidth - startMap - minimumCenter - 20);
-        setLeftWidth(Math.max(190, Math.min(maxLeft, startLeft + delta)));
+        setLeftWidth(Math.max(190, Math.min(maxLeft, startLeft + delta));
       } else {
         const maxMap = Math.min(600, containerWidth - startLeft - minimumCenter - 20);
         setMapWidth(Math.max(280, Math.min(maxMap, startMap - delta)));
@@ -247,7 +277,7 @@ export const OperatorConsole: React.FC = () => {
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">
                 <h2 className="text-sm font-black text-white">Móviles disponibles</h2>
-                <p className="mt-0.5 truncate text-[10px] text-zinc-500">Arrástralos a una carrera o usa Asignar</p>
+                <p className="mt-0.5 truncate text-[10px] text-zinc-500">Orden de fila persistente · arrastra o usa Asignar</p>
               </div>
               <span className="rounded-lg bg-emerald-500/10 px-2 py-1 text-xs font-black text-emerald-300">{availableDrivers.length}</span>
             </div>
@@ -279,6 +309,7 @@ export const OperatorConsole: React.FC = () => {
                     <span className="block truncate text-xs font-black text-white">{driver.name}</span>
                     <span className="mt-0.5 block truncate text-[9px] text-zinc-500">{driver.currentLocation.address || DRIVER_STATUS_LABELS[driver.status]}</span>
                   </span>
+                  {queueOrder[driver.id] != null && <span className="rounded-md border border-amber-500/20 bg-amber-500/10 px-1.5 py-1 text-[8px] font-black text-amber-300" title="Posición persistida en la fila">P{queueOrder[driver.id]}</span>}
                   <GripVertical className="h-4 w-4 shrink-0 text-zinc-700" />
                   <span className="rounded-md border border-zinc-800 bg-zinc-950 px-1.5 py-1 text-[8px] font-black uppercase text-zinc-500">{driver.operationMode === 'traditional' ? 'Radio' : 'App'}</span>
                 </button>
