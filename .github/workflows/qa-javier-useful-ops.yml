@@ -1,0 +1,68 @@
+name: QA Javier useful ops
+
+on:
+  push:
+    branches:
+      - qa/javier-useful-ops
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-check:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Integrar atajo operativo sin copiar UI antigua
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          operator = Path('src/components/modules/OperatorConsole.tsx')
+          text = operator.read_text()
+          old = "    currentCompany,\n    setNewTripModalOpen,"
+          new = "    currentCompany,\n    setActiveModule,\n    setNewTripModalOpen,"
+          if old not in text and new not in text:
+              raise SystemExit('No se encontró el bloque useApp esperado en OperatorConsole')
+          text = text.replace(old, new, 1)
+
+          anchor = '''          </div>\n          <div className="flex items-center justify-between gap-2 rounded-b-2xl border-t border-zinc-800 bg-zinc-950/40 px-3 py-2 text-[8px] font-bold text-zinc-500">'''
+          insert = '''          </div>\n          {focusDriverId && (\n            <div className="border-t border-zinc-800 bg-zinc-950/25 p-2">\n              <button\n                type="button"\n                onClick={() => {\n                  try { window.sessionStorage.setItem('centralgo:focus-driver', focusDriverId); } catch { /* sesión sin storage */ }\n                  setActiveModule('drivers');\n                }}\n                className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-cyan-400/20 bg-cyan-400/[0.07] px-2 py-2 text-[9px] font-black text-cyan-200 transition hover:border-cyan-300/40 hover:bg-cyan-400/[0.12]"\n                title="Abrir la ficha del conductor seleccionado para cambiar chofer o vehículo"\n              >\n                <UserRound className="h-3.5 w-3.5" />\n                Gestionar chofer / vehículo\n              </button>\n            </div>\n          )}\n          <div className="flex items-center justify-between gap-2 rounded-b-2xl border-t border-zinc-800 bg-zinc-950/40 px-3 py-2 text-[8px] font-bold text-zinc-500">'''
+          if 'Gestionar chofer / vehículo' not in text:
+              if anchor not in text:
+                  raise SystemExit('No se encontró el pie de móviles disponibles')
+              text = text.replace(anchor, insert, 1)
+          operator.write_text(text)
+
+          drivers = Path('src/components/modules/DriversModule.tsx')
+          text = drivers.read_text()
+          anchor = " const openEdit=(d:Driver)=>{setEditing(d);setEditError('');setEdit({unitNumber:d.unitNumber,name:d.name,phone:d.phone,address:d.address??'',birthDate:d.birthDate??'',licenseNumber:d.licenseNumber,licenseExpiry:d.licenseExpiry||'',vehicleId:d.vehicleId||''});};\n"
+          effect = anchor + " useEffect(()=>{let targetId='';try{targetId=window.sessionStorage.getItem('centralgo:focus-driver')||'';}catch{/* storage puede estar bloqueado */}if(!targetId)return;const target=drivers.find(d=>d.id===targetId);if(!target)return;try{window.sessionStorage.removeItem('centralgo:focus-driver');}catch{/* no bloquea la edición */}openEdit(target);},[drivers,currentCompany.id]);\n"
+          if "centralgo:focus-driver" not in text:
+              if anchor not in text:
+                  raise SystemExit('No se encontró openEdit esperado en DriversModule')
+              text = text.replace(anchor, effect, 1)
+          drivers.write_text(text)
+          PY
+      - name: Validar código
+        run: |
+          npm ci
+          npm run check:commercial
+          npm run lint
+          npm run build
+      - name: Guardar integración validada
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "Sin cambios que guardar"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/components/modules/OperatorConsole.tsx src/components/modules/DriversModule.tsx
+          git commit -m "ux: add direct driver vehicle management shortcut"
+          git push origin HEAD:qa/javier-useful-ops
