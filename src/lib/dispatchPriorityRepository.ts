@@ -10,6 +10,8 @@ export interface DispatchQueueItem {
   routeDistanceKm:number|null;routeDurationSeconds:number|null;routeProvider:string|null;routeComputedAt:string|null;presenceLastSeenAt:string|null;
 }
 
+const APP_PRESENCE_MAX_AGE_MS=4.5*60*1000;
+const FALLBACK_RECONCILE_MS=8000;
 const isFresh=(timestamp:string|null,maxAgeMs:number)=>{if(!timestamp)return false;const ageMs=Date.now()-new Date(timestamp).getTime();return Number.isFinite(ageMs)&&ageMs>=-60*1000&&ageMs<=maxAgeMs;};
 
 /**
@@ -18,11 +20,15 @@ const isFresh=(timestamp:string|null,maxAgeMs:number)=>{if(!timestamp)return fal
  * - el GPS, cuando existe, permite además ubicarlo en el mapa.
  * Así un móvil recién integrado no desaparece sólo porque todavía está tomando
  * la primera posición GPS o porque Android suspendió temporalmente el sensor.
+ *
+ * La ventana de presencia sigue el heartbeat real (1 min) y el corte de sesión
+ * del backend (4 min). Evita móviles fantasma durante 20 minutos si la app se
+ * cierra sin poder enviar el evento de desconexión.
  */
 export const isQueueConnected=(item:DispatchQueueItem)=>{
   if(['offline','paused','sos'].includes(item.status)||!item.serviceEnabled)return false;
   if(item.operationMode==='traditional')return item.status==='available';
-  return isFresh(item.presenceLastSeenAt,20*60*1000);
+  return isFresh(item.presenceLastSeenAt,APP_PRESENCE_MAX_AGE_MS);
 };
 
 export async function loadDispatchQueue(companyId:string,tripId?:string):Promise<DispatchQueueItem[]>{
@@ -41,4 +47,30 @@ export async function refreshDispatchRouteMatrix(tripId:string){const{error}=awa
 export async function moveDispatchPriority(driverId:string,direction:DispatchQueueDirection){const{error}=await requireSupabase().rpc('centralgo_operator_move_driver_priority',{p_driver_id:driverId,p_direction:direction});if(error)throw error;}
 export async function setDriverOperationMode(driverId:string,mode:DriverOperationMode){const{error}=await requireSupabase().rpc('centralgo_operator_set_driver_operation_mode',{p_driver_id:driverId,p_mode:mode});if(error)throw error;}
 export async function setTraditionalDriverAvailability(driverId:string,available:boolean){const{error}=await requireSupabase().rpc('centralgo_operator_set_driver_daily_service',{p_driver_id:driverId,p_enabled:available,p_mode:'traditional'});if(error)throw error;}
-export function subscribeDispatchQueue(companyId:string,onChange:()=>void){const db=requireSupabase();let timer:number|null=null;const schedule=()=>{if(timer!==null)window.clearTimeout(timer);timer=window.setTimeout(onChange,120);};const channel=db.channel(`centralgo-dispatch-priority:${companyId}`).on('postgres_changes',{event:'*',schema:'public',table:'drivers',filter:`company_id=eq.${companyId}`},schedule).on('postgres_changes',{event:'*',schema:'public',table:'driver_locations',filter:`company_id=eq.${companyId}`},schedule).on('postgres_changes',{event:'*',schema:'public',table:'driver_presence_sessions',filter:`company_id=eq.${companyId}`},schedule).subscribe();return()=>{if(timer!==null)window.clearTimeout(timer);void db.removeChannel(channel);};}
+
+/**
+ * Realtime es la vía rápida. El sondeo visible de 8 s es deliberadamente un
+ * cinturón de seguridad: una pestaña de central no puede quedar desactualizada
+ * indefinidamente por una reconexión WebSocket perdida.
+ */
+export function subscribeDispatchQueue(companyId:string,onChange:()=>void){
+ const db=requireSupabase();
+ let timer:number|null=null;
+ const schedule=()=>{if(timer!==null)window.clearTimeout(timer);timer=window.setTimeout(onChange,120);};
+ const channel=db.channel(`centralgo-dispatch-priority:${companyId}`)
+  .on('postgres_changes',{event:'*',schema:'public',table:'drivers',filter:`company_id=eq.${companyId}`},schedule)
+  .on('postgres_changes',{event:'*',schema:'public',table:'driver_locations',filter:`company_id=eq.${companyId}`},schedule)
+  .on('postgres_changes',{event:'*',schema:'public',table:'driver_presence_sessions',filter:`company_id=eq.${companyId}`},schedule)
+  .subscribe(status=>{if(status==='SUBSCRIBED')schedule();});
+ const reconcile=()=>{if(document.visibilityState==='visible'&&navigator.onLine)onChange();};
+ const interval=window.setInterval(reconcile,FALLBACK_RECONCILE_MS);
+ window.addEventListener('focus',reconcile);
+ window.addEventListener('online',reconcile);
+ return()=>{
+  if(timer!==null)window.clearTimeout(timer);
+  window.clearInterval(interval);
+  window.removeEventListener('focus',reconcile);
+  window.removeEventListener('online',reconcile);
+  void db.removeChannel(channel);
+ };
+}
