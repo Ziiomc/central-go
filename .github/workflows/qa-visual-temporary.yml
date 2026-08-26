@@ -78,7 +78,7 @@ jobs:
             await expect(page.getByRole('heading', { name: 'Nueva carrera' })).toBeVisible({ timeout: 10000 });
             await assertNoHorizontalOverflow(page, 'modal nueva carrera escritorio');
             await page.screenshot({ path: 'test-results/02-new-trip-desktop.png', fullPage: true });
-            await page.getByRole('button', { name: 'Cerrar' }).click();
+            await page.getByLabel('Cerrar', { exact: true }).click();
 
             const operatorsNav = page.getByText('Operadores', { exact: true }).first();
             await expect(operatorsNav).toBeVisible({ timeout: 15000 });
@@ -122,7 +122,7 @@ jobs:
             await page.getByPlaceholder('Dirección de retiro').fill('Plaza de Armas, Linares, Chile');
             await assertNoHorizontalOverflow(page, 'modal operadora escritorio');
             await page.screenshot({ path: 'test-results/06-operator-new-trip.png', fullPage: true });
-            await page.getByRole('button', { name: 'Cerrar' }).click();
+            await page.getByLabel('Cerrar', { exact: true }).click();
 
             expect(pageErrors, `Errores JS de página: ${pageErrors.join(' | ')}`).toEqual([]);
             await context.close();
@@ -144,7 +144,7 @@ jobs:
               await expect(page.getByRole('heading', { name: 'Nueva carrera' })).toBeVisible({ timeout: 10000 });
               await assertNoHorizontalOverflow(page, `${device.name} modal`);
               await page.screenshot({ path: `test-results/11-${device.name}-new-trip.png`, fullPage: true });
-              await expect(page.getByRole('button', { name: 'Cerrar' })).toBeVisible();
+              await expect(page.getByLabel('Cerrar', { exact: true })).toBeVisible();
               expect(pageErrors, `Errores JS ${device.name}: ${pageErrors.join(' | ')}`).toEqual([]);
               await context.close();
             });
