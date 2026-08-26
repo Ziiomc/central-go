@@ -295,9 +295,47 @@ export async function cancelTripAtomic(tripId: string, reason: string): Promise<
 
 export async function setTripStatusAtomic(tripId: string, status: TripStatus, asDriver: boolean): Promise<Trip> {
   const rpc = asDriver ? 'centralgo_driver_transition_trip' : 'centralgo_operator_set_trip_status';
-  const { data, error } = await requireSupabase().rpc(rpc, { p_trip_id: tripId, p_new_status: status });
+  const db = requireSupabase();
+  const transition = () => db.rpc(rpc, { p_trip_id: tripId, p_new_status: status });
+  const first = await transition();
+  if (!first.error) return mapTripRow(first.data);
+  if (!asDriver) throw first.error;
+
+  const confirmed = await loadTripByIdSafe(tripId);
+  if (confirmed && tripReachedStatus(confirmed.status, status)) return confirmed;
+  if (!isTransientConnectionError(first.error)) throw first.error;
+
+  try { await db.auth.refreshSession(); } catch { /* The existing session may still be usable. */ }
+  await new Promise((resolve) => setTimeout(resolve, 350));
+  const retry = await transition();
+  if (!retry.error) return mapTripRow(retry.data);
+  const recovered = await loadTripByIdSafe(tripId);
+  if (recovered && tripReachedStatus(recovered.status, status)) return recovered;
+  throw new Error('No pudimos confirmar el cambio por una conexión inestable. La app volverá a sincronizar el viaje automáticamente.');
+}
+
+const TRIP_PROGRESS: TripStatus[] = ['pending', 'assigned', 'en_route', 'arrived', 'in_progress', 'completed'];
+const tripReachedStatus = (current: TripStatus, target: TripStatus) => {
+  const currentIndex = TRIP_PROGRESS.indexOf(current);
+  const targetIndex = TRIP_PROGRESS.indexOf(target);
+  return current === target || (currentIndex >= 0 && targetIndex >= 0 && currentIndex >= targetIndex);
+};
+const isTransientConnectionError = (error: unknown) => /network|fetch|timeout|timed out|connection|load failed|failed to fetch/i.test(error instanceof Error ? error.message : String(error ?? ''));
+
+export async function loadTripById(tripId: string): Promise<Trip | null> {
+  const { data, error } = await requireSupabase().from('trips').select('*').eq('id', tripId).maybeSingle();
   if (error) throw error;
-  return mapTripRow(data);
+  return data ? mapTripRow(data) : null;
+}
+
+const loadTripByIdSafe = async (tripId: string) => {
+  try { return await loadTripById(tripId); } catch { return null; }
+};
+
+export async function loadDriverVisibleTrips(companyId: string): Promise<Trip[]> {
+  const { data, error } = await requireSupabase().from('trips').select('*').eq('company_id', companyId).order('created_at', { ascending: false }).limit(250);
+  if (error) throw error;
+  return (data ?? []).map(mapTripRow);
 }
 
 export async function completeTripAtomic(tripId: string, finalFare: number, paymentMethod: PaymentMethod): Promise<Trip> {
@@ -521,6 +559,7 @@ export function subscribeCompanyRealtime(companyId: string, handlers: {
   onDriver: (driverRow: any) => void;
   onLocation: (locationRow: any) => void;
   onNotification: (notification: AppNotification) => void;
+  onStatus?: (status: string) => void;
 }) {
   const db = requireSupabase();
   const channel = db.channel(`centralgo:${companyId}`)
@@ -536,7 +575,7 @@ export function subscribeCompanyRealtime(companyId: string, handlers: {
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `company_id=eq.${companyId}` }, (payload) => {
       handlers.onNotification(mapNotificationRow(payload.new));
     })
-    .subscribe();
+    .subscribe((status) => handlers.onStatus?.(status));
 
   return () => { void db.removeChannel(channel); };
 }

@@ -36,7 +36,7 @@ const roleOptions: Array<{
 }> = [
   { id: 'central', label: 'Central', detail: '5 días Full', icon: Building2 },
   { id: 'driver', label: 'Conductor', detail: 'Portal inmediato', icon: CarFront },
-  { id: 'operator', label: 'Operadora', detail: 'Solo con Google', icon: Headphones },
+  { id: 'operator', label: 'Operadora', detail: 'Acceso administrado', icon: Headphones },
   { id: 'sales_partner', label: 'Socio comercial', detail: 'Requiere aprobación', icon: Handshake },
 ];
 
@@ -233,7 +233,7 @@ export const LoginScreen: React.FC = () => {
           {busy ? (mode === 'register' ? 'Creando cuenta…' : 'Ingresando…') : (mode === 'register' ? 'Crear mi cuenta' : 'Iniciar sesión')}
         </button>
       </form>}
-      {mode === 'register' && role === 'operator' && <div className="cg-alert cg-alert-info">Las cuentas de operadora se registran únicamente con Google. Así validamos el correo de las invitaciones y protegemos el acceso a la central.</div>}
+      {mode === 'register' && role === 'operator' && <div className="cg-alert cg-alert-info">El administrador crea el usuario y la contraseña de cada operadora y autoriza el computador desde el módulo Operadores. También puede invitar una cuenta Google.</div>}
 
       {mode === 'login' && (
         <button type="button" disabled={busy || !email.trim() || recoveryCooldown > 0} onClick={() => void recoverPassword()} className="cg-subtle-button w-full disabled:opacity-40">

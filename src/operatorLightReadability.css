@@ -1,0 +1,54 @@
+/* Central GO · operator/admin light-mode readability
+   Hard-coded dark-theme utility text must remain readable when operational
+   surfaces are translated to light cards. Driver-specific light styles live
+   in themeInteractionFixes.css and are intentionally left untouched here. */
+
+[data-theme='light'] .cg-main [class*='text-white'],
+[data-theme='light'] .cg-main [class*='text-zinc-100'],
+[data-theme='light'] .cg-main [class*='text-zinc-200'],
+[data-theme='light'] .cg-main [class*='text-zinc-300'],
+[data-theme='light'] .cg-sidebar [class*='text-white'],
+[data-theme='light'] .cg-sidebar [class*='text-zinc-100'],
+[data-theme='light'] .cg-sidebar [class*='text-zinc-200'],
+[data-theme='light'] .cg-sidebar [class*='text-zinc-300'],
+[data-theme='light'] .cg-topbar [class*='text-white'],
+[data-theme='light'] .cg-topbar [class*='text-zinc-100'],
+[data-theme='light'] .cg-topbar [class*='text-zinc-200'],
+[data-theme='light'] .cg-topbar [class*='text-zinc-300'] {
+  color: #173f5c !important;
+}
+
+[data-theme='light'] .cg-main [class*='text-zinc-400'],
+[data-theme='light'] .cg-main [class*='text-zinc-500'],
+[data-theme='light'] .cg-main [class*='text-zinc-600'],
+[data-theme='light'] .cg-sidebar [class*='text-zinc-400'],
+[data-theme='light'] .cg-sidebar [class*='text-zinc-500'],
+[data-theme='light'] .cg-sidebar [class*='text-zinc-600'],
+[data-theme='light'] .cg-topbar [class*='text-zinc-400'],
+[data-theme='light'] .cg-topbar [class*='text-zinc-500'],
+[data-theme='light'] .cg-topbar [class*='text-zinc-600'] {
+  color: #526d83 !important;
+}
+
+[data-theme='light'] .cg-main [class*='border-zinc-700'],
+[data-theme='light'] .cg-main [class*='border-zinc-800'],
+[data-theme='light'] .cg-sidebar [class*='border-zinc-700'],
+[data-theme='light'] .cg-sidebar [class*='border-zinc-800'] {
+  border-color: rgba(31, 78, 113, .25) !important;
+}
+
+/* Filled controls preserve their intended foreground contrast. */
+[data-theme='light'] .cg-main button[class*='bg-blue-500'],
+[data-theme='light'] .cg-main button[class*='bg-blue-600'],
+[data-theme='light'] .cg-main button[class*='bg-purple-500'],
+[data-theme='light'] .cg-main button[class*='bg-rose-500'],
+[data-theme='light'] .cg-main button[class*='bg-rose-600'],
+[data-theme='light'] .cg-main button[class*='bg-red-600'],
+[data-theme='light'] .cg-main button[class*='bg-emerald-500'] {
+  color: #fff !important;
+}
+
+[data-theme='light'] .cg-main button[class*='bg-amber-400'],
+[data-theme='light'] .cg-main button[class*='bg-emerald-400'] {
+  color: #07130d !important;
+}

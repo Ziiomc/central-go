@@ -12,7 +12,7 @@
     "generate:locations": "node scripts/generate-world-location-data.mjs",
     "generate:partner-pdf": "python3 scripts/generate-partner-requirements.py",
     "generate:central-manual": "node scripts/generate-central-manual.mjs",
-    "check:commercial": "node scripts/commercial-check.mjs",
+    "check:commercial": "node scripts/commercial-check.mjs && node scripts/security-header-check.mjs",
     "test": "npm run lint && npm run check:commercial && npm run build"
   },
   "dependencies": {

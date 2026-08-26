@@ -351,6 +351,7 @@ export const DriverMobileView: React.FC = () => {
       return true;
     } catch (error) {
       setActionError(error instanceof Error ? error.message : 'La operación no pudo confirmarse. Revisa la conexión e inténtalo nuevamente.');
+      window.dispatchEvent(new CustomEvent('centralgo:driver-resync'));
       return false;
     } finally {
       setPendingAction(null);

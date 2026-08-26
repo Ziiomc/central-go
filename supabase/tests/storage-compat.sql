@@ -70,3 +70,36 @@ grant usage on schema storage to anon, authenticated;
 grant select on storage.buckets to anon, authenticated;
 grant select,insert,update,delete on storage.objects to authenticated;
 grant execute on function storage.foldername(text), storage.extension(text) to anon, authenticated;
+
+-- Supabase Realtime owns this table and helper in hosted projects. The local
+-- PostgreSQL service only needs their public contract so radio RLS migrations
+-- can be compiled and tested from a clean database.
+create schema if not exists realtime;
+
+create table if not exists realtime.messages (
+  id uuid primary key default gen_random_uuid(),
+  topic text not null default '',
+  extension text not null default 'broadcast',
+  event text,
+  payload jsonb not null default '{}'::jsonb,
+  private boolean not null default true,
+  inserted_at timestamptz not null default now()
+);
+
+alter table realtime.messages enable row level security;
+
+create or replace function realtime.topic()
+returns text
+language sql
+stable
+as $$
+  select coalesce(
+    nullif(current_setting('realtime.topic',true),''),
+    nullif(current_setting('request.jwt.claims',true),'')::jsonb->>'topic',
+    ''
+  );
+$$;
+
+grant usage on schema realtime to authenticated;
+grant select,insert on realtime.messages to authenticated;
+grant execute on function realtime.topic() to authenticated;
