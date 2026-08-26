@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Car, ChevronDown, ChevronUp, Eye, GripVertical, Loader2, MapPin, Navigation, PhoneCall, Plus, Search, UserPlus, UserRound, Wand2, XCircle } from 'lucide-react';
+import { Car, ChevronUp, Eye, GripVertical, Loader2, MapPin, Navigation, PhoneCall, Plus, Search, UserPlus, UserRound, Wand2, XCircle } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { DRIVER_STATUS_LABELS, TRIP_STATUS_LABELS } from '../../lib/labels';
 import { isQueueConnected, loadDispatchQueue, setTraditionalDriverAvailability, subscribeDispatchQueue, type DispatchQueueItem } from '../../lib/dispatchPriorityRepository';
@@ -7,6 +7,7 @@ import type { Driver, Trip, TripStatus } from '../../types';
 import { LiveMap } from '../map/LiveMap';
 
 const ACTIVE_STATUSES: TripStatus[] = ['pending', 'assigned', 'en_route', 'arrived', 'in_progress'];
+const DRIVER_BUSY_STATUSES: TripStatus[] = ['assigned', 'en_route', 'arrived', 'in_progress'];
 const PANEL_KEY = 'centralgo:operator-panel-widths:v1';
 const DRIVER_MIME = 'application/x-centralgo-driver';
 
@@ -127,18 +128,31 @@ export const OperatorConsole: React.FC = () => {
     [vehicles],
   );
 
+  // A driver tied to an active trip must never be selectable even if the
+  // driver row arrives a few milliseconds late through Realtime.
+  const activeTripDriverIds = useMemo(() => new Set(
+    trips
+      .filter((trip) => Boolean(trip.driverId) && DRIVER_BUSY_STATUSES.includes(trip.status))
+      .map((trip) => trip.driverId as string),
+  ), [trips]);
+
   const availableDrivers = useMemo(() => queueItems
-    .filter((item) => item.status === 'available' && isQueueConnected(item))
+    .filter((item) => item.status === 'available' && isQueueConnected(item) && !activeTripDriverIds.has(item.driverId))
     .sort((a, b) => a.queueOrder - b.queueOrder || a.unitNumber.localeCompare(b.unitNumber, 'es', { numeric: true }))
     .map((item) => drivers.find((driver) => driver.id === item.driverId))
-    .filter((driver): driver is Driver => Boolean(driver)), [drivers, queueItems]);
+    .filter((driver): driver is Driver => Boolean(driver)), [activeTripDriverIds, drivers, queueItems]);
 
+  // Keep stale App sessions out of the live queue, but expose those drivers to
+  // the operator so they can be explicitly incorporated by radio. Connected
+  // App drivers stay under App control and are not duplicated in this menu.
   const manualDriversManageable = useMemo(() => queueItems
-    .filter((item) => item.operationMode === 'traditional')
+    .filter((item) => !activeTripDriverIds.has(item.driverId))
+    .filter((item) => item.operationMode === 'traditional' || !isQueueConnected(item))
     .filter((item) => !['en_route', 'in_trip', 'sos'].includes(item.status))
-    .sort((a, b) => a.unitNumber.localeCompare(b.unitNumber, 'es', { numeric: true })), [queueItems]);
+    .sort((a, b) => a.unitNumber.localeCompare(b.unitNumber, 'es', { numeric: true })), [activeTripDriverIds, queueItems]);
 
   const noAppDriverCount = useMemo(() => queueItems.filter((item) => !item.userId).length, [queueItems]);
+  const outsideQueueCount = useMemo(() => queueItems.filter((item) => !isQueueConnected(item) && !activeTripDriverIds.has(item.driverId)).length, [activeTripDriverIds, queueItems]);
 
   const addManualDriverToQueue = async (item: DispatchQueueItem) => {
     if (manualBusyId) return;
@@ -197,23 +211,23 @@ export const OperatorConsole: React.FC = () => {
   const activeCount = activeTrips.filter((trip) => trip.status !== 'pending').length;
 
   const runTripAction = async (tripId: string, action: () => Promise<unknown> | unknown) => {
-  if (busyTripIdsRef.current.has(tripId)) return;
-  busyTripIdsRef.current.add(tripId);
-  setBusyTripIds(new Set(busyTripIdsRef.current));
-  try {
-    await Promise.resolve(action());
-  } catch (error) {
-    window.alert(error instanceof Error ? error.message : 'No fue posible completar la operación.');
-  } finally {
-    busyTripIdsRef.current.delete(tripId);
+    if (busyTripIdsRef.current.has(tripId)) return;
+    busyTripIdsRef.current.add(tripId);
     setBusyTripIds(new Set(busyTripIdsRef.current));
-  }
-};
+    try {
+      await Promise.resolve(action());
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : 'No fue posible completar la operación.');
+    } finally {
+      busyTripIdsRef.current.delete(tripId);
+      setBusyTripIds(new Set(busyTripIdsRef.current));
+    }
+  };
 
-const assignDriverToTrip = (trip: Trip, driverId: string) => {
+  const assignDriverToTrip = (trip: Trip, driverId: string) => {
     if (!driverId || trip.status !== 'pending') return;
-    const driver = drivers.find((item) => item.id === driverId);
-    if (!driver || driver.status !== 'available') return;
+    const driver = availableDrivers.find((item) => item.id === driverId);
+    if (!driver) return;
     void runTripAction(trip.id, async () => {
       await Promise.resolve(assignTrip(trip.id, driverId));
       setSelectedTripId(trip.id);
@@ -332,8 +346,8 @@ const assignDriverToTrip = (trip: Trip, driverId: string) => {
                   type="button"
                   onClick={() => { setManualMenuOpen((open) => !open); setManualError(''); }}
                   className={`grid h-8 w-8 place-items-center rounded-lg border transition ${manualMenuOpen ? 'border-amber-400/35 bg-amber-400/10 text-amber-200' : 'border-zinc-800 bg-zinc-950 text-zinc-400 hover:border-amber-400/25 hover:text-amber-200'}`}
-                  title="Gestionar móviles manuales"
-                  aria-label="Gestionar móviles manuales"
+                  title="Gestionar móviles por radio"
+                  aria-label="Gestionar móviles por radio"
                   aria-expanded={manualMenuOpen}
                 >
                   <UserPlus className="h-3.5 w-3.5" />
@@ -343,11 +357,11 @@ const assignDriverToTrip = (trip: Trip, driverId: string) => {
             </div>
 
             {manualMenuOpen && (
-              <div className="absolute right-2 top-[58px] z-[80] w-[285px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-amber-400/20 bg-[#111216] shadow-2xl shadow-black/60">
+              <div className="absolute right-2 top-[58px] z-[80] w-[310px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-amber-400/20 bg-[#111216] shadow-2xl shadow-black/60">
                 <div className="flex items-start justify-between gap-2 border-b border-white/[0.06] px-3 py-2.5">
                   <div className="min-w-0">
-                    <p className="text-[10px] font-black text-white">Móviles manuales</p>
-                    <p className="mt-0.5 text-[8px] leading-snug text-zinc-500">Añade o saca móviles de la fila sin borrar el vehículo ni su historial.</p>
+                    <p className="text-[10px] font-black text-white">Fila / operación por radio</p>
+                    <p className="mt-0.5 text-[8px] leading-snug text-zinc-500">Los móviles con App desconectada pueden incorporarse por radio sin borrar su cuenta, vehículo ni historial.</p>
                   </div>
                   <button type="button" onClick={() => setManualMenuOpen(false)} className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-white/[0.06] text-zinc-500" aria-label="Cerrar lista de conductores manuales">
                     <ChevronUp className="h-3.5 w-3.5" />
@@ -358,19 +372,23 @@ const assignDriverToTrip = (trip: Trip, driverId: string) => {
                   {manualDriversManageable.map((item) => {
                     const driver = drivers.find((candidate) => candidate.id === item.driverId);
                     const phone = driver?.phone?.trim() || '';
+                    const isManualInQueue = item.operationMode === 'traditional' && item.serviceEnabled && item.status === 'available';
+                    const sourceLabel = item.operationMode === 'traditional'
+                      ? (item.userId ? 'Radio temporal' : 'Sin app')
+                      : 'App fuera de línea · disponible para radio';
                     return (
                       <div key={item.driverId} className="flex items-center gap-2 px-2.5 py-2.5">
                         <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-amber-400/20 bg-amber-400/10 text-[9px] font-black text-amber-200">{item.unitNumber}</span>
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-[9px] font-black text-white">{item.name}</span>
-                          <span className="mt-0.5 block truncate text-[7px] text-zinc-500">{phone || 'Sin teléfono registrado'} · {item.userId?'Radio temporal':'Sin app'}</span>
+                          <span className="mt-0.5 block truncate text-[7px] text-zinc-500">{phone || 'Sin teléfono registrado'} · {sourceLabel}</span>
                         </span>
                         {phone && (
                           <a href={`tel:${phone}`} className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-cyan-400/20 bg-cyan-400/[0.07] text-cyan-200" title={`Llamar a ${item.name}`} aria-label={`Llamar a ${item.name}`}>
                             <PhoneCall className="h-3 w-3" />
                           </a>
                         )}
-                        {item.serviceEnabled ? (
+                        {isManualInQueue ? (
                           <button
                             type="button"
                             disabled={Boolean(manualBusyId)}
@@ -388,26 +406,26 @@ const assignDriverToTrip = (trip: Trip, driverId: string) => {
                             className="inline-flex h-7 shrink-0 items-center gap-1 rounded-lg bg-emerald-400 px-2 text-[7px] font-black text-emerald-950 disabled:opacity-40"
                           >
                             {manualBusyId === item.driverId ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
-                            Añadir
+                            Por radio
                           </button>
                         )}
                       </div>
                     );
                   })}
                   {!manualDriversManageable.length && (
-                    <p className="px-4 py-6 text-center text-[9px] text-zinc-500">No hay móviles manuales disponibles para gestionar.</p>
+                    <p className="px-4 py-6 text-center text-[9px] text-zinc-500">No hay móviles fuera de fila para gestionar.</p>
                   )}
                 </div>
                 <div className="flex items-center justify-between border-t border-white/[0.06] px-3 py-2 text-[7px] font-bold text-zinc-500">
-                  <span>{queueItems.length} conductores registrados</span>
-                  <span>{noAppDriverCount} sin app</span>
+                  <span>{queueItems.length} registrados</span>
+                  <span>{outsideQueueCount} fuera de fila</span>
                 </div>
               </div>
             )}
           </div>
           <div className="max-h-[500px] divide-y divide-zinc-800/80 overflow-y-auto overflow-x-hidden rounded-b-2xl">
             {availableDrivers.length === 0 ? (
-              <p className="px-4 py-10 text-center text-xs text-zinc-500">No hay móviles conectados y libres.</p>
+              <p className="px-4 py-10 text-center text-xs text-zinc-500">No hay móviles conectados/libres. Usa + para incorporar uno por radio.</p>
             ) : availableDrivers.map((driver: Driver, index) => {
               const focused = focusDriverId === driver.id;
               const dragging = dragDriverId === driver.id;
@@ -458,7 +476,7 @@ const assignDriverToTrip = (trip: Trip, driverId: string) => {
             </div>
           )}
           <div className="flex items-center justify-between gap-2 rounded-b-2xl border-t border-zinc-800 bg-zinc-950/40 px-3 py-2 text-[8px] font-bold text-zinc-500">
-            <span>Conductores {queueItems.length}</span>
+            <span>En fila {availableDrivers.length} · Registrados {queueItems.length}</span>
             <span>Sin app {noAppDriverCount}</span>
           </div>
         </aside>
@@ -553,8 +571,8 @@ const assignDriverToTrip = (trip: Trip, driverId: string) => {
                       {next && <button type="button" disabled={isBusy} onClick={() => void runTripAction(trip.id, () => updateTripStatus(trip.id, next.status))} className="h-11 touch-manipulation rounded-lg bg-emerald-600 px-3 text-xs font-black text-white disabled:opacity-40 sm:h-9">{next.label}</button>}
                       {trip.status === 'assigned' && <button type="button" disabled={isBusy} onClick={() => void runTripAction(trip.id, () => unassignTrip(trip.id))} className="h-11 touch-manipulation rounded-lg border border-zinc-700 bg-zinc-900 px-2.5 text-xs font-black text-zinc-300 disabled:opacity-40 sm:h-9">Liberar</button>}
                       {trip.status === 'in_progress' && <button type="button" onClick={() => setSelectedTripForDetail(trip)} className="h-11 touch-manipulation rounded-lg bg-emerald-600 px-3 text-xs font-black text-white sm:h-9">Finalizar</button>}
-                      <button type="button" onClick={() => setSelectedTripForDetail(trip)} className="grid h-11 w-11 touch-manipulation place-items-center rounded-lg border border-zinc-700 bg-zinc-900 text-zinc-400 hover:text-white sm:h-9 sm:w-9" title="Ver detalle" aria-label={`Ver detalle de ${trip.code}`} ><Eye className="h-4 w-4" /></button>
-                      <button type="button" disabled={isBusy} onClick={() => handleCancel(trip)} className="grid h-11 w-11 touch-manipulation place-items-center rounded-lg border border-rose-500/20 bg-rose-500/10 text-rose-300 disabled:opacity-40 sm:h-9 sm:w-9" title="Cancelar carrera" aria-label={`Cancelar ${trip.code}`} ><XCircle className="h-4 w-4" /></button>
+                      <button type="button" onClick={() => setSelectedTripForDetail(trip)} className="grid h-11 w-11 touch-manipulation place-items-center rounded-lg border border-zinc-700 bg-zinc-900 text-zinc-400 hover:text-white sm:h-9 sm:w-9" title="Ver detalle" aria-label={`Ver detalle de ${trip.code}`}><Eye className="h-4 w-4" /></button>
+                      <button type="button" disabled={isBusy} onClick={() => handleCancel(trip)} className="grid h-11 w-11 touch-manipulation place-items-center rounded-lg border border-rose-500/20 bg-rose-500/10 text-rose-300 disabled:opacity-40 sm:h-9 sm:w-9" title="Cancelar carrera" aria-label={`Cancelar ${trip.code}`}><XCircle className="h-4 w-4" /></button>
                     </div>
                   </article>
                 );
