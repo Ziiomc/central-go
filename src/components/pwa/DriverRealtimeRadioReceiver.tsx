@@ -58,12 +58,20 @@ export const DriverRealtimeRadioReceiver: React.FC = () => {
 
   useEffect(() => {
     if (!ownDriver || !currentCompany.id || currentCompany.id === 'network') return;
+    queueRef.current = [];
+    playerRef.current?.pause();
+    playerRef.current = null;
+    playingRef.current = false;
+    setLive(false);
+    setNeedsTap(false);
+
     const channel = createPrivateRadioChannel(currentCompany.id)
       .on('broadcast', { event: RADIO_VOICE_EVENT }, ({ payload }) => {
         const frame = decodeRadioVoiceFrame(payload);
         if (!frame) return;
         if (frame.meta.targetDriverId && frame.meta.targetDriverId !== ownDriver.id) return;
         if (Date.now() - frame.meta.sentAt > 15000) return;
+        if (soundMuted) return;
         if (lastStreamRef.current !== frame.meta.streamId) {
           lastStreamRef.current = frame.meta.streamId;
           setLive(true);
@@ -84,7 +92,7 @@ export const DriverRealtimeRadioReceiver: React.FC = () => {
       playerRef.current = null;
       void requireSupabase().removeChannel(channel);
     };
-  }, [currentCompany.id, ownDriver?.id]);
+  }, [currentCompany.id, ownDriver?.id, soundMuted]);
 
   if (!ownDriver || (!live && !needsTap)) return null;
 
