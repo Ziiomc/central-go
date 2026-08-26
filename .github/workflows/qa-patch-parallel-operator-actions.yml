@@ -1,0 +1,96 @@
+name: QA patch parallel operator actions
+
+on:
+  push:
+    branches: [qa/operator-stress-audit]
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: qa/operator-stress-audit
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Permitir operaciones simultáneas en carreras distintas
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path('src/components/modules/OperatorConsole.tsx')
+          text = path.read_text()
+
+          old_state = "  const [busyTripId, setBusyTripId] = useState<string | null>(null);"
+          new_state = "  const busyTripIdsRef = useRef<Set<string>>(new Set());\n  const [busyTripIds, setBusyTripIds] = useState<Set<string>>(() => new Set());"
+
+          old_action = """  const runTripAction = async (tripId: string, action: () => Promise<unknown> | unknown) => {
+            if (busyTripId) return;
+            setBusyTripId(tripId);
+            try {
+              await Promise.resolve(action());
+            } catch (error) {
+              window.alert(error instanceof Error ? error.message : 'No fue posible completar la operación.');
+            } finally {
+              setBusyTripId(null);
+            }
+          };"""
+          new_action = """  const runTripAction = async (tripId: string, action: () => Promise<unknown> | unknown) => {
+            if (busyTripIdsRef.current.has(tripId)) return;
+            busyTripIdsRef.current.add(tripId);
+            setBusyTripIds(new Set(busyTripIdsRef.current));
+            try {
+              await Promise.resolve(action());
+            } catch (error) {
+              window.alert(error instanceof Error ? error.message : 'No fue posible completar la operación.');
+            } finally {
+              busyTripIdsRef.current.delete(tripId);
+              setBusyTripIds(new Set(busyTripIdsRef.current));
+            }
+          };"""
+
+          old_render = "                const isBusy = busyTripId === trip.id;"
+          new_render = "                const isBusy = busyTripIds.has(trip.id);"
+
+          if old_state not in text and 'busyTripIdsRef' in text:
+              print('La corrección ya estaba aplicada.')
+              raise SystemExit(0)
+
+          for old, new, label in [
+              (old_state, new_state, 'estado busy'),
+              (old_action, new_action, 'acción por carrera'),
+              (old_render, new_render, 'render busy'),
+          ]:
+              if old not in text:
+                  raise SystemExit(f'No se encontró el bloque esperado: {label}')
+              text = text.replace(old, new, 1)
+
+          path.write_text(text)
+
+      - name: Verificar compilación y reglas
+        run: |
+          npm ci --no-audit --no-fund
+          npm run lint
+          npm run check:commercial
+          npm run build
+
+      - name: Publicar corrección en rama QA
+        shell: bash
+        run: |
+          if git diff --quiet -- src/components/modules/OperatorConsole.tsx; then
+            echo 'Sin cambios pendientes.'
+            exit 0
+          fi
+          git config user.name 'central-go-qa-bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add src/components/modules/OperatorConsole.tsx
+          git commit -m 'fix: allow parallel actions across operator trips'
+          git push origin HEAD:qa/operator-stress-audit
