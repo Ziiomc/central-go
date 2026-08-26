@@ -1,0 +1,108 @@
+name: Apply driver sync reservations and manual fleet UX
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/main-fix-driver-reservations-manual-fleet.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Apply audited source changes
+        shell: python
+        run: |
+          from pathlib import Path
+
+          def replace_once(path, old, new, label):
+              p=Path(path); text=p.read_text()
+              count=text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected 1 match, got {count}')
+              p.write_text(text.replace(old,new,1))
+
+          # 1) Reservations become a real routed module, never a full-screen Sidebar overlay.
+          sidebar=Path('src/components/Sidebar.tsx')
+          s=sidebar.read_text()
+          s=s.replace("import { ScheduledTripsStrip } from './modules/ScheduledTripsStrip';\n",'',1)
+          s=s.replace("  const [reservationsOpen,setReservationsOpen]=React.useState(false);\n",'',1)
+          escape_block="""  React.useEffect(()=>{\n    const closeReservations=(event:KeyboardEvent)=>{if(event.key==='Escape'&&reservationsOpen)setReservationsOpen(false);};\n    window.addEventListener('keydown',closeReservations);\n    return()=>window.removeEventListener('keydown',closeReservations);\n  },[reservationsOpen]);\n\n"""
+          if escape_block not in s: raise SystemExit('sidebar reservations escape block not found')
+          s=s.replace(escape_block,'',1)
+          old_open="""  const openItem=(id:string)=>{\n    if(id==='reservations'){\n      setReservationsOpen(true);\n      onClose();\n      return;\n    }\n    setReservationsOpen(false);\n    setActiveModule(id);\n    onClose();\n  };\n"""
+          new_open="""  const openItem=(id:string)=>{\n    setActiveModule(id);\n    onClose();\n  };\n"""
+          if old_open not in s: raise SystemExit('sidebar openItem block not found')
+          s=s.replace(old_open,new_open,1)
+          old_active="const active=id==='reservations'?reservationsOpen:activeModule===id&&!reservationsOpen;"
+          if old_active not in s: raise SystemExit('sidebar active expression not found')
+          s=s.replace(old_active,"const active=activeModule===id;",1)
+          overlay_start=s.find('\n      {reservationsOpen&&<div')
+          if overlay_start < 0: raise SystemExit('sidebar reservations overlay not found')
+          overlay_end=s.find('\n    </>\n  );',overlay_start)
+          if overlay_end < 0: raise SystemExit('sidebar overlay end not found')
+          s=s[:overlay_start]+s[overlay_end:]
+          sidebar.write_text(s)
+
+          app=Path('src/App.tsx'); a=app.read_text()
+          old="const TripsModule=lazy(()=>import('./components/modules/TripsModule').then(module=>({default:module.TripsModule})));"
+          new=old+"\nconst ReservationsModule=lazy(()=>import('./components/modules/ReservationsModule').then(module=>({default:module.ReservationsModule})));"
+          if old not in a: raise SystemExit('App TripsModule lazy import not found')
+          a=a.replace(old,new,1)
+          old="live_map:['super_admin'],trips:['company_admin','operator'],drivers:['company_admin','operator']"
+          new="live_map:['super_admin'],trips:['company_admin','operator'],reservations:['company_admin','operator'],drivers:['company_admin','operator']"
+          if old not in a: raise SystemExit('App reservations access insertion point not found')
+          a=a.replace(old,new,1)
+          old="case'trips':return <TripsModule/>;case'drivers':return <DriversModule/>;"
+          new="case'trips':return <TripsModule/>;case'reservations':return <ReservationsModule/>;case'drivers':return <DriversModule/>;"
+          if old not in a: raise SystemExit('App reservation render insertion point not found')
+          a=a.replace(old,new,1)
+          app.write_text(a)
+
+          # 2) The manual fleet popover now supports both adding and taking a radio/mobile out of service.
+          op=Path('src/components/modules/OperatorConsole.tsx'); o=op.read_text()
+          o=o.replace('manualDriversOutsideQueue','manualDriversManageable')
+          old=".filter((item) => !item.userId && item.operationMode === 'traditional' && !item.serviceEnabled)"
+          new=".filter((item) => item.operationMode === 'traditional')"
+          if old not in o: raise SystemExit('manual driver filter not found')
+          o=o.replace(old,new,1)
+          add_block="""  const addManualDriverToQueue = async (item: DispatchQueueItem) => {\n    if (manualBusyId) return;\n    setManualBusyId(item.driverId);\n    setManualError('');\n    try {\n      await setTraditionalDriverAvailability(item.driverId, true);\n      setQueueItems(await loadDispatchQueue(currentCompany.id));\n    } catch (error) {\n      setManualError(error instanceof Error ? error.message : 'No fue posible agregar el conductor a la fila.');\n    } finally {\n      setManualBusyId(null);\n    }\n  };\n"""
+          remove_block=add_block+"""\n  const removeManualDriverFromQueue = async (item: DispatchQueueItem) => {\n    if (manualBusyId) return;\n    if (!window.confirm(`¿Sacar el móvil ${item.unitNumber} de la fila?\\n\\nNo se elimina el vehículo ni su historial. Podrás volver a incorporarlo manualmente cuando corresponda.`)) return;\n    setManualBusyId(item.driverId);\n    setManualError('');\n    try {\n      await setTraditionalDriverAvailability(item.driverId, false);\n      setQueueItems(await loadDispatchQueue(currentCompany.id));\n    } catch (error) {\n      setManualError(error instanceof Error ? error.message : 'No fue posible sacar el móvil de la fila.');\n    } finally {\n      setManualBusyId(null);\n    }\n  };\n"""
+          if add_block not in o: raise SystemExit('add manual driver function not found')
+          o=o.replace(add_block,remove_block,1)
+          o=o.replace('title="Añadir conductor sin app"','title="Gestionar móviles manuales"',1)
+          o=o.replace('aria-label="Añadir conductor manual"','aria-label="Gestionar móviles manuales"',1)
+          o=o.replace('<p className="text-[10px] font-black text-white">Conductores sin app</p>','<p className="text-[10px] font-black text-white">Móviles manuales</p>',1)
+          o=o.replace('<p className="mt-0.5 text-[8px] leading-snug text-zinc-500">Añade un conductor antiguo al final de la fila. Quedará en modo Radio.</p>','<p className="mt-0.5 text-[8px] leading-snug text-zinc-500">Añade o saca móviles de la fila sin borrar el vehículo ni su historial.</p>',1)
+          o=o.replace("{phone || 'Sin teléfono registrado'} · Sin app","{phone || 'Sin teléfono registrado'} · {item.userId?'Radio temporal':'Sin app'}",1)
+          old_button="""                        <button\n                          type=\"button\"\n                          disabled={Boolean(manualBusyId)}\n                          onClick={() => void addManualDriverToQueue(item)}\n                          className=\"inline-flex h-7 shrink-0 items-center gap-1 rounded-lg bg-emerald-400 px-2 text-[7px] font-black text-emerald-950 disabled:opacity-40\"\n                        >\n                          {manualBusyId === item.driverId ? <Loader2 className=\"h-3 w-3 animate-spin\" /> : <Plus className=\"h-3 w-3\" />}\n                          Añadir\n                        </button>\n"""
+          new_button="""                        {item.serviceEnabled ? (\n                          <button\n                            type=\"button\"\n                            disabled={Boolean(manualBusyId)}\n                            onClick={() => void removeManualDriverFromQueue(item)}\n                            className=\"inline-flex h-7 shrink-0 items-center gap-1 rounded-lg border border-rose-400/25 bg-rose-400/10 px-2 text-[7px] font-black text-rose-200 disabled:opacity-40\"\n                          >\n                            {manualBusyId === item.driverId ? <Loader2 className=\"h-3 w-3 animate-spin\" /> : <XCircle className=\"h-3 w-3\" />}\n                            Sacar\n                          </button>\n                        ) : (\n                          <button\n                            type=\"button\"\n                            disabled={Boolean(manualBusyId)}\n                            onClick={() => void addManualDriverToQueue(item)}\n                            className=\"inline-flex h-7 shrink-0 items-center gap-1 rounded-lg bg-emerald-400 px-2 text-[7px] font-black text-emerald-950 disabled:opacity-40\"\n                          >\n                            {manualBusyId === item.driverId ? <Loader2 className=\"h-3 w-3 animate-spin\" /> : <Plus className=\"h-3 w-3\" />}\n                            Añadir\n                          </button>\n                        )}\n"""
+          if old_button not in o: raise SystemExit('manual add button block not found')
+          o=o.replace(old_button,new_button,1)
+          o=o.replace('Todos los conductores sin app ya están en la fila o en servicio.','No hay móviles manuales disponibles para gestionar.',1)
+          op.write_text(o)
+
+          print('Source patch applied successfully')
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Verify application
+        run: npm test
+      - name: Commit verified source changes
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/App.tsx src/components/Sidebar.tsx src/components/modules/OperatorConsole.tsx
+          git commit -m 'fix: sync drivers and separate reservations workflow'
+          git push origin HEAD:main
