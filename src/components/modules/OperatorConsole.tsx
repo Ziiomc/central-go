@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Car, Eye, GripVertical, MapPin, Navigation, Plus, Search, UserRound, Wand2, XCircle } from 'lucide-react';
+import { Car, ChevronDown, ChevronUp, Eye, GripVertical, Loader2, MapPin, Navigation, PhoneCall, Plus, Search, UserPlus, UserRound, Wand2, XCircle } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { DRIVER_STATUS_LABELS, TRIP_STATUS_LABELS } from '../../lib/labels';
-import { loadDispatchQueue, subscribeDispatchQueue } from '../../lib/dispatchPriorityRepository';
+import { isQueueConnected, loadDispatchQueue, setTraditionalDriverAvailability, subscribeDispatchQueue, type DispatchQueueItem } from '../../lib/dispatchPriorityRepository';
 import type { Driver, Trip, TripStatus } from '../../types';
 import { LiveMap } from '../map/LiveMap';
 
@@ -49,6 +49,7 @@ export const OperatorConsole: React.FC = () => {
   const {
     trips,
     drivers,
+    vehicles,
     currentCompany,
     setNewTripModalOpen,
     setSelectedTripForDetail,
@@ -67,7 +68,10 @@ export const OperatorConsole: React.FC = () => {
   const [busyTripId, setBusyTripId] = useState<string | null>(null);
   const [dragDriverId, setDragDriverId] = useState<string | null>(null);
   const [dragOverTripId, setDragOverTripId] = useState<string | null>(null);
-  const [queueOrder, setQueueOrder] = useState<Record<string, number>>({});
+  const [queueItems, setQueueItems] = useState<DispatchQueueItem[]>([]);
+  const [manualMenuOpen, setManualMenuOpen] = useState(false);
+  const [manualBusyId, setManualBusyId] = useState<string | null>(null);
+  const [manualError, setManualError] = useState('');
   const [now, setNow] = useState(Date.now());
   const initialWidths = useMemo(readPanelWidths, []);
   const [leftWidth, setLeftWidth] = useState(initialWidths.left);
@@ -88,7 +92,7 @@ export const OperatorConsole: React.FC = () => {
 
   useEffect(() => {
     if (currentCompany.id === 'network') {
-      setQueueOrder({});
+      setQueueItems([]);
       return;
     }
 
@@ -97,9 +101,9 @@ export const OperatorConsole: React.FC = () => {
       try {
         const queue = await loadDispatchQueue(currentCompany.id);
         if (!active) return;
-        setQueueOrder(Object.fromEntries(queue.map((item) => [item.driverId, item.queueOrder])));
+        setQueueItems(queue);
       } catch {
-        if (active) setQueueOrder({});
+        if (active) setQueueItems([]);
       }
     };
 
@@ -111,13 +115,42 @@ export const OperatorConsole: React.FC = () => {
     };
   }, [currentCompany.id]);
 
-  const availableDrivers = useMemo(() => drivers
-    .filter((driver) => driver.status === 'available')
-    .sort((a, b) => {
-      const aPriority = queueOrder[a.id] ?? Number.MAX_SAFE_INTEGER;
-      const bPriority = queueOrder[b.id] ?? Number.MAX_SAFE_INTEGER;
-      return aPriority - bPriority || a.unitNumber.localeCompare(b.unitNumber, 'es', { numeric: true });
-    }), [drivers, queueOrder]);
+  const queueOrder = useMemo(
+    () => Object.fromEntries(queueItems.map((item) => [item.driverId, item.queueOrder])),
+    [queueItems],
+  );
+
+  const vehicleById = useMemo(
+    () => new Map(vehicles.map((vehicle) => [vehicle.id, vehicle])),
+    [vehicles],
+  );
+
+  const availableDrivers = useMemo(() => queueItems
+    .filter((item) => item.status === 'available' && isQueueConnected(item))
+    .sort((a, b) => a.queueOrder - b.queueOrder || a.unitNumber.localeCompare(b.unitNumber, 'es', { numeric: true }))
+    .map((item) => drivers.find((driver) => driver.id === item.driverId))
+    .filter((driver): driver is Driver => Boolean(driver)), [drivers, queueItems]);
+
+  const manualDriversOutsideQueue = useMemo(() => queueItems
+    .filter((item) => !item.userId && item.operationMode === 'traditional' && !item.serviceEnabled)
+    .filter((item) => !['en_route', 'in_trip', 'sos'].includes(item.status))
+    .sort((a, b) => a.unitNumber.localeCompare(b.unitNumber, 'es', { numeric: true })), [queueItems]);
+
+  const noAppDriverCount = useMemo(() => queueItems.filter((item) => !item.userId).length, [queueItems]);
+
+  const addManualDriverToQueue = async (item: DispatchQueueItem) => {
+    if (manualBusyId) return;
+    setManualBusyId(item.driverId);
+    setManualError('');
+    try {
+      await setTraditionalDriverAvailability(item.driverId, true);
+      setQueueItems(await loadDispatchQueue(currentCompany.id));
+    } catch (error) {
+      setManualError(error instanceof Error ? error.message : 'No fue posible agregar el conductor a la fila.');
+    } finally {
+      setManualBusyId(null);
+    }
+  };
 
   const activeTrips = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -268,22 +301,87 @@ export const OperatorConsole: React.FC = () => {
       </section>
 
       <section ref={gridRef} style={gridStyle} className="cg-operator-grid grid items-start gap-3 lg:grid-cols-[240px_minmax(0,1fr)]">
-        <aside className="overflow-hidden rounded-2xl border border-zinc-800 bg-[#0d0d0f] shadow-xl shadow-black/20 lg:sticky lg:top-2">
-          <div className="border-b border-zinc-800 px-3 py-3">
+        <aside className="overflow-visible rounded-2xl border border-zinc-800 bg-[#0d0d0f] shadow-xl shadow-black/20 lg:sticky lg:top-2">
+          <div className="relative rounded-t-2xl border-b border-zinc-800 bg-[#0d0d0f] px-3 py-3">
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">
                 <h2 className="text-sm font-black text-white">Móviles disponibles</h2>
                 <p className="mt-0.5 truncate text-[10px] text-zinc-500">Orden de fila persistente · arrastra o usa Asignar</p>
               </div>
-              <span className="rounded-lg bg-emerald-500/10 px-2 py-1 text-xs font-black text-emerald-300">{availableDrivers.length}</span>
+              <div className="flex shrink-0 items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => { setManualMenuOpen((open) => !open); setManualError(''); }}
+                  className={`grid h-8 w-8 place-items-center rounded-lg border transition ${manualMenuOpen ? 'border-amber-400/35 bg-amber-400/10 text-amber-200' : 'border-zinc-800 bg-zinc-950 text-zinc-400 hover:border-amber-400/25 hover:text-amber-200'}`}
+                  title="Añadir conductor sin app"
+                  aria-label="Añadir conductor manual"
+                  aria-expanded={manualMenuOpen}
+                >
+                  <UserPlus className="h-3.5 w-3.5" />
+                </button>
+                <span className="rounded-lg bg-emerald-500/10 px-2 py-1 text-xs font-black text-emerald-300">{availableDrivers.length}</span>
+              </div>
             </div>
+
+            {manualMenuOpen && (
+              <div className="absolute right-2 top-[58px] z-[80] w-[285px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-amber-400/20 bg-[#111216] shadow-2xl shadow-black/60">
+                <div className="flex items-start justify-between gap-2 border-b border-white/[0.06] px-3 py-2.5">
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-black text-white">Conductores sin app</p>
+                    <p className="mt-0.5 text-[8px] leading-snug text-zinc-500">Añade un conductor antiguo al final de la fila. Quedará en modo Radio.</p>
+                  </div>
+                  <button type="button" onClick={() => setManualMenuOpen(false)} className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-white/[0.06] text-zinc-500" aria-label="Cerrar lista de conductores manuales">
+                    <ChevronUp className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+                {manualError && <p className="mx-2 mt-2 rounded-lg border border-rose-400/20 bg-rose-400/[0.07] px-2 py-1.5 text-[8px] font-bold text-rose-200">{manualError}</p>}
+                <div className="max-h-64 divide-y divide-white/[0.055] overflow-y-auto">
+                  {manualDriversOutsideQueue.map((item) => {
+                    const driver = drivers.find((candidate) => candidate.id === item.driverId);
+                    const phone = driver?.phone?.trim() || '';
+                    return (
+                      <div key={item.driverId} className="flex items-center gap-2 px-2.5 py-2.5">
+                        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-amber-400/20 bg-amber-400/10 text-[9px] font-black text-amber-200">{item.unitNumber}</span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-[9px] font-black text-white">{item.name}</span>
+                          <span className="mt-0.5 block truncate text-[7px] text-zinc-500">{phone || 'Sin teléfono registrado'} · Sin app</span>
+                        </span>
+                        {phone && (
+                          <a href={`tel:${phone}`} className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-cyan-400/20 bg-cyan-400/[0.07] text-cyan-200" title={`Llamar a ${item.name}`} aria-label={`Llamar a ${item.name}`}>
+                            <PhoneCall className="h-3 w-3" />
+                          </a>
+                        )}
+                        <button
+                          type="button"
+                          disabled={Boolean(manualBusyId)}
+                          onClick={() => void addManualDriverToQueue(item)}
+                          className="inline-flex h-7 shrink-0 items-center gap-1 rounded-lg bg-emerald-400 px-2 text-[7px] font-black text-emerald-950 disabled:opacity-40"
+                        >
+                          {manualBusyId === item.driverId ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
+                          Añadir
+                        </button>
+                      </div>
+                    );
+                  })}
+                  {!manualDriversOutsideQueue.length && (
+                    <p className="px-4 py-6 text-center text-[9px] text-zinc-500">Todos los conductores sin app ya están en la fila o en servicio.</p>
+                  )}
+                </div>
+                <div className="flex items-center justify-between border-t border-white/[0.06] px-3 py-2 text-[7px] font-bold text-zinc-500">
+                  <span>{queueItems.length} conductores registrados</span>
+                  <span>{noAppDriverCount} sin app</span>
+                </div>
+              </div>
+            )}
           </div>
-          <div className="max-h-[540px] divide-y divide-zinc-800/80 overflow-y-auto">
+          <div className="max-h-[500px] divide-y divide-zinc-800/80 overflow-y-auto overflow-x-hidden rounded-b-2xl">
             {availableDrivers.length === 0 ? (
-              <p className="px-4 py-10 text-center text-xs text-zinc-500">No hay móviles libres.</p>
+              <p className="px-4 py-10 text-center text-xs text-zinc-500">No hay móviles conectados y libres.</p>
             ) : availableDrivers.map((driver: Driver, index) => {
               const focused = focusDriverId === driver.id;
               const dragging = dragDriverId === driver.id;
+              const vehicle = driver.vehicleId ? vehicleById.get(driver.vehicleId) : undefined;
+              const secondary = [vehicle?.licensePlate ? `Patente ${vehicle.licensePlate}` : '', driver.currentLocation.address || DRIVER_STATUS_LABELS[driver.status]].filter(Boolean).join(' · ');
               return (
                 <button
                   key={driver.id}
@@ -303,7 +401,7 @@ export const OperatorConsole: React.FC = () => {
                   <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-emerald-500/10 text-sm font-black text-emerald-300">{driver.unitNumber}</span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-xs font-black text-white">{driver.name}</span>
-                    <span className="mt-0.5 block truncate text-[9px] text-zinc-500">{driver.currentLocation.address || DRIVER_STATUS_LABELS[driver.status]}</span>
+                    <span className="mt-0.5 block truncate text-[9px] text-zinc-500">{secondary}</span>
                   </span>
                   <span className="rounded-md border border-amber-500/20 bg-amber-500/10 px-1.5 py-1 text-[8px] font-black text-amber-300" title="Posición actual en la fila">#{index + 1}</span>
                   <GripVertical className="h-4 w-4 shrink-0 text-zinc-700" />
@@ -311,6 +409,10 @@ export const OperatorConsole: React.FC = () => {
                 </button>
               );
             })}
+          </div>
+          <div className="flex items-center justify-between gap-2 rounded-b-2xl border-t border-zinc-800 bg-zinc-950/40 px-3 py-2 text-[8px] font-bold text-zinc-500">
+            <span>Conductores {queueItems.length}</span>
+            <span>Sin app {noAppDriverCount}</span>
           </div>
         </aside>
 
