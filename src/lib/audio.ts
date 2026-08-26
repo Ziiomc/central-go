@@ -6,8 +6,11 @@ class SoundManager{
  public toggleMute(){this.muted=!this.muted;try{window.localStorage.setItem('centralgo:sound-muted',this.muted?'1':'0');}catch{}return this.muted;}
  public isMuted(){return this.muted;}
  public async prime(){this.initCtx();if(!this.ctx)return false;try{if(this.ctx.state==='suspended')await this.ctx.resume();const o=this.ctx.createOscillator(),g=this.ctx.createGain();g.gain.value=0;o.connect(g);g.connect(this.ctx.destination);o.start();o.stop(this.ctx.currentTime+.01);return this.ctx.state==='running';}catch{return false;}}
- private simpleSequence(notes:Array<[number,number,number,number]>,wave:OscillatorType='sine',masterPeak=.7){if(this.muted)return;this.initCtx();if(!this.ctx)return;const c=this.ctx,n=c.currentTime,m=c.createGain(),comp=c.createDynamicsCompressor();m.gain.setValueAtTime(masterPeak,n);comp.threshold.setValueAtTime(-22,n);comp.knee.setValueAtTime(12,n);comp.ratio.setValueAtTime(4,n);m.connect(comp);comp.connect(c.destination);notes.forEach(([f,o,d,p])=>{const osc=c.createOscillator(),g=c.createGain(),s=n+o;osc.type=wave;osc.frequency.setValueAtTime(f,s);g.gain.setValueAtTime(.0001,s);g.gain.exponentialRampToValueAtTime(p,s+.01);g.gain.setValueAtTime(p,s+Math.max(.02,d*.45));g.gain.exponentialRampToValueAtTime(.0001,s+d);osc.connect(g);g.connect(m);osc.start(s);osc.stop(s+d+.03);});}
- public playDispatchChime(){this.simpleSequence([[392,0,.42,.1],[784,.02,.58,.24],[988,.16,.52,.16],[1175,.29,.44,.11]],'sine',.78);}
+ private simpleSequence(notes:Array<[number,number,number,number]>,wave:OscillatorType='sine',masterPeak=.7){if(this.muted)return;this.initCtx();if(!this.ctx)return;const c=this.ctx,n=c.currentTime,m=c.createGain(),comp=c.createDynamicsCompressor();m.gain.setValueAtTime(masterPeak,n);comp.threshold.setValueAtTime(-22,n);comp.knee.setValueAtTime(12,n);comp.ratio.setValueAtTime(4,n);m.connect(comp);comp.connect(c.destination);notes.forEach(([f,o,d,p])=>{const osc=c.createOscillator(),g=c.createGain(),s=n+o;osc.type=wave;osc.frequency.setValueAtTime(f,s);g.gain.setValueAtTime(.0001,s);g.gain.exponentialRampToValueAtTime(p,s+.018);g.gain.setValueAtTime(p,s+Math.max(.03,d*.38));g.gain.exponentialRampToValueAtTime(.0001,s+d);osc.connect(g);g.connect(m);osc.start(s);osc.stop(s+d+.03);});}
+ /** Aviso de nueva carrera: tres notas suaves, limpio y corto para turnos largos. */
+ public playDispatchChime(){
+  this.simpleSequence([[659.25,0,.46,.13],[783.99,.13,.52,.115],[1046.5,.29,.66,.095]],'sine',.52);
+ }
  /** Alarma de reserva claramente distinta: doble ráfaga larga y potente. */
  public playReservationAlarm(){
   this.simpleSequence([[880,0,.46,.55],[1175,.18,.5,.58],[880,.72,.46,.55],[1319,.9,.58,.6],[880,1.58,.46,.55],[1175,1.76,.5,.58],[1480,2.32,.7,.62]],'square',1);
