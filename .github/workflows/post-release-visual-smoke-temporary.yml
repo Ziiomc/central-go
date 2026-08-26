@@ -31,6 +31,7 @@ jobs:
       - name: Build post-release visual spec from audited fixture history
         shell: python
         run: |
+          import re
           import subprocess
           from pathlib import Path
 
@@ -45,11 +46,12 @@ jobs:
           spec = source[start:end]
           spec = spec.replace("test.describe.configure({ mode: 'serial' });", "// independent release scenarios")
 
-          # The historical fixture used a day-level suffix. Make each run unique
-          # without printing or copying any credentials into this workflow.
-          if '${stamp}' not in spec:
-              raise SystemExit('Expected dynamic QA suffix not found in visual fixture.')
-          spec = spec.replace('${stamp}', '${stamp}${String(Date.now()).slice(-6)}')
+          # Make the historical date-only suffix unique for this run without
+          # embedding, exposing or logging the fixture credentials.
+          unique_stamp = "const stamp = new Date().toISOString().replace(/[^0-9]/g, '').slice(2, 14);"
+          spec, stamp_count = re.subn(r"const\s+stamp\s*=\s*[^;]+;", unique_stamp, spec, count=1)
+          if stamp_count != 1:
+              raise SystemExit('Expected QA timestamp declaration not found in visual fixture.')
 
           old = "            await page.getByLabel('Cerrar', { exact: true }).click();\n\n            const operatorsNav = page.getByText('Operadores', { exact: true }).first();"
           new = "            await page.getByLabel('Cerrar', { exact: true }).click();\n\n            await page.getByLabel('Abrir menú principal').click();\n            const operatorsNav = page.getByText('Operadores', { exact: true }).first();"
