@@ -28,18 +28,17 @@ set local request.jwt.claim.sub='e1000000-0000-4000-8000-000000000001';
 
 do $$
 declare
-  trip_id uuid;
+  v_trip_id uuid;
   v_before bigint;
   v_after bigint;
   audit_before int;
   audit_after int;
-  event_before int;
   event_after int;
   i int;
   request_id uuid;
 begin
   -- 1. A user clicks Nueva carrera nine times because "nothing happened".
-  select id into trip_id from public.centralgo_operator_create_trip(
+  select id into v_trip_id from public.centralgo_operator_create_trip(
     'e2000000-0000-4000-8000-000000000001','e5000000-0000-4000-8000-000000000001',null,'Cliente Caos','+56900000001',
     'Origen caos',-35.84,-71.59,null,'Destino caos',-35.85,-71.60,null,null,'standard',2,8,5000,false,null,'efectivo','CHAOS',null,'manual');
   for i in 1..8 loop
@@ -52,11 +51,11 @@ begin
   end if;
 
   -- 2. Same manual assignment twice must be a no-op the second time.
-  perform public.centralgo_operator_assign_trip(trip_id,'e4000000-0000-4000-8000-000000000001');
-  select version into v_before from public.trips where id=trip_id;
+  perform public.centralgo_operator_assign_trip(v_trip_id,'e4000000-0000-4000-8000-000000000001');
+  select version into v_before from public.trips where id=v_trip_id;
   select count(*) into audit_before from public.audit_logs where company_id='e2000000-0000-4000-8000-000000000001' and action='ASIGNACION_TRADICIONAL_CONFIRMADA';
-  perform public.centralgo_operator_assign_trip(trip_id,'e4000000-0000-4000-8000-000000000001');
-  select version into v_after from public.trips where id=trip_id;
+  perform public.centralgo_operator_assign_trip(v_trip_id,'e4000000-0000-4000-8000-000000000001');
+  select version into v_after from public.trips where id=v_trip_id;
   select count(*) into audit_after from public.audit_logs where company_id='e2000000-0000-4000-8000-000000000001' and action='ASIGNACION_TRADICIONAL_CONFIRMADA';
   if v_after<>v_before or audit_after<>audit_before then
     raise exception 'CHAOS FAIL: duplicate assignment changed state/audit';
@@ -69,20 +68,19 @@ begin
   exception when sqlstate '55000' then null; end;
 
   -- 4. Repeated cancellation behaves like one cancellation, not two events.
-  select count(*) into event_before from public.trip_dispatch_events where trip_id=trip_id;
-  perform public.centralgo_operator_cancel_trip(trip_id,'Cliente se confundió');
-  select version into v_before from public.trips where id=trip_id;
-  select count(*) into event_after from public.trip_dispatch_events where trip_id=trip_id;
-  perform public.centralgo_operator_cancel_trip(trip_id,'Cliente se confundió');
-  select version into v_after from public.trips where id=trip_id;
-  if v_after<>v_before or (select count(*) from public.trip_dispatch_events where trip_id=trip_id)<>event_after then
+  perform public.centralgo_operator_cancel_trip(v_trip_id,'Cliente se confundió');
+  select version into v_before from public.trips where id=v_trip_id;
+  select count(*) into event_after from public.trip_dispatch_events e where e.trip_id=v_trip_id;
+  perform public.centralgo_operator_cancel_trip(v_trip_id,'Cliente se confundió');
+  select version into v_after from public.trips where id=v_trip_id;
+  if v_after<>v_before or (select count(*) from public.trip_dispatch_events e where e.trip_id=v_trip_id)<>event_after then
     raise exception 'CHAOS FAIL: repeated cancel produced extra mutation';
   end if;
   if (select status from public.drivers where id='e4000000-0000-4000-8000-000000000001')<>'available' then
     raise exception 'CHAOS FAIL: cancellation left mobile busy';
   end if;
   begin
-    perform public.centralgo_operator_assign_trip(trip_id,'e4000000-0000-4000-8000-000000000002');
+    perform public.centralgo_operator_assign_trip(v_trip_id,'e4000000-0000-4000-8000-000000000002');
     raise exception 'CHAOS FAIL: cancelled trip was reassigned';
   exception when sqlstate '55000' then null; end;
 
@@ -100,18 +98,18 @@ begin
   end if;
 
   -- 6. Wrong central, impossible state and blank cancellation reason are rejected.
-  select id into trip_id from public.centralgo_operator_create_trip(
+  select id into v_trip_id from public.centralgo_operator_create_trip(
     'e2000000-0000-4000-8000-000000000001','e5000000-0000-4000-8000-000000000002',null,'Cliente Dos','',
     'Origen dos',-35.84,-71.59,null,'Destino dos',-35.85,-71.60,null,null,'standard',1,5,2500,false,null,'efectivo',null,null,'manual');
-  begin perform public.centralgo_operator_assign_trip(trip_id,'e4000000-0000-4000-8000-000000000003'); raise exception 'CHAOS FAIL: cross-company mobile accepted'; exception when sqlstate '22023' then null; end;
-  begin perform public.centralgo_operator_set_trip_status(trip_id,'arrived'); raise exception 'CHAOS FAIL: pending trip jumped to arrived'; exception when sqlstate '55000' then null; end;
-  begin perform public.centralgo_operator_cancel_trip(trip_id,'   '); raise exception 'CHAOS FAIL: blank cancellation accepted'; exception when sqlstate '22023' then null; end;
+  begin perform public.centralgo_operator_assign_trip(v_trip_id,'e4000000-0000-4000-8000-000000000003'); raise exception 'CHAOS FAIL: cross-company mobile accepted'; exception when sqlstate '22023' then null; end;
+  begin perform public.centralgo_operator_set_trip_status(v_trip_id,'arrived'); raise exception 'CHAOS FAIL: pending trip jumped to arrived'; exception when sqlstate '55000' then null; end;
+  begin perform public.centralgo_operator_cancel_trip(v_trip_id,'   '); raise exception 'CHAOS FAIL: blank cancellation accepted'; exception when sqlstate '22023' then null; end;
 
   -- 7. Future reservations cannot be dragged into today's live dispatch early.
-  select id into trip_id from public.centralgo_operator_create_trip(
+  select id into v_trip_id from public.centralgo_operator_create_trip(
     'e2000000-0000-4000-8000-000000000001','e5000000-0000-4000-8000-000000000003',null,'Reserva Torpe','',
     'Origen reserva',-35.84,-71.59,null,'Destino reserva',-35.85,-71.60,null,null,'standard',1,5,2500,false,null,'efectivo',null,now()+interval '2 hours','manual');
-  begin perform public.centralgo_operator_assign_trip(trip_id,'e4000000-0000-4000-8000-000000000002'); raise exception 'CHAOS FAIL: future reservation dispatched early'; exception when sqlstate '55000' then null; end;
+  begin perform public.centralgo_operator_assign_trip(v_trip_id,'e4000000-0000-4000-8000-000000000002'); raise exception 'CHAOS FAIL: future reservation dispatched early'; exception when sqlstate '55000' then null; end;
 
   -- 8. Invalid/corrupt values must be stopped at the RPC boundary.
   begin
@@ -126,17 +124,17 @@ begin
   -- 9. Reassign/unassign abuse loop: 25 services, two mobiles, stale duplicate actions.
   for i in 1..25 loop
     request_id:=gen_random_uuid();
-    select id into trip_id from public.centralgo_operator_create_trip(
+    select id into v_trip_id from public.centralgo_operator_create_trip(
       'e2000000-0000-4000-8000-000000000001',request_id,null,'Cliente Loop','',
       'Origen loop',-35.84,-71.59,null,'Destino loop',-35.85,-71.60,null,null,'standard',1,4,2200,false,null,'efectivo',null,null,'manual');
-    perform public.centralgo_operator_assign_trip(trip_id,'e4000000-0000-4000-8000-000000000001');
-    perform public.centralgo_operator_unassign_trip(trip_id,'Operador cambió de idea');
-    select version into v_before from public.trips where id=trip_id;
-    perform public.centralgo_operator_unassign_trip(trip_id,'Operador cambió de idea');
-    select version into v_after from public.trips where id=trip_id;
+    perform public.centralgo_operator_assign_trip(v_trip_id,'e4000000-0000-4000-8000-000000000001');
+    perform public.centralgo_operator_unassign_trip(v_trip_id,'Operador cambió de idea');
+    select version into v_before from public.trips where id=v_trip_id;
+    perform public.centralgo_operator_unassign_trip(v_trip_id,'Operador cambió de idea');
+    select version into v_after from public.trips where id=v_trip_id;
     if v_after<>v_before then raise exception 'CHAOS FAIL: repeated unassign mutated trip'; end if;
-    perform public.centralgo_operator_assign_trip(trip_id,'e4000000-0000-4000-8000-000000000002');
-    perform public.centralgo_operator_cancel_trip(trip_id,'Prueba torpe');
+    perform public.centralgo_operator_assign_trip(v_trip_id,'e4000000-0000-4000-8000-000000000002');
+    perform public.centralgo_operator_cancel_trip(v_trip_id,'Prueba torpe');
   end loop;
 
   if exists(select 1 from public.drivers where company_id='e2000000-0000-4000-8000-000000000001' and status in ('en_route','in_trip')) then
