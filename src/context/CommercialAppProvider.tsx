@@ -31,6 +31,8 @@ import {
   insertTrip,
   insertVehicle,
   loadCommercialSnapshot,
+  loadDriverVisibleTrips,
+  loadTripById,
   mapDriverRow,
   markAllNotificationsRead,
   markNotificationRead,
@@ -196,6 +198,17 @@ export const CommercialAppProvider: React.FC<React.PropsWithChildren> = ({ child
     return()=>{window.removeEventListener('centralgo:driver-resync',resync);window.removeEventListener('online',resync);};
   },[authUser?.id,currentCompany.id,currentRole]);
 
+  useEffect(()=>{
+    if(!authUser||currentRole!=='driver'||currentCompany.id==='network')return;
+    let active=true;
+    const reconcile=()=>{if(!navigator.onLine)return;void loadDriverVisibleTrips(currentCompany.id).then(items=>{if(active)setTrips(items);}).catch(()=>{});};
+    const onVisible=()=>{if(document.visibilityState==='visible')reconcile();};
+    reconcile();
+    const timer=window.setInterval(()=>{if(document.visibilityState==='visible')reconcile();},8000);
+    window.addEventListener('focus',reconcile);window.addEventListener('online',reconcile);document.addEventListener('visibilitychange',onVisible);
+    return()=>{active=false;window.clearInterval(timer);window.removeEventListener('focus',reconcile);window.removeEventListener('online',reconcile);document.removeEventListener('visibilitychange',onVisible);};
+  },[authUser?.id,currentCompany.id,currentRole]);
+
   useEffect(() => {
     if (!authUser || currentCompany.id === 'network') return;
     const unsubscribe = subscribeCompanyRealtime(currentCompany.id, {
@@ -225,11 +238,13 @@ export const CommercialAppProvider: React.FC<React.PropsWithChildren> = ({ child
       } : driver)),
       onNotification: (notification) => {
         setNotifications((items) => upsertById(items, notification));
+        if(currentRole==='driver'&&notification.relatedId)void loadTripById(notification.relatedId).then(trip=>{if(trip)setTrips(items=>upsertById(items,trip));}).catch(()=>{});
         if (notification.type === 'sos' && !soundMuted) playSOSSiren();
       },
+      onStatus:status=>{if(currentRole==='driver'&&status==='SUBSCRIBED')void loadDriverVisibleTrips(currentCompany.id).then(setTrips).catch(()=>{});},
     });
     return unsubscribe;
-  }, [authUser?.id, currentCompany.id, soundMuted]);
+  }, [authUser?.id, currentCompany.id, currentRole, soundMuted]);
 
   const addAuditLog = (action: string, description: string) => {
     if (currentCompany.id === 'network') return;
