@@ -1,0 +1,73 @@
+name: Caos de operadora Central GO
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  clumsy-operator-chaos:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: centralgo_chaos
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d centralgo_chaos"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGDATABASE: centralgo_chaos
+      PGUSER: postgres
+      PGPASSWORD: postgres
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Preparar compatibilidad Supabase
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          create role anon nologin;
+          create role authenticated nologin;
+          create role service_role nologin;
+          create schema auth;
+          create table auth.users (
+            id uuid primary key,
+            email text,
+            email_confirmed_at timestamptz,
+            raw_user_meta_data jsonb not null default '{}'::jsonb
+          );
+          create or replace function auth.uid()
+          returns uuid
+          language sql
+          stable
+          as $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
+          grant usage on schema auth to anon, authenticated;
+          grant execute on function auth.uid() to anon, authenticated;
+          create publication supabase_realtime;
+          SQL
+          psql -v ON_ERROR_STOP=1 -f supabase/tests/storage-compat.sql
+      - name: Reconstruir base desde cero
+        shell: bash
+        run: |
+          set -euo pipefail
+          for migration in supabase/migrations/*.sql; do
+            echo "Aplicando $migration"
+            psql -q -v ON_ERROR_STOP=1 -f "$migration"
+          done
+      - name: Romper la app como usuarios torpes
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/operator-chaos-misuse.sql
