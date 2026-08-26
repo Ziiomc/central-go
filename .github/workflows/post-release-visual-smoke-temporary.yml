@@ -44,6 +44,13 @@ jobs:
           end = source.index(end_marker, start)
           spec = source[start:end]
           spec = spec.replace("test.describe.configure({ mode: 'serial' });", "// independent release scenarios")
+
+          # The historical fixture used a day-level suffix. Make each run unique
+          # without printing or copying any credentials into this workflow.
+          if '${stamp}' not in spec:
+              raise SystemExit('Expected dynamic QA suffix not found in visual fixture.')
+          spec = spec.replace('${stamp}', '${stamp}${String(Date.now()).slice(-6)}')
+
           old = "            await page.getByLabel('Cerrar', { exact: true }).click();\n\n            const operatorsNav = page.getByText('Operadores', { exact: true }).first();"
           new = "            await page.getByLabel('Cerrar', { exact: true }).click();\n\n            await page.getByLabel('Abrir menú principal').click();\n            const operatorsNav = page.getByText('Operadores', { exact: true }).first();"
           if "await page.getByLabel('Abrir menú principal').click();" not in spec:
