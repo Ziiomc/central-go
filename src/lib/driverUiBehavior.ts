@@ -9,6 +9,37 @@ const setButtonLabel = (button: HTMLButtonElement, label: string) => {
   if (textNode && textNode.textContent?.trim() !== label) textNode.textContent = label;
 };
 
+const setNativeInputValue = (input: HTMLInputElement, value: string) => {
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+  setter?.call(input, value);
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+};
+
+const isFinishFareInput = (input: HTMLInputElement) => {
+  if (!input.closest('.cg-driver-app')) return false;
+  const label = input.closest('label');
+  return Boolean(label?.textContent?.includes('Monto realmente cobrado'));
+};
+
+const prepareFinishFareInput = (input: HTMLInputElement) => {
+  if (input.dataset.cgFarePrepared === '1') return;
+  input.dataset.cgFarePrepared = '1';
+  input.removeAttribute('autofocus');
+  input.readOnly = true;
+  input.setAttribute('inputmode', 'none');
+  input.title = 'Toca el monto solo si deseas editarlo';
+  if (input.value !== '2500') setNativeInputValue(input, '2500');
+  input.blur();
+};
+
+const syncFinishFare = () => {
+  const app = document.querySelector('.cg-driver-app');
+  if (!app) return;
+  app.querySelectorAll<HTMLInputElement>('input[type="number"]').forEach((input) => {
+    if (isFinishFareInput(input)) prepareFinishFareInput(input);
+  });
+};
+
 const hasIncomingOffer = () => {
   const app = document.querySelector('.cg-driver-app');
   if (!app) return false;
@@ -46,6 +77,7 @@ const syncIncomingOfferRadar = () => {
 const syncDriverTripButtons = () => {
   scheduled = false;
   syncIncomingOfferRadar();
+  syncFinishFare();
   const app = document.querySelector('.cg-driver-app');
   if (!app) return;
 
@@ -83,6 +115,22 @@ export function installDriverTripButtonBehavior() {
   // not immediately undo the optimistic button transition before Supabase confirms it.
   const observer = new MutationObserver(scheduleSync);
   observer.observe(document.documentElement, { childList: true, subtree: true });
+
+  document.addEventListener('focus', (event) => {
+    const input = event.target as HTMLInputElement | null;
+    if (!(input instanceof HTMLInputElement) || !isFinishFareInput(input)) return;
+    prepareFinishFareInput(input);
+    if (input.dataset.cgFareEditing !== '1') input.blur();
+  }, true);
+
+  document.addEventListener('pointerdown', (event) => {
+    const input = event.target as HTMLInputElement | null;
+    if (!(input instanceof HTMLInputElement) || !isFinishFareInput(input)) return;
+    prepareFinishFareInput(input);
+    input.dataset.cgFareEditing = '1';
+    input.readOnly = false;
+    input.setAttribute('inputmode', 'numeric');
+  }, true);
 
   document.addEventListener('click', (event) => {
     const button = (event.target as HTMLElement | null)?.closest('button') as HTMLButtonElement | null;
