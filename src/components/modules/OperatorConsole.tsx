@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Car, ChevronUp, Eye, GripVertical, Loader2, MapPin, Navigation, PhoneCall, Plus, Search, UserPlus, UserRound, Wand2, XCircle } from 'lucide-react';
+import { Car, ChevronUp, Eye, GripVertical, List, Loader2, Map as MapIcon, MapPin, Navigation, PhoneCall, Plus, Search, UserPlus, UserRound, Wand2, XCircle } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { DRIVER_STATUS_LABELS, TRIP_STATUS_LABELS } from '../../lib/labels';
 import { isQueueConnected, loadDispatchQueue, setTraditionalDriverAvailability, subscribeDispatchQueue, type DispatchQueueItem } from '../../lib/dispatchPriorityRepository';
@@ -9,6 +9,7 @@ import { LiveMap } from '../map/LiveMap';
 const ACTIVE_STATUSES: TripStatus[] = ['pending', 'assigned', 'en_route', 'arrived', 'in_progress'];
 const DRIVER_BUSY_STATUSES: TripStatus[] = ['assigned', 'en_route', 'arrived', 'in_progress'];
 const PANEL_KEY = 'centralgo:operator-panel-widths:v1';
+const MAP_PANEL_VIEW_KEY = 'centralgo:operator-map-panel-view:v1';
 const DRIVER_MIME = 'application/x-centralgo-driver';
 
 const statusTone: Record<TripStatus, string> = {
@@ -71,6 +72,14 @@ const readPanelWidths = () => {
   }
 };
 
+const readMapPanelView = (): 'map' | 'list' => {
+  try {
+    return window.localStorage.getItem(MAP_PANEL_VIEW_KEY) === 'list' ? 'list' : 'map';
+  } catch {
+    return 'map';
+  }
+};
+
 export const OperatorConsole: React.FC = () => {
   const {
     trips,
@@ -102,6 +111,8 @@ export const OperatorConsole: React.FC = () => {
   const [manualBusyId, setManualBusyId] = useState<string | null>(null);
   const [manualError, setManualError] = useState('');
   const [manualSearch, setManualSearch] = useState('');
+  const [mapPanelView, setMapPanelView] = useState<'map' | 'list'>(readMapPanelView);
+  const [mapListSearch, setMapListSearch] = useState('');
   const [now, setNow] = useState(Date.now());
   const initialWidths = useMemo(readPanelWidths, []);
   const [leftWidth, setLeftWidth] = useState(initialWidths.left);
@@ -119,6 +130,14 @@ export const OperatorConsole: React.FC = () => {
       // Panel resizing remains available for the current session.
     }
   }, [leftWidth, mapWidth]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(MAP_PANEL_VIEW_KEY, mapPanelView);
+    } catch {
+      // View preference remains available for the current session.
+    }
+  }, [mapPanelView]);
 
   useEffect(() => {
     if (currentCompany.id === 'network') {
@@ -155,8 +174,6 @@ export const OperatorConsole: React.FC = () => {
     [vehicles],
   );
 
-  // A driver tied to an active trip must never be selectable even if the
-  // driver row arrives a few milliseconds late through Realtime.
   const activeTripDriverIds = useMemo(() => new Set(
     trips
       .filter((trip) => Boolean(trip.driverId) && DRIVER_BUSY_STATUSES.includes(trip.status))
@@ -169,9 +186,6 @@ export const OperatorConsole: React.FC = () => {
     .map((item) => drivers.find((driver) => driver.id === item.driverId))
     .filter((driver): driver is Driver => Boolean(driver)), [activeTripDriverIds, drivers, queueItems]);
 
-  // Keep stale App sessions out of the live queue, but expose those drivers to
-  // the operator so they can be explicitly incorporated by radio. Connected
-  // App drivers stay under App control and are not duplicated in this menu.
   const manualDriversManageable = useMemo(() => queueItems
     .filter((item) => !activeTripDriverIds.has(item.driverId))
     .filter((item) => item.operationMode === 'traditional' || !isQueueConnected(item))
@@ -189,6 +203,26 @@ export const OperatorConsole: React.FC = () => {
       return normalizeDriverSearch(searchable).includes(term);
     });
   }, [drivers, manualDriversManageable, manualSearch, vehicleById]);
+
+  const mapListDrivers = useMemo(() => {
+    const term = normalizeDriverSearch(mapListSearch);
+    return queueItems
+      .map((item) => ({ item, driver: drivers.find((candidate) => candidate.id === item.driverId) }))
+      .filter((entry): entry is { item: DispatchQueueItem; driver: Driver } => Boolean(entry.driver))
+      .filter(({ item, driver }) => {
+        if (!term) return true;
+        const vehicle = driver.vehicleId ? vehicleById.get(driver.vehicleId) : undefined;
+        const searchable = [item.unitNumber, item.name, driver.phone ?? '', vehicle?.licensePlate ?? ''].join(' ');
+        return normalizeDriverSearch(searchable).includes(term);
+      })
+      .sort((a, b) => {
+        const aBusy = activeTripDriverIds.has(a.item.driverId) ? 1 : 0;
+        const bBusy = activeTripDriverIds.has(b.item.driverId) ? 1 : 0;
+        const aConnected = isQueueConnected(a.item) ? 0 : 1;
+        const bConnected = isQueueConnected(b.item) ? 0 : 1;
+        return aBusy - bBusy || aConnected - bConnected || a.item.queueOrder - b.item.queueOrder || a.item.unitNumber.localeCompare(b.item.unitNumber, 'es', { numeric: true });
+      });
+  }, [activeTripDriverIds, drivers, mapListSearch, queueItems, vehicleById]);
 
   const noAppDriverCount = useMemo(() => queueItems.filter((item) => !item.userId).length, [queueItems]);
   const outsideQueueCount = useMemo(() => queueItems.filter((item) => !isQueueConnected(item) && !activeTripDriverIds.has(item.driverId)).length, [activeTripDriverIds, queueItems]);
@@ -680,14 +714,96 @@ export const OperatorConsole: React.FC = () => {
         </div>
 
         <aside className="cg-map-panel overflow-hidden rounded-2xl border border-zinc-800 bg-[#0d0d0f] shadow-xl shadow-black/20 lg:col-span-2 xl:col-span-1 xl:sticky xl:top-2">
-          <div className="flex items-center justify-between gap-3 border-b border-zinc-800 px-3 py-3">
-            <div className="min-w-0">
-              <h2 className="text-sm font-black text-white">Mapa</h2>
-              <p className="mt-0.5 truncate text-[10px] text-zinc-500">Referencia visual de móviles y carrera seleccionada</p>
+          <div className="flex items-center justify-between gap-2 border-b border-zinc-800 px-3 py-3">
+            <div className="min-w-0 flex-1">
+              <h2 className="text-sm font-black text-white">{mapPanelView === 'map' ? 'Mapa' : 'Lista de móviles'}</h2>
+              <p className="mt-0.5 truncate text-[10px] text-zinc-500">{mapPanelView === 'map' ? 'Referencia visual de móviles y carrera seleccionada' : 'Estado operativo de los móviles registrados'}</p>
             </div>
-            {selectedTrip && <span className="max-w-[45%] truncate text-[10px] font-black text-blue-300">{selectedTrip.code}</span>}
+            <div className="flex shrink-0 items-center gap-1">
+              {selectedTrip && <span className="hidden max-w-[100px] truncate text-[9px] font-black text-blue-300 sm:block">{selectedTrip.code}</span>}
+              <div className="flex rounded-lg border border-zinc-800 bg-zinc-950 p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setMapPanelView('map')}
+                  className={`flex h-7 items-center gap-1 rounded-md px-2 text-[8px] font-black transition ${mapPanelView === 'map' ? 'bg-blue-500/20 text-blue-200' : 'text-zinc-500 hover:text-white'}`}
+                  title="Ver mapa"
+                  aria-pressed={mapPanelView === 'map'}
+                >
+                  <MapIcon className="h-3 w-3" />
+                  Mapa
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMapPanelView('list')}
+                  className={`flex h-7 items-center gap-1 rounded-md px-2 text-[8px] font-black transition ${mapPanelView === 'list' ? 'bg-emerald-500/20 text-emerald-200' : 'text-zinc-500 hover:text-white'}`}
+                  title="Ver lista"
+                  aria-pressed={mapPanelView === 'list'}
+                >
+                  <List className="h-3 w-3" />
+                  Lista
+                </button>
+              </div>
+            </div>
           </div>
-          <LiveMap height="h-[410px]" selectedTrip={selectedTrip} focusDriverId={focusDriverId} onSelectDriver={(driver) => setFocusDriverId(driver?.id ?? null)} />
+
+          {mapPanelView === 'map' ? (
+            <LiveMap height="h-[410px]" selectedTrip={selectedTrip} focusDriverId={focusDriverId} onSelectDriver={(driver) => setFocusDriverId(driver?.id ?? null)} />
+          ) : (
+            <div className="flex h-[410px] flex-col">
+              <div className="border-b border-zinc-800 p-2.5">
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-500" />
+                  <input
+                    value={mapListSearch}
+                    onChange={(event) => setMapListSearch(event.target.value)}
+                    placeholder="Buscar móvil, nombre, teléfono o patente"
+                    autoComplete="off"
+                    className="h-9 w-full rounded-lg border border-zinc-700 bg-zinc-950 pl-8 pr-3 text-[10px] font-bold text-white outline-none transition placeholder:text-zinc-600 focus:border-emerald-400/60 focus:ring-2 focus:ring-emerald-400/10"
+                    aria-label="Buscar en lista de móviles"
+                  />
+                </div>
+              </div>
+              <div className="min-h-0 flex-1 divide-y divide-zinc-800/80 overflow-y-auto">
+                {mapListDrivers.map(({ item, driver }) => {
+                  const vehicle = driver.vehicleId ? vehicleById.get(driver.vehicleId) : undefined;
+                  const isBusyDriver = activeTripDriverIds.has(item.driverId);
+                  const connected = isQueueConnected(item);
+                  const isAvailable = !isBusyDriver && connected && item.status === 'available';
+                  const statusLabel = isBusyDriver ? 'En carrera' : isAvailable ? 'Disponible' : connected ? 'Conectado' : 'Fuera de fila';
+                  const statusClass = isBusyDriver
+                    ? 'border-amber-400/20 bg-amber-400/10 text-amber-200'
+                    : isAvailable
+                      ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-200'
+                      : connected
+                        ? 'border-sky-400/20 bg-sky-400/10 text-sky-200'
+                        : 'border-zinc-700 bg-zinc-900 text-zinc-500';
+                  const focused = focusDriverId === driver.id;
+                  return (
+                    <button
+                      key={driver.id}
+                      type="button"
+                      onClick={() => setFocusDriverId(focused ? null : driver.id)}
+                      className={`flex w-full items-center gap-2.5 px-3 py-2.5 text-left transition ${focused ? 'bg-blue-500/[0.10]' : 'hover:bg-zinc-900/70'}`}
+                    >
+                      <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl border text-[11px] font-black ${isAvailable ? 'border-emerald-400/25 bg-emerald-400/10 text-emerald-200' : isBusyDriver ? 'border-amber-400/25 bg-amber-400/10 text-amber-200' : 'border-zinc-700 bg-zinc-900 text-zinc-400'}`}>{item.unitNumber}</span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[10px] font-black text-white">{driver.name}</span>
+                        <span className="mt-0.5 block truncate text-[8px] text-zinc-500">{[vehicle?.licensePlate ? `Patente ${vehicle.licensePlate}` : '', driver.phone || '', item.operationMode === 'traditional' ? 'Radio' : 'App'].filter(Boolean).join(' · ')}</span>
+                      </span>
+                      <span className={`shrink-0 rounded-md border px-1.5 py-1 text-[7px] font-black ${statusClass}`}>{statusLabel}</span>
+                    </button>
+                  );
+                })}
+                {!mapListDrivers.length && (
+                  <div className="flex h-full min-h-40 items-center justify-center px-5 text-center text-[10px] font-bold text-zinc-500">No encontramos móviles con esa búsqueda.</div>
+                )}
+              </div>
+              <div className="flex items-center justify-between border-t border-zinc-800 bg-zinc-950/40 px-3 py-2 text-[8px] font-bold text-zinc-500">
+                <span>{mapListDrivers.length} visibles · {queueItems.length} registrados</span>
+                <span>{availableDrivers.length} disponibles</span>
+              </div>
+            </div>
+          )}
         </aside>
       </section>
     </div>
