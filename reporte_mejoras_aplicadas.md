@@ -31,9 +31,9 @@ Fecha de auditoría: 2026-08-26
 
 | Módulo | Tipo | Hallazgo | Estado |
 |---|---|---|---|
-| Consola móvil de despacho | Diseño UX | En anchos móviles, los contadores de estado compiten con el título y generan solapamiento visual. | EN CORRECCIÓN |
-| Acciones táctiles de carrera | Diseño UX | Algunos icon-buttons de detalle/cancelación son de 36 px y deben ampliarse en móvil. | EN CORRECCIÓN |
-| App conductor | Diseño UX / Microfallo | Falta una pasada visual específica del flujo conductor completo con foco en botones de aceptación, llegada, inicio y finalización. | EN AUDITORÍA |
+| Consola móvil de despacho | Diseño UX | Reorganizados título, chips, búsqueda y CTA para apilarse sin solapamiento en móvil. | VERIFICADO POR BUILD; PENDIENTE CAPTURA PROD |
+| Acciones táctiles de carrera | Diseño UX | Controles móviles de asignación, detalle y cancelación ampliados a objetivos táctiles de 44 px o más, manteniendo densidad desktop. | VERIFICADO POR BUILD; PENDIENTE CAPTURA PROD |
+| App conductor | Diseño UX / Microfallo | Aumentados objetivos táctiles y jerarquía de aceptación, GPS, llamada, llegada, inicio, finalización, perfil y cierre de errores; oferta marcada como actualización prioritaria accesible. | VERIFICADO POR BUILD; PENDIENTE E2E VISUAL |
 | `centralgo_private_settings` | Seguridad defensiva | RLS está deshabilitado, aunque la tabla no tiene grants para `anon`/`authenticated`; requiere validar funciones de pago antes de endurecerlo. | PENDIENTE CONTROLADO |
 
 ## Regla anti-bucle

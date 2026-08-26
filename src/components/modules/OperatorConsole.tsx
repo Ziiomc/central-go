@@ -277,17 +277,17 @@ const assignDriverToTrip = (trip: Trip, driverId: string) => {
       `}</style>
 
       <section className="rounded-2xl border border-zinc-800 bg-[#0d0d0f] p-3 shadow-xl shadow-black/20">
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="min-w-0 flex-1">
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+          <div className="min-w-0 sm:flex-1">
             <p className="text-[10px] font-black uppercase tracking-[.18em] text-zinc-500">Central GO</p>
             <h1 className="text-xl font-black text-white">Despacho</h1>
           </div>
-          <div className="flex items-center gap-2 text-xs font-black">
+          <div className="-mx-1 flex max-w-full items-center gap-2 overflow-x-auto px-1 pb-1 text-xs font-black sm:mx-0 sm:overflow-visible sm:px-0 sm:pb-0">
             <span className="rounded-lg border border-amber-500/25 bg-amber-500/10 px-2.5 py-1.5 text-amber-300">{pendingCount} pendientes</span>
             <span className="rounded-lg border border-blue-500/25 bg-blue-500/10 px-2.5 py-1.5 text-blue-300">{activeCount} activas</span>
             <span className="rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-1.5 text-emerald-300">{availableDrivers.length} libres</span>
           </div>
-          <div className="relative min-w-[220px] flex-[0_1_340px]">
+          <div className="relative w-full sm:min-w-[220px] sm:flex-[0_1_340px]">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
             <input
               value={search}
@@ -296,7 +296,7 @@ const assignDriverToTrip = (trip: Trip, driverId: string) => {
               className="h-10 w-full rounded-xl border border-zinc-800 bg-zinc-950 pl-9 pr-3 text-sm text-white outline-none transition focus:border-blue-500"
             />
           </div>
-          <button type="button" onClick={() => setNewTripModalOpen(true)} className="flex h-10 items-center gap-2 rounded-xl bg-amber-400 px-4 text-sm font-black text-zinc-950">
+          <button type="button" onClick={() => setNewTripModalOpen(true)} className="flex h-11 w-full touch-manipulation items-center justify-center gap-2 rounded-xl bg-amber-400 px-4 text-sm font-black text-zinc-950 sm:h-10 sm:w-auto">
             <Plus className="h-4 w-4" strokeWidth={3} />
             Nueva carrera
           </button>
@@ -489,28 +489,28 @@ const assignDriverToTrip = (trip: Trip, driverId: string) => {
                       </div>
                     </div>
 
-                    <div className="mt-3 flex max-w-full flex-wrap items-center gap-1.5" onClick={(event) => event.stopPropagation()}>
+                    <div className="mt-3 flex max-w-full flex-wrap items-center gap-2 sm:gap-1.5" onClick={(event) => event.stopPropagation()}>
                       {trip.status === 'pending' && (
                         <>
                           <select
                             value={driverChoice[trip.id] ?? ''}
                             onChange={(event) => setDriverChoice((current) => ({ ...current, [trip.id]: event.target.value }))}
-                            className="h-9 min-w-[150px] max-w-full flex-1 rounded-lg border border-zinc-700 bg-zinc-950 px-2 text-xs font-bold text-zinc-200 outline-none focus:border-blue-500"
+                            className="h-11 min-w-[150px] max-w-full flex-1 rounded-lg border border-zinc-700 bg-zinc-950 px-2 text-xs font-bold text-zinc-200 outline-none focus:border-blue-500 sm:h-9"
                             aria-label={`Móvil para ${trip.code}`}
                           >
                             <option value="">Elegir móvil</option>
                             {availableDrivers.map((driver) => <option key={driver.id} value={driver.id}>Móvil {driver.unitNumber} · {driver.name}</option>)}
                           </select>
-                          <button type="button" disabled={!driverChoice[trip.id] || isBusy} onClick={() => { const id = driverChoice[trip.id]; if (id) assignDriverToTrip(trip, id); }} className="h-9 rounded-lg bg-blue-600 px-3 text-xs font-black text-white disabled:opacity-40">Asignar</button>
-                          <button type="button" disabled={!availableDrivers.length || isBusy} onClick={() => handleAutoAssign(trip)} className="flex h-9 items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-900 px-2.5 text-xs font-black text-zinc-300 disabled:opacity-40" title="Asignar automáticamente al móvil más cercano"><Wand2 className="h-3.5 w-3.5" />Auto</button>
+                          <button type="button" disabled={!driverChoice[trip.id] || isBusy} onClick={() => { const id = driverChoice[trip.id]; if (id) assignDriverToTrip(trip, id); }} className="h-11 touch-manipulation rounded-lg bg-blue-600 px-3 text-xs font-black text-white disabled:opacity-40 sm:h-9">Asignar</button>
+                          <button type="button" disabled={!availableDrivers.length || isBusy} onClick={() => handleAutoAssign(trip)} className="flex h-11 touch-manipulation items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-900 px-2.5 text-xs font-black text-zinc-300 disabled:opacity-40 sm:h-9" title="Asignar automáticamente al móvil más cercano"><Wand2 className="h-3.5 w-3.5" />Auto</button>
                         </>
                       )}
 
-                      {next && <button type="button" disabled={isBusy} onClick={() => void runTripAction(trip.id, () => updateTripStatus(trip.id, next.status))} className="h-9 rounded-lg bg-emerald-600 px-3 text-xs font-black text-white disabled:opacity-40">{next.label}</button>}
-                      {trip.status === 'assigned' && <button type="button" disabled={isBusy} onClick={() => void runTripAction(trip.id, () => unassignTrip(trip.id))} className="h-9 rounded-lg border border-zinc-700 bg-zinc-900 px-2.5 text-xs font-black text-zinc-300 disabled:opacity-40">Liberar</button>}
-                      {trip.status === 'in_progress' && <button type="button" onClick={() => setSelectedTripForDetail(trip)} className="h-9 rounded-lg bg-emerald-600 px-3 text-xs font-black text-white">Finalizar</button>}
-                      <button type="button" onClick={() => setSelectedTripForDetail(trip)} className="grid h-9 w-9 place-items-center rounded-lg border border-zinc-700 bg-zinc-900 text-zinc-400 hover:text-white" title="Ver detalle"><Eye className="h-4 w-4" /></button>
-                      <button type="button" disabled={isBusy} onClick={() => handleCancel(trip)} className="grid h-9 w-9 place-items-center rounded-lg border border-rose-500/20 bg-rose-500/10 text-rose-300 disabled:opacity-40" title="Cancelar carrera"><XCircle className="h-4 w-4" /></button>
+                      {next && <button type="button" disabled={isBusy} onClick={() => void runTripAction(trip.id, () => updateTripStatus(trip.id, next.status))} className="h-11 touch-manipulation rounded-lg bg-emerald-600 px-3 text-xs font-black text-white disabled:opacity-40 sm:h-9">{next.label}</button>}
+                      {trip.status === 'assigned' && <button type="button" disabled={isBusy} onClick={() => void runTripAction(trip.id, () => unassignTrip(trip.id))} className="h-11 touch-manipulation rounded-lg border border-zinc-700 bg-zinc-900 px-2.5 text-xs font-black text-zinc-300 disabled:opacity-40 sm:h-9">Liberar</button>}
+                      {trip.status === 'in_progress' && <button type="button" onClick={() => setSelectedTripForDetail(trip)} className="h-11 touch-manipulation rounded-lg bg-emerald-600 px-3 text-xs font-black text-white sm:h-9">Finalizar</button>}
+                      <button type="button" onClick={() => setSelectedTripForDetail(trip)} className="grid h-11 w-11 touch-manipulation place-items-center rounded-lg border border-zinc-700 bg-zinc-900 text-zinc-400 hover:text-white sm:h-9 sm:w-9" title="Ver detalle" aria-label={`Ver detalle de ${trip.code}`} ><Eye className="h-4 w-4" /></button>
+                      <button type="button" disabled={isBusy} onClick={() => handleCancel(trip)} className="grid h-11 w-11 touch-manipulation place-items-center rounded-lg border border-rose-500/20 bg-rose-500/10 text-rose-300 disabled:opacity-40 sm:h-9 sm:w-9" title="Cancelar carrera" aria-label={`Cancelar ${trip.code}`} ><XCircle className="h-4 w-4" /></button>
                     </div>
                   </article>
                 );
