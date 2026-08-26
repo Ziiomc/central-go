@@ -51,6 +51,7 @@ export const OperatorConsole: React.FC = () => {
     drivers,
     vehicles,
     currentCompany,
+    setActiveModule,
     setNewTripModalOpen,
     setSelectedTripForDetail,
     assignTrip,
@@ -440,6 +441,22 @@ const assignDriverToTrip = (trip: Trip, driverId: string) => {
               );
             })}
           </div>
+          {focusDriverId && (
+            <div className="border-t border-zinc-800 bg-zinc-950/25 p-2">
+              <button
+                type="button"
+                onClick={() => {
+                  try { window.sessionStorage.setItem('centralgo:focus-driver', focusDriverId); } catch { /* sesión sin storage */ }
+                  setActiveModule('drivers');
+                }}
+                className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-cyan-400/20 bg-cyan-400/[0.07] px-2 py-2 text-[9px] font-black text-cyan-200 transition hover:border-cyan-300/40 hover:bg-cyan-400/[0.12]"
+                title="Abrir la ficha del conductor seleccionado para cambiar chofer o vehículo"
+              >
+                <UserRound className="h-3.5 w-3.5" />
+                Gestionar chofer / vehículo
+              </button>
+            </div>
+          )}
           <div className="flex items-center justify-between gap-2 rounded-b-2xl border-t border-zinc-800 bg-zinc-950/40 px-3 py-2 text-[8px] font-bold text-zinc-500">
             <span>Conductores {queueItems.length}</span>
             <span>Sin app {noAppDriverCount}</span>
