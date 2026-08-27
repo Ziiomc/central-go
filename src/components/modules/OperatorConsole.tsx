@@ -440,7 +440,7 @@ export const OperatorConsole: React.FC = () => {
             </div>
 
             {manualMenuOpen && (
-              <div className="absolute left-0 top-[58px] z-[80] flex max-h-[calc(100dvh-5rem)] w-[min(330px,calc(100vw-2rem))] flex-col overflow-hidden rounded-xl border border-amber-400/20 bg-[#111216] shadow-2xl shadow-black/60">
+              <div className="fixed inset-x-2 bottom-2 top-auto z-[80] flex max-h-[calc(100dvh-1rem)] w-auto flex-col overflow-hidden rounded-xl border border-amber-400/20 bg-[#111216] shadow-2xl shadow-black/60 sm:absolute sm:inset-x-auto sm:bottom-auto sm:left-0 sm:top-[58px] sm:max-h-[calc(100dvh-5rem)] sm:w-[min(330px,calc(100vw-2rem))]">
                 <div className="flex items-start justify-between gap-2 border-b border-white/[0.06] px-3 py-2.5">
                   <div className="min-w-0">
                     <p className="text-[10px] font-black text-white">Fila / operación por radio</p>
