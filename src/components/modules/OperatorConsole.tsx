@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Car, ChevronUp, Eye, GripVertical, List, Loader2, Map as MapIcon, MapPin, Navigation, Pencil, PhoneCall, Plus, Search, UserPlus, UserRound, Wand2, XCircle } from 'lucide-react';
+import { Car, ChevronUp, Eye, GripVertical, List, Loader2, Map as MapIcon, MapPin, Navigation, Pencil, PhoneCall, Plus, Search, Trash2, UserPlus, UserRound, Wand2, XCircle, Zap } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { DRIVER_STATUS_LABELS, TRIP_STATUS_LABELS } from '../../lib/labels';
 import { isQueueConnected, loadDispatchQueue, setTraditionalDriverAvailability, subscribeDispatchQueue, type DispatchQueueItem } from '../../lib/dispatchPriorityRepository';
@@ -347,7 +347,7 @@ export const OperatorConsole: React.FC = () => {
     const startLeft = leftWidth;
     const startMap = mapWidth;
     const containerWidth = gridRef.current?.getBoundingClientRect().width ?? window.innerWidth;
-    const minimumCenter = 340;
+    const minimumCenter = 320;
 
     const onMove = (moveEvent: PointerEvent) => {
       const delta = moveEvent.clientX - startX;
@@ -383,7 +383,7 @@ export const OperatorConsole: React.FC = () => {
       <style>{`
         .cg-panel-resizer{display:none}
         @media (min-width:1280px){
-          .cg-operator-grid{grid-template-columns:var(--cg-left-panel) 10px minmax(340px,380px) 10px minmax(var(--cg-map-panel),1fr)!important;gap:0!important}
+          .cg-operator-grid{grid-template-columns:var(--cg-left-panel) 10px minmax(320px,350px) 10px minmax(var(--cg-map-panel),1fr)!important;gap:0!important}
           .cg-panel-resizer{display:flex}
           .cg-map-panel{grid-column:auto!important}
         }
@@ -554,8 +554,6 @@ export const OperatorConsole: React.FC = () => {
             ) : availableDrivers.map((driver: Driver, index) => {
               const focused = focusDriverId === driver.id;
               const dragging = dragDriverId === driver.id;
-              const vehicle = driver.vehicleId ? vehicleById.get(driver.vehicleId) : undefined;
-              const secondary = [vehicle?.licensePlate ? `Patente ${vehicle.licensePlate}` : '', driver.currentLocation.address || DRIVER_STATUS_LABELS[driver.status]].filter(Boolean).join(' · ');
               return (
                 <button
                   key={driver.id}
@@ -569,13 +567,12 @@ export const OperatorConsole: React.FC = () => {
                   }}
                   onDragEnd={() => { setDragDriverId(null); setDragOverTripId(null); }}
                   onClick={() => setFocusDriverId(focused ? null : driver.id)}
-                  className={`flex w-full cursor-grab items-center gap-2.5 px-3 py-2.5 text-left transition active:cursor-grabbing ${dragging ? 'opacity-45' : ''} ${focused ? 'bg-emerald-500/[0.10]' : 'hover:bg-zinc-900/70'}`}
-                  title="Puedes arrastrar este móvil sobre una carrera pendiente"
+                  className={`flex w-full cursor-grab items-center gap-2 px-3 py-2 text-left transition active:cursor-grabbing ${dragging ? 'opacity-45' : ''} ${focused ? 'bg-emerald-500/[0.10]' : 'hover:bg-zinc-900/70'}`}
+                  title={`${driver.name} · ${driver.currentLocation.address || DRIVER_STATUS_LABELS[driver.status]}. Puedes arrastrar este móvil sobre una carrera pendiente.`}
                 >
-                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-emerald-400/25 bg-emerald-500/10 text-base font-black text-emerald-300" title={`Posición ${index + 1} en la fila`}>{index + 1}</span>
+                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-emerald-400/25 bg-emerald-500/10 text-sm font-black text-emerald-300" title={`Posición ${index + 1} en la fila`}>{index + 1}</span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-black text-white">Móvil {driver.unitNumber}</span>
-                    <span className="mt-0.5 block truncate text-[9px] text-zinc-500">{secondary}</span>
+                    <span className="block truncate text-base font-black leading-none text-white">{driver.unitNumber}</span>
                   </span>
                   <GripVertical className="h-4 w-4 shrink-0 text-zinc-700" />
                 </button>
@@ -678,7 +675,7 @@ export const OperatorConsole: React.FC = () => {
                         <span className="min-w-0 truncate">{trip.destination.address}</span>
                       </p>
                       <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                        {trip.driverUnitNumber && <p className="flex items-center gap-1 text-[10px] font-black text-blue-300"><Car className="h-3 w-3" />Móvil {trip.driverUnitNumber}</p>}
+                        {trip.driverUnitNumber && <p className="flex items-center gap-1 text-[10px] font-black text-blue-300"><Car className="h-3 w-3" />{trip.driverUnitNumber}</p>}
                       </div>
                     </div>
 
@@ -708,17 +705,18 @@ export const OperatorConsole: React.FC = () => {
                               aria-label={`Número de móvil para asignar la carrera de ${trip.origin.address}`}
                             />
                           </div>
-                          <button type="button" disabled={!driverChoice[trip.id] || isBusy} onClick={() => { const id = driverChoice[trip.id]; if (id) assignDriverToTrip(trip, id); }} className="h-11 touch-manipulation rounded-lg bg-blue-600 px-2.5 text-[11px] font-black text-white disabled:opacity-40 sm:h-8">Asignar</button>
-                          <button type="button" disabled={!availableDrivers.length || isBusy} onClick={() => handleAutoAssign(trip)} className="flex h-11 touch-manipulation items-center gap-1 rounded-lg border border-zinc-700 bg-zinc-900 px-2 text-[11px] font-black text-zinc-300 disabled:opacity-40 sm:h-8" title="Asignar automáticamente al móvil más cercano"><Wand2 className="h-3 w-3" />Auto</button>
+                          <button type="button" data-operator-action disabled={!driverChoice[trip.id] || isBusy} onClick={() => { const id = driverChoice[trip.id]; if (id) assignDriverToTrip(trip, id); }} className="grid h-11 w-11 touch-manipulation place-items-center rounded-lg border border-blue-400/35 bg-blue-600 text-white disabled:opacity-40 sm:h-8 sm:w-8" title="Asignar" aria-label={`Asignar móvil escrito a ${trip.code}`}><Zap className="h-3.5 w-3.5" /></button>
+                          <button type="button" data-operator-action disabled={!availableDrivers.length || isBusy} onClick={() => handleAutoAssign(trip)} className="grid h-11 w-11 touch-manipulation place-items-center rounded-lg border border-violet-400/30 bg-violet-500/15 text-violet-200 disabled:opacity-40 sm:h-8 sm:w-8" title="Autoasignar al móvil más cercano" aria-label={`Autoasignar ${trip.code}`}><Wand2 className="h-3.5 w-3.5" /></button>
                         </>
                       )}
 
-                      {next && <button type="button" disabled={isBusy} onClick={() => void runTripAction(trip.id, () => updateTripStatus(trip.id, next.status))} className="h-11 touch-manipulation rounded-lg bg-emerald-600 px-2.5 text-[11px] font-black text-white disabled:opacity-40 sm:h-8">{next.label}</button>}
-                      {trip.status === 'assigned' && <button type="button" disabled={isBusy} onClick={() => void runTripAction(trip.id, () => unassignTrip(trip.id))} className="h-11 touch-manipulation rounded-lg border border-zinc-700 bg-zinc-900 px-2 text-[11px] font-black text-zinc-300 disabled:opacity-40 sm:h-8">Liberar</button>}
-                      {trip.status === 'in_progress' && <button type="button" onClick={() => setSelectedTripForDetail(trip)} className="h-11 touch-manipulation rounded-lg bg-emerald-600 px-2.5 text-[11px] font-black text-white sm:h-8">Finalizar</button>}
-                      <button type="button" onClick={() => editTrip(trip)} className="flex h-11 touch-manipulation items-center gap-1 rounded-lg border border-cyan-500/25 bg-cyan-500/10 px-2 text-[11px] font-black text-cyan-200 sm:h-8" title="Editar datos de la carrera" aria-label={`Editar ${trip.code}`}><Pencil className="h-3 w-3" /><span className="hidden sm:inline">Editar</span></button>
-                      <button type="button" onClick={() => setSelectedTripForDetail(trip)} className="grid h-11 w-11 touch-manipulation place-items-center rounded-lg border border-zinc-700 bg-zinc-900 text-zinc-400 hover:text-white sm:h-8 sm:w-8" title="Ver detalle" aria-label={`Ver detalle de ${trip.code}`}><Eye className="h-3.5 w-3.5" /></button>
-                      <button type="button" disabled={isBusy} onClick={() => handleCancel(trip)} className="grid h-11 w-11 touch-manipulation place-items-center rounded-lg border border-rose-500/20 bg-rose-500/10 text-rose-300 disabled:opacity-40 sm:h-8 sm:w-8" title="Cancelar carrera" aria-label={`Cancelar ${trip.code}`}><XCircle className="h-3.5 w-3.5" /></button>
+                      {next && <button type="button" data-operator-action disabled={isBusy} onClick={() => void runTripAction(trip.id, () => updateTripStatus(trip.id, next.status))} className="h-11 touch-manipulation rounded-lg border border-emerald-400/30 bg-emerald-600 px-2.5 text-[11px] font-black text-white disabled:opacity-40 sm:h-8">{next.label}</button>}
+                      {trip.status === 'assigned' && <button type="button" data-operator-action disabled={isBusy} onClick={() => void runTripAction(trip.id, () => unassignTrip(trip.id))} className="h-11 touch-manipulation rounded-lg border border-zinc-600 bg-zinc-800 px-2 text-[11px] font-black text-zinc-200 disabled:opacity-40 sm:h-8">Liberar</button>}
+                      {trip.status === 'in_progress' && <button type="button" data-operator-action onClick={() => setSelectedTripForDetail(trip)} className="h-11 touch-manipulation rounded-lg border border-emerald-400/30 bg-emerald-600 px-2.5 text-[11px] font-black text-white sm:h-8">Finalizar</button>}
+                      {trip.clientPhone && trip.clientPhone !== 'Sin teléfono' && <a data-operator-action href={`tel:${trip.clientPhone}`} onClick={(event) => event.stopPropagation()} className="grid h-11 w-11 touch-manipulation place-items-center rounded-lg border border-emerald-400/25 bg-emerald-500/10 text-emerald-200 sm:h-8 sm:w-8" title="Llamar al cliente" aria-label={`Llamar a ${trip.clientName}`}><PhoneCall className="h-3.5 w-3.5" /></a>}
+                      <button type="button" data-operator-action onClick={() => editTrip(trip)} className="grid h-11 w-11 touch-manipulation place-items-center rounded-lg border border-cyan-400/30 bg-cyan-500/15 text-cyan-200 sm:h-8 sm:w-8" title="Editar carrera" aria-label={`Editar ${trip.code}`}><Pencil className="h-3.5 w-3.5" /></button>
+                      <button type="button" data-operator-action onClick={() => setSelectedTripForDetail(trip)} className="grid h-11 w-11 touch-manipulation place-items-center rounded-lg border border-zinc-600 bg-zinc-800 text-zinc-300 sm:h-8 sm:w-8" title="Ver detalle" aria-label={`Ver detalle de ${trip.code}`}><Eye className="h-3.5 w-3.5" /></button>
+                      <button type="button" data-operator-action disabled={isBusy} onClick={() => handleCancel(trip)} className="grid h-11 w-11 touch-manipulation place-items-center rounded-lg border border-rose-400/30 bg-rose-500/15 text-rose-200 disabled:opacity-40 sm:h-8 sm:w-8" title="Cancelar carrera" aria-label={`Cancelar ${trip.code}`}><Trash2 className="h-3.5 w-3.5" /></button>
                     </div>
                   </article>
                 );

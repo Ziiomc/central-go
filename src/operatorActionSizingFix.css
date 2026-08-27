@@ -45,6 +45,28 @@
   stroke-width: 2.35;
 }
 
+/* Javier's reference uses controls that read like real, pressable buttons. */
+[data-dispatch-trip-id] [data-operator-action] {
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.7), 0 5px 12px rgba(0, 0, 0, 0.28);
+  transform: translateY(0);
+  transition: transform 120ms ease, box-shadow 120ms ease, filter 120ms ease, border-color 120ms ease !important;
+}
+
+[data-dispatch-trip-id] [data-operator-action]:not(:disabled):hover {
+  filter: brightness(1.14);
+  transform: translateY(-1px);
+}
+
+[data-dispatch-trip-id] [data-operator-action]:not(:disabled):active {
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.72);
+  transform: translateY(2px);
+}
+
+[data-dispatch-trip-id] [data-operator-action]:focus-visible {
+  outline: 2px solid rgb(250 204 21 / 0.85);
+  outline-offset: 2px;
+}
+
 /* The compact queue should remain on one clean action row. */
 [data-dispatch-trip-id] > div button[title="Asignar"],
 [data-dispatch-trip-id] > div button[title="Editar carrera"],
