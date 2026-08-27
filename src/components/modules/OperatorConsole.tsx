@@ -440,7 +440,7 @@ export const OperatorConsole: React.FC = () => {
             </div>
 
             {manualMenuOpen && (
-              <div className="absolute right-2 top-[58px] z-[80] w-[330px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-amber-400/20 bg-[#111216] shadow-2xl shadow-black/60">
+              <div className="absolute left-0 top-[58px] z-[80] flex max-h-[calc(100dvh-5rem)] w-[min(330px,calc(100vw-2rem))] flex-col overflow-hidden rounded-xl border border-amber-400/20 bg-[#111216] shadow-2xl shadow-black/60">
                 <div className="flex items-start justify-between gap-2 border-b border-white/[0.06] px-3 py-2.5">
                   <div className="min-w-0">
                     <p className="text-[10px] font-black text-white">Fila / operación por radio</p>
@@ -486,7 +486,7 @@ export const OperatorConsole: React.FC = () => {
                   <p className="mt-1.5 text-[7px] font-bold text-zinc-600">Escribe, por ejemplo: 6, Juan, 927... o una patente.</p>
                 </div>
                 {manualError && <p className="mx-2 mt-2 rounded-lg border border-rose-400/20 bg-rose-400/[0.07] px-2 py-1.5 text-[8px] font-bold text-rose-200">{manualError}</p>}
-                <div className="max-h-64 divide-y divide-white/[0.055] overflow-y-auto">
+                <div className="min-h-0 flex-1 divide-y divide-white/[0.055] overflow-y-auto">
                   {filteredManualDriversManageable.map((item) => {
                     const driver = drivers.find((candidate) => candidate.id === item.driverId);
                     const phone = driver?.phone?.trim() || '';
