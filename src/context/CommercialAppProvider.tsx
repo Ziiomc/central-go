@@ -456,6 +456,14 @@ export const CommercialAppProvider: React.FC<React.PropsWithChildren> = ({ child
     setNotifications((items) => items.map((notification) => ({ ...notification, read: true })));
   };
 
+  const toggleSound = () => {
+    const muted = soundManager.toggleMute();
+    setSoundMuted(muted);
+    if (!muted) void soundManager.prime().then((ready) => {
+      if (ready) soundManager.playDispatchChime();
+    });
+  };
+
   const value: AppContextType = {
     currentRole,
     setCurrentRole: () => undefined,
@@ -473,7 +481,7 @@ export const CommercialAppProvider: React.FC<React.PropsWithChildren> = ({ child
     fareConfig,
     zones: ZONES,
     soundMuted,
-    toggleSound: () => setSoundMuted(soundManager.toggleMute()),
+    toggleSound,
     activeModule,
     setActiveModule,
     selectedTripForDetail,
@@ -523,3 +531,4 @@ export const CommercialAppProvider: React.FC<React.PropsWithChildren> = ({ child
     </AppContext.Provider>
   );
 };
+

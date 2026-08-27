@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Car, ChevronUp, Eye, GripVertical, List, Loader2, Map as MapIcon, MapPin, Navigation, PhoneCall, Plus, Search, UserPlus, UserRound, Wand2, XCircle } from 'lucide-react';
+import { Car, ChevronUp, Eye, GripVertical, List, Loader2, Map as MapIcon, MapPin, Navigation, Pencil, PhoneCall, Plus, Search, UserPlus, UserRound, Wand2, XCircle } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { DRIVER_STATUS_LABELS, TRIP_STATUS_LABELS } from '../../lib/labels';
 import { isQueueConnected, loadDispatchQueue, setTraditionalDriverAvailability, subscribeDispatchQueue, type DispatchQueueItem } from '../../lib/dispatchPriorityRepository';
@@ -335,6 +335,11 @@ export const OperatorConsole: React.FC = () => {
     setFocusDriverId(trip.driverId ?? null);
   };
 
+  const editTrip = (trip: Trip) => {
+    setSelectedTripForDetail(trip);
+    window.setTimeout(() => window.dispatchEvent(new CustomEvent('centralgo:edit-trip', { detail: { tripId: trip.id } })), 0);
+  };
+
   const startResize = (side: 'left' | 'map', event: React.PointerEvent<HTMLDivElement>) => {
     if (window.innerWidth < 1280) return;
     event.preventDefault();
@@ -660,6 +665,10 @@ export const OperatorConsole: React.FC = () => {
                         <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
                         <strong className="min-w-0 truncate">{trip.origin.address}</strong>
                       </p>
+                      <p className="mt-1.5 flex min-w-0 items-center gap-1.5 text-[11px] font-bold text-zinc-200" title={[trip.clientName, trip.clientPhone].filter(Boolean).join(' · ')}>
+                        <UserRound className="h-3.5 w-3.5 shrink-0 text-cyan-300" />
+                        <span className="min-w-0 truncate">{trip.clientName}{trip.clientPhone && trip.clientPhone !== 'Sin teléfono' ? ` · ${trip.clientPhone}` : ''}</span>
+                      </p>
                       <p className="mt-1 flex min-w-0 items-start gap-1.5 pl-0.5 text-[11px] text-zinc-500" title={trip.destination.address}>
                         <Navigation className="mt-0.5 h-3.5 w-3.5 shrink-0 text-sky-400" />
                         <span className="min-w-0 truncate">{trip.destination.address}</span>
@@ -703,6 +712,7 @@ export const OperatorConsole: React.FC = () => {
                       {next && <button type="button" disabled={isBusy} onClick={() => void runTripAction(trip.id, () => updateTripStatus(trip.id, next.status))} className="h-11 touch-manipulation rounded-lg bg-emerald-600 px-3 text-xs font-black text-white disabled:opacity-40 sm:h-9">{next.label}</button>}
                       {trip.status === 'assigned' && <button type="button" disabled={isBusy} onClick={() => void runTripAction(trip.id, () => unassignTrip(trip.id))} className="h-11 touch-manipulation rounded-lg border border-zinc-700 bg-zinc-900 px-2.5 text-xs font-black text-zinc-300 disabled:opacity-40 sm:h-9">Liberar</button>}
                       {trip.status === 'in_progress' && <button type="button" onClick={() => setSelectedTripForDetail(trip)} className="h-11 touch-manipulation rounded-lg bg-emerald-600 px-3 text-xs font-black text-white sm:h-9">Finalizar</button>}
+                      <button type="button" onClick={() => editTrip(trip)} className="flex h-11 touch-manipulation items-center gap-1.5 rounded-lg border border-cyan-500/25 bg-cyan-500/10 px-2.5 text-xs font-black text-cyan-200 sm:h-9" title="Editar datos de la carrera" aria-label={`Editar ${trip.code}`}><Pencil className="h-3.5 w-3.5" /><span className="hidden sm:inline">Editar</span></button>
                       <button type="button" onClick={() => setSelectedTripForDetail(trip)} className="grid h-11 w-11 touch-manipulation place-items-center rounded-lg border border-zinc-700 bg-zinc-900 text-zinc-400 hover:text-white sm:h-9 sm:w-9" title="Ver detalle" aria-label={`Ver detalle de ${trip.code}`}><Eye className="h-4 w-4" /></button>
                       <button type="button" disabled={isBusy} onClick={() => handleCancel(trip)} className="grid h-11 w-11 touch-manipulation place-items-center rounded-lg border border-rose-500/20 bg-rose-500/10 text-rose-300 disabled:opacity-40 sm:h-9 sm:w-9" title="Cancelar carrera" aria-label={`Cancelar ${trip.code}`}><XCircle className="h-4 w-4" /></button>
                     </div>
@@ -813,3 +823,4 @@ export const OperatorConsole: React.FC = () => {
     </div>
   );
 };
+
