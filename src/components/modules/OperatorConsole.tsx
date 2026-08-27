@@ -417,8 +417,14 @@ export const OperatorConsole: React.FC = () => {
       </section>
 
       <section ref={gridRef} style={gridStyle} className="cg-operator-grid grid items-start gap-3 lg:grid-cols-[240px_minmax(0,1fr)]">
-        <aside className="overflow-visible rounded-2xl border border-zinc-800 bg-[#0d0d0f] shadow-xl shadow-black/20 lg:sticky lg:top-2">
-          <div className="relative rounded-t-2xl border-b border-zinc-800 bg-[#0d0d0f] px-3 py-3">
+        <aside
+          className="overflow-visible rounded-2xl border border-zinc-800 bg-[#0d0d0f] shadow-xl shadow-black/20 lg:sticky lg:top-2"
+          style={manualMenuOpen ? { backdropFilter: 'none', WebkitBackdropFilter: 'none' } : undefined}
+        >
+          <div
+            className="relative rounded-t-2xl border-b border-zinc-800 bg-[#0d0d0f] px-3 py-3"
+            style={manualMenuOpen ? { backdropFilter: 'none', WebkitBackdropFilter: 'none' } : undefined}
+          >
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">
                 <h2 className="text-sm font-black text-white">Móviles disponibles</h2>
