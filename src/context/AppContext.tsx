@@ -209,6 +209,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const toggleSound = () => {
     const muted = soundManager.toggleMute();
     setSoundMuted(muted);
+    if (!muted) void soundManager.prime().then((ready) => {
+      if (ready) soundManager.playDispatchChime();
+    });
   };
 
   const addAuditLog = (action: string, description: string) => {
@@ -1020,3 +1023,4 @@ export const useApp = () => {
   }
   return context;
 };
+
