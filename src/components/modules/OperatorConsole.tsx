@@ -10,7 +10,7 @@ import { LiveMap } from '../map/LiveMap';
 const ACTIVE_STATUSES: TripStatus[] = ['pending', 'assigned', 'en_route', 'arrived', 'in_progress'];
 const DRIVER_BUSY_STATUSES: TripStatus[] = ['assigned', 'en_route', 'arrived', 'in_progress'];
 type PanelId = 'map' | 'trips' | 'mobiles';
-const PANEL_LAYOUT_KEY = 'centralgo:operator-panel-layout:v5';
+const PANEL_LAYOUT_KEY = 'centralgo:operator-panel-layout:v6';
 const DEFAULT_PANEL_ORDER: PanelId[] = ['map', 'trips', 'mobiles'];
 const DEFAULT_PANEL_RATIOS: Record<PanelId, number> = { map: 0.44, trips: 0.35, mobiles: 0.21 };
 const MINIMUM_PANEL_WIDTH: Record<PanelId, number> = { map: 320, trips: 300, mobiles: 190 };
@@ -154,7 +154,7 @@ export const OperatorConsole: React.FC = () => {
       const usableWidth = Math.max(1, (gridRef.current?.getBoundingClientRect().width ?? 0) - 20);
       if (usableWidth <= 1) return;
       const total = DEFAULT_PANEL_ORDER.reduce((sum, panel) => sum + panelRatios[panel], 0);
-      const invalid = !Number.isFinite(total) || Math.abs(total - 1) > 0.02 || DEFAULT_PANEL_ORDER.some((panel) => panelRatios[panel] * usableWidth < MINIMUM_PANEL_WIDTH[panel]);
+      const invalid = !Number.isFinite(total) || Math.abs(total - 1) > 0.02 || DEFAULT_PANEL_ORDER.some((panel) => panelRatios[panel] * usableWidth + 1 < MINIMUM_PANEL_WIDTH[panel]);
       const alreadyDefault = panelOrder.every((panel, index) => panel === DEFAULT_PANEL_ORDER[index]) && DEFAULT_PANEL_ORDER.every((panel) => Math.abs(panelRatios[panel] - DEFAULT_PANEL_RATIOS[panel]) < 0.001);
       if (invalid && !alreadyDefault) {
         setPanelOrder([...DEFAULT_PANEL_ORDER]);
@@ -443,14 +443,17 @@ export const OperatorConsole: React.FC = () => {
     const stop = () => {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', stop);
+      window.removeEventListener('pointercancel', stop);
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
+      window.dispatchEvent(new Event('resize'));
     };
 
     document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', stop, { once: true });
+    window.addEventListener('pointercancel', stop, { once: true });
   };
 
   const gridStyle = {
@@ -476,7 +479,8 @@ export const OperatorConsole: React.FC = () => {
         @media (min-width:1280px){
           .cg-operator-grid{grid-template-columns:minmax(0,var(--cg-slot-a)) 10px minmax(0,var(--cg-slot-b)) 10px minmax(0,var(--cg-slot-c))!important;gap:0!important}
           .cg-panel-resizer{display:flex}
-          .cg-layout-panel{grid-column:var(--cg-panel-column)!important;min-width:0}
+          .cg-layout-panel{grid-column:var(--cg-panel-column)!important;grid-row:1!important;min-width:0}
+          .cg-panel-resizer{grid-row:1!important;align-self:stretch}
         }
       `}</style>
 
@@ -656,7 +660,7 @@ export const OperatorConsole: React.FC = () => {
           </div>
         </aside>
 
-        <div style={{ gridColumn: 2 }} className="cg-panel-resizer h-[540px] cursor-col-resize items-center justify-center rounded-lg text-zinc-700 transition hover:bg-blue-500/10 hover:text-blue-400" onPointerDown={(event) => startResize(0, event)} title="Arrastra para redimensionar los cuadros">
+        <div style={{ gridColumn: 2 }} className="cg-panel-resizer min-h-[540px] touch-none cursor-col-resize items-center justify-center rounded-lg bg-blue-500/[0.025] text-zinc-600 transition hover:bg-blue-500/15 hover:text-blue-300" onPointerDown={(event) => startResize(0, event)} title="Arrastra para redimensionar los cuadros">
           <GripVertical className="h-5 w-5" />
         </div>
 
@@ -785,7 +789,7 @@ export const OperatorConsole: React.FC = () => {
           )}
         </div>
 
-        <div style={{ gridColumn: 4 }} className="cg-panel-resizer h-[540px] cursor-col-resize items-center justify-center rounded-lg text-zinc-700 transition hover:bg-blue-500/10 hover:text-blue-400" onPointerDown={(event) => startResize(1, event)} title="Arrastra para redimensionar los cuadros">
+        <div style={{ gridColumn: 4 }} className="cg-panel-resizer min-h-[540px] touch-none cursor-col-resize items-center justify-center rounded-lg bg-blue-500/[0.025] text-zinc-600 transition hover:bg-blue-500/15 hover:text-blue-300" onPointerDown={(event) => startResize(1, event)} title="Arrastra para redimensionar los cuadros">
           <GripVertical className="h-5 w-5" />
         </div>
 
