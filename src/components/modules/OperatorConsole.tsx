@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Car, ChevronUp, Eye, GripVertical, List, Loader2, Map as MapIcon, MapPin, Navigation, Pencil, PhoneCall, Pin, Plus, Power, Search, Trash2, UserPlus, UserRound, Wand2, XCircle, Zap } from 'lucide-react';
+import { ArrowLeft, CalendarClock, Car, Check, ChevronUp, Eye, GripVertical, LayoutPanelTop, Loader2, MapPin, Navigation, Pencil, PhoneCall, Pin, Plus, Power, RotateCcw, Search, Trash2, UserPlus, UserRound, Wand2, XCircle, Zap } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { DRIVER_STATUS_LABELS, TRIP_STATUS_LABELS } from '../../lib/labels';
 import { isQueueConnected, loadDispatchQueue, moveDispatchPriority, setTraditionalDriverAvailability, subscribeDispatchQueue, type DispatchQueueItem } from '../../lib/dispatchPriorityRepository';
@@ -8,8 +8,10 @@ import { LiveMap } from '../map/LiveMap';
 
 const ACTIVE_STATUSES: TripStatus[] = ['pending', 'assigned', 'en_route', 'arrived', 'in_progress'];
 const DRIVER_BUSY_STATUSES: TripStatus[] = ['assigned', 'en_route', 'arrived', 'in_progress'];
-const PANEL_KEY = 'centralgo:operator-panel-widths:v3';
-const MAP_PANEL_VIEW_KEY = 'centralgo:operator-map-panel-view:v1';
+type PanelId = 'map' | 'trips' | 'mobiles';
+const PANEL_LAYOUT_KEY = 'centralgo:operator-panel-layout:v4';
+const DEFAULT_PANEL_ORDER: PanelId[] = ['map', 'trips', 'mobiles'];
+const DEFAULT_PANEL_RATIOS: Record<PanelId, number> = { map: 0.44, trips: 0.35, mobiles: 0.21 };
 const DRIVER_MIME = 'application/x-centralgo-driver';
 const PRIORITY_HOLD_KEY = 'centralgo:operator-priority-holds:v1';
 
@@ -65,23 +67,16 @@ const nextTripAction = (status: TripStatus): { status: TripStatus; label: string
   return null;
 };
 
-const readPanelWidths = () => {
+const readPanelLayout = () => {
   try {
-    const parsed = JSON.parse(window.localStorage.getItem(PANEL_KEY) || '{}') as { left?: number; map?: number };
-    return {
-      left: Math.min(300, Math.max(210, Number(parsed.left) || 240)),
-      map: Math.min(700, Math.max(420, Number(parsed.map) || 460)),
-    };
+    const parsed = JSON.parse(window.localStorage.getItem(PANEL_LAYOUT_KEY) || '{}') as { order?: PanelId[]; ratios?: Partial<Record<PanelId, number>> };
+    const order = Array.isArray(parsed.order) && parsed.order.length === 3 && DEFAULT_PANEL_ORDER.every((panel) => parsed.order?.includes(panel))
+      ? parsed.order
+      : DEFAULT_PANEL_ORDER;
+    const ratios = { ...DEFAULT_PANEL_RATIOS, ...(parsed.ratios ?? {}) };
+    return { order: [...order], ratios };
   } catch {
-    return { left: 240, map: 460 };
-  }
-};
-
-const readMapPanelView = (): 'map' | 'list' => {
-  try {
-    return window.localStorage.getItem(MAP_PANEL_VIEW_KEY) === 'list' ? 'list' : 'map';
-  } catch {
-    return 'map';
+    return { order: [...DEFAULT_PANEL_ORDER], ratios: { ...DEFAULT_PANEL_RATIOS } };
   }
 };
 
@@ -117,12 +112,13 @@ export const OperatorConsole: React.FC = () => {
   const [manualError, setManualError] = useState('');
   const [manualSearch, setManualSearch] = useState('');
   const [priorityHolds, setPriorityHolds] = useState<Record<string, number>>({});
-  const [mapPanelView, setMapPanelView] = useState<'map' | 'list'>(readMapPanelView);
-  const [mapListSearch, setMapListSearch] = useState('');
+  const [reservationsOpen, setReservationsOpen] = useState(false);
+  const [layoutMenuOpen, setLayoutMenuOpen] = useState(false);
+  const initialLayout = useMemo(readPanelLayout, []);
+  const [panelOrder, setPanelOrder] = useState<PanelId[]>(initialLayout.order);
+  const [panelRatios, setPanelRatios] = useState<Record<PanelId, number>>(initialLayout.ratios);
+  const [dragPanelId, setDragPanelId] = useState<PanelId | null>(null);
   const [now, setNow] = useState(Date.now());
-  const initialWidths = useMemo(readPanelWidths, []);
-  const [leftWidth, setLeftWidth] = useState(initialWidths.left);
-  const [mapWidth, setMapWidth] = useState(initialWidths.map);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 30000);
@@ -130,20 +126,8 @@ export const OperatorConsole: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    try {
-      window.localStorage.setItem(PANEL_KEY, JSON.stringify({ left: leftWidth, map: mapWidth }));
-    } catch {
-      // Panel resizing remains available for the current session.
-    }
-  }, [leftWidth, mapWidth]);
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(MAP_PANEL_VIEW_KEY, mapPanelView);
-    } catch {
-      // View preference remains available for the current session.
-    }
-  }, [mapPanelView]);
+    try { window.localStorage.setItem(PANEL_LAYOUT_KEY, JSON.stringify({ order: panelOrder, ratios: panelRatios })); } catch { /* layout remains for this session */ }
+  }, [panelOrder, panelRatios]);
 
   useEffect(() => {
     if (currentCompany.id === 'network') {
@@ -212,40 +196,13 @@ export const OperatorConsole: React.FC = () => {
     .filter((item) => !['en_route', 'in_trip', 'sos'].includes(item.status))
     .sort((a, b) => a.unitNumber.localeCompare(b.unitNumber, 'es', { numeric: true })), [activeTripDriverIds, queueItems]);
 
-  const filteredManualDriversManageable = useMemo(() => {
-    const term = normalizeDriverSearch(manualSearch);
-    if (!term) return manualDriversManageable;
-
-    return manualDriversManageable.filter((item) => {
-      const driver = drivers.find((candidate) => candidate.id === item.driverId);
-      const vehicle = driver?.vehicleId ? vehicleById.get(driver.vehicleId) : undefined;
-      const searchable = [item.unitNumber, item.name, driver?.phone ?? '', vehicle?.licensePlate ?? ''].join(' ');
-      return normalizeDriverSearch(searchable).includes(term);
-    });
-  }, [drivers, manualDriversManageable, manualSearch, vehicleById]);
-
-  const mapListDrivers = useMemo(() => {
-    const term = normalizeDriverSearch(mapListSearch);
-    return queueItems
-      .map((item) => ({ item, driver: drivers.find((candidate) => candidate.id === item.driverId) }))
-      .filter((entry): entry is { item: DispatchQueueItem; driver: Driver } => Boolean(entry.driver))
-      .filter(({ item, driver }) => {
-        if (!term) return true;
-        const vehicle = driver.vehicleId ? vehicleById.get(driver.vehicleId) : undefined;
-        const searchable = [item.unitNumber, item.name, driver.phone ?? '', vehicle?.licensePlate ?? ''].join(' ');
-        return normalizeDriverSearch(searchable).includes(term);
-      })
-      .sort((a, b) => {
-        const aBusy = activeTripDriverIds.has(a.item.driverId) ? 1 : 0;
-        const bBusy = activeTripDriverIds.has(b.item.driverId) ? 1 : 0;
-        const aConnected = isQueueConnected(a.item) ? 0 : 1;
-        const bConnected = isQueueConnected(b.item) ? 0 : 1;
-        return aBusy - bBusy || aConnected - bConnected || a.item.queueOrder - b.item.queueOrder || a.item.unitNumber.localeCompare(b.item.unitNumber, 'es', { numeric: true });
-      });
-  }, [activeTripDriverIds, drivers, mapListSearch, queueItems, vehicleById]);
+  const quickManualMatch = useMemo(() => {
+    const unit = manualSearch.trim().toLowerCase();
+    if (!unit) return null;
+    return manualDriversManageable.find((item) => item.unitNumber.trim().toLowerCase() === unit) ?? null;
+  }, [manualDriversManageable, manualSearch]);
 
   const noAppDriverCount = useMemo(() => queueItems.filter((item) => !item.userId).length, [queueItems]);
-  const outsideQueueCount = useMemo(() => queueItems.filter((item) => !isQueueConnected(item) && !activeTripDriverIds.has(item.driverId)).length, [activeTripDriverIds, queueItems]);
 
   const restorePriorityHold = async (driverId: string, preferredOrder: number) => {
     const currentQueue = await loadDispatchQueue(currentCompany.id);
@@ -275,19 +232,18 @@ export const OperatorConsole: React.FC = () => {
     }
   };
 
-  const removeManualDriverFromQueue = async (item: DispatchQueueItem) => {
-    if (manualBusyId) return;
-    if (!window.confirm(`¿Sacar el móvil ${item.unitNumber} de la fila?\n\nNo se elimina el vehículo ni su historial. Podrás volver a incorporarlo manualmente cuando corresponda.`)) return;
-    setManualBusyId(item.driverId);
+  const submitQuickManualDriver = (event: React.FormEvent) => {
+    event.preventDefault();
     setManualError('');
-    try {
-      await setTraditionalDriverAvailability(item.driverId, false);
-      await refreshQueueAfterControl();
-    } catch (error) {
-      setManualError(error instanceof Error ? error.message : 'No fue posible sacar el móvil de la fila.');
-    } finally {
-      setManualBusyId(null);
+    if (!manualSearch.trim()) {
+      setManualError('Escribe el número del móvil.');
+      return;
     }
+    if (!quickManualMatch) {
+      setManualError(`No encontramos el móvil ${manualSearch.trim()} fuera de la fila.`);
+      return;
+    }
+    void addManualDriverToQueue(quickManualMatch).then(() => setManualSearch(''));
   };
 
   const toggleQueueIncorporation = async (driver: Driver) => {
@@ -340,6 +296,10 @@ export const OperatorConsole: React.FC = () => {
         return aTime - bTime;
       });
   }, [trips, search, now]);
+
+  const scheduledReservations = useMemo(() => trips
+    .filter((trip) => Boolean(trip.scheduledFor) && !['completed', 'cancelled'].includes(trip.status))
+    .sort((a, b) => new Date(a.scheduledFor as string).getTime() - new Date(b.scheduledFor as string).getTime()), [trips]);
 
   const selectedTrip = activeTrips.find((trip) => trip.id === selectedTripId) ?? null;
   const pendingCount = activeTrips.filter((trip) => trip.status === 'pending').length;
@@ -398,24 +358,41 @@ export const OperatorConsole: React.FC = () => {
     window.setTimeout(() => window.dispatchEvent(new CustomEvent('centralgo:edit-trip', { detail: { tripId: trip.id } })), 0);
   };
 
-  const startResize = (side: 'left' | 'map', event: React.PointerEvent<HTMLDivElement>) => {
+  const movePanel = (source: PanelId, target: PanelId) => {
+    if (source === target) return;
+    setPanelOrder((current) => {
+      const next = [...current];
+      const sourceIndex = next.indexOf(source);
+      const targetIndex = next.indexOf(target);
+      next.splice(sourceIndex, 1);
+      next.splice(targetIndex, 0, source);
+      return next;
+    });
+  };
+
+  const resetPanelLayout = () => {
+    setPanelOrder([...DEFAULT_PANEL_ORDER]);
+    setPanelRatios({ ...DEFAULT_PANEL_RATIOS });
+    setLayoutMenuOpen(false);
+  };
+
+  const startResize = (boundary: 0 | 1, event: React.PointerEvent<HTMLDivElement>) => {
     if (window.innerWidth < 1280) return;
     event.preventDefault();
     const startX = event.clientX;
-    const startLeft = leftWidth;
-    const startMap = mapWidth;
-    const containerWidth = gridRef.current?.getBoundingClientRect().width ?? window.innerWidth;
-    const minimumCenter = 320;
+    const startRatios = { ...panelRatios };
+    const leftPanel = panelOrder[boundary];
+    const rightPanel = panelOrder[boundary + 1];
+    const usableWidth = Math.max(1, (gridRef.current?.getBoundingClientRect().width ?? window.innerWidth) - 20);
+    const minimumWidth: Record<PanelId, number> = { map: 320, trips: 300, mobiles: 190 };
+    const minimumLeftRatio = minimumWidth[leftPanel] / usableWidth;
+    const minimumRightRatio = minimumWidth[rightPanel] / usableWidth;
+    const pairTotal = startRatios[leftPanel] + startRatios[rightPanel];
 
     const onMove = (moveEvent: PointerEvent) => {
-      const delta = moveEvent.clientX - startX;
-      if (side === 'left') {
-        const maxLeft = Math.min(300, containerWidth - startMap - minimumCenter - 20);
-        setLeftWidth(Math.max(210, Math.min(maxLeft, startLeft - delta)));
-      } else {
-        const maxMap = Math.min(620, containerWidth - startLeft - minimumCenter - 20);
-        setMapWidth(Math.max(420, Math.min(maxMap, startMap + delta)));
-      }
+      const deltaRatio = (moveEvent.clientX - startX) / usableWidth;
+      const nextLeft = Math.max(minimumLeftRatio, Math.min(pairTotal - minimumRightRatio, startRatios[leftPanel] + deltaRatio));
+      setPanelRatios((current) => ({ ...current, [leftPanel]: nextLeft, [rightPanel]: pairTotal - nextLeft }));
     };
 
     const stop = () => {
@@ -432,36 +409,51 @@ export const OperatorConsole: React.FC = () => {
   };
 
   const gridStyle = {
-    '--cg-left-panel': `${leftWidth}px`,
-    '--cg-map-panel': `${mapWidth}px`,
+    '--cg-slot-a': `${panelRatios[panelOrder[0]]}fr`,
+    '--cg-slot-b': `${panelRatios[panelOrder[1]]}fr`,
+    '--cg-slot-c': `${panelRatios[panelOrder[2]]}fr`,
   } as React.CSSProperties;
+
+  const panelColumn = (panel: PanelId) => panelOrder.indexOf(panel) * 2 + 1;
+
+  const safeBack = () => {
+    if (reservationsOpen) { setReservationsOpen(false); return; }
+    if (layoutMenuOpen) { setLayoutMenuOpen(false); return; }
+    if (manualMenuOpen) { setManualMenuOpen(false); return; }
+    const detail = { handled: false };
+    window.dispatchEvent(new CustomEvent('centralgo:hardware-back', { detail }));
+  };
 
   return (
     <div className="space-y-3 pb-4">
       <style>{`
         .cg-panel-resizer{display:none}
         @media (min-width:1280px){
-          .cg-operator-grid{grid-template-areas:"map map-resizer trips mobiles-resizer mobiles";grid-template-columns:minmax(var(--cg-map-panel),1fr) 10px minmax(360px,450px) 10px var(--cg-left-panel)!important;gap:0!important}
-          .cg-operator-grid>aside:first-of-type{grid-area:mobiles}
-          .cg-operator-grid>.cg-panel-resizer:nth-child(2){grid-area:mobiles-resizer}
-          .cg-operator-grid>div:nth-child(3){grid-area:trips}
-          .cg-operator-grid>.cg-panel-resizer:nth-child(4){grid-area:map-resizer}
-          .cg-operator-grid>.cg-map-panel{grid-area:map}
+          .cg-operator-grid{grid-template-columns:minmax(0,var(--cg-slot-a)) 10px minmax(0,var(--cg-slot-b)) 10px minmax(0,var(--cg-slot-c))!important;gap:0!important}
           .cg-panel-resizer{display:flex}
-          .cg-map-panel{grid-column:auto!important}
+          .cg-layout-panel{grid-column:var(--cg-panel-column)!important}
         }
       `}</style>
 
-      <section className="rounded-2xl border border-zinc-800 bg-[#0d0d0f] p-3 shadow-xl shadow-black/20">
+      <section className="relative rounded-2xl border border-zinc-800 bg-[#0d0d0f] p-3 shadow-xl shadow-black/20">
         <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center">
-          <div className="min-w-0 lg:shrink-0">
-            <p className="text-[10px] font-black uppercase tracking-[.18em] text-zinc-500">Central GO</p>
-            <h1 className="text-xl font-black text-white">Despacho</h1>
+          <div className="flex min-w-0 items-center gap-2 lg:shrink-0">
+            <button type="button" onClick={safeBack} className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-zinc-700 bg-zinc-950 text-zinc-300 transition hover:border-blue-400/40 hover:text-white" title="Atrás sin cerrar la sesión" aria-label="Atrás sin cerrar la sesión"><ArrowLeft className="h-4 w-4" /></button>
+            <div><p className="text-[10px] font-black uppercase tracking-[.18em] text-zinc-500">Central GO</p><h1 className="text-xl font-black text-white">Despacho</h1></div>
           </div>
           <div className="-mx-1 flex max-w-full items-center gap-2 overflow-x-auto px-1 pb-1 text-xs font-black sm:mx-0 sm:overflow-visible sm:px-0 sm:pb-0">
             <span className="rounded-lg border border-amber-500/25 bg-amber-500/10 px-2.5 py-1.5 text-amber-300">{pendingCount} pendientes</span>
             <span className="rounded-lg border border-blue-500/25 bg-blue-500/10 px-2.5 py-1.5 text-blue-300">{activeCount} activas</span>
             <span className="rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-1.5 text-emerald-300">{availableDrivers.length} libres</span>
+            <div className="relative shrink-0">
+              <button type="button" onClick={() => { setReservationsOpen((open) => !open); setLayoutMenuOpen(false); }} className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 transition ${reservationsOpen ? 'border-cyan-300/45 bg-cyan-500/20 text-cyan-100' : 'border-cyan-500/25 bg-cyan-500/10 text-cyan-300'}`} aria-expanded={reservationsOpen}><CalendarClock className="h-3.5 w-3.5" />{scheduledReservations.length} reservas</button>
+              {reservationsOpen && <div className="fixed inset-x-3 top-20 z-[90] max-h-[70vh] overflow-hidden rounded-xl border border-cyan-400/25 bg-[#11151a] shadow-2xl shadow-black/60 sm:absolute sm:inset-x-auto sm:left-0 sm:top-[calc(100%+8px)] sm:w-[360px]">
+                <div className="flex items-center justify-between border-b border-white/[0.07] px-3 py-2.5"><div><p className="text-[10px] font-black text-white">Reservas próximas</p><p className="text-[8px] font-medium text-zinc-500">Ordenadas por fecha y hora</p></div><button type="button" onClick={() => setReservationsOpen(false)} className="grid h-7 w-7 place-items-center rounded-lg text-zinc-500" aria-label="Cerrar reservas"><XCircle className="h-4 w-4" /></button></div>
+                <div className="max-h-[52vh] divide-y divide-white/[0.06] overflow-y-auto">{scheduledReservations.map((trip) => <button key={trip.id} type="button" onClick={() => { setSelectedTripForDetail(trip); setReservationsOpen(false); }} className="flex w-full items-start gap-2 px-3 py-2.5 text-left transition hover:bg-cyan-400/[0.06]"><span className="rounded-lg bg-cyan-400/10 px-2 py-1 text-[9px] font-black text-cyan-200">{new Date(trip.scheduledFor as string).toLocaleString('es-CL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })}</span><span className="min-w-0 flex-1"><strong className="block truncate text-[10px] text-white">{trip.origin.address}</strong><span className="mt-0.5 block truncate text-[8px] text-zinc-500">{trip.clientName} · {trip.driverUnitNumber ? `Móvil ${trip.driverUnitNumber}` : 'Sin móvil reservado'}</span></span></button>)}</div>
+                {!scheduledReservations.length && <p className="px-4 py-8 text-center text-[10px] text-zinc-500">No hay reservas pendientes.</p>}
+                <button type="button" onClick={() => { setActiveModule('reservations'); setReservationsOpen(false); }} className="w-full border-t border-white/[0.07] px-3 py-2.5 text-[9px] font-black text-cyan-300">Abrir módulo de reservas</button>
+              </div>}
+            </div>
           </div>
           <div className="relative w-full lg:min-w-[220px] lg:flex-[0_1_340px]">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
@@ -476,15 +468,30 @@ export const OperatorConsole: React.FC = () => {
             <Plus className="h-4 w-4" strokeWidth={3} />
             Nueva carrera
           </button>
+          <div className="relative">
+            <button type="button" onClick={() => { setLayoutMenuOpen((open) => !open); setReservationsOpen(false); }} className={`flex h-10 items-center justify-center gap-1.5 rounded-xl border px-3 text-[10px] font-black transition ${layoutMenuOpen ? 'border-blue-300/45 bg-blue-500/20 text-blue-100' : 'border-zinc-700 bg-zinc-950 text-zinc-400 hover:text-white'}`} aria-expanded={layoutMenuOpen}><LayoutPanelTop className="h-4 w-4" />Organizar</button>
+            {layoutMenuOpen && <div className="absolute right-0 top-[calc(100%+8px)] z-[85] w-64 rounded-xl border border-blue-400/20 bg-[#11151a] p-3 shadow-2xl shadow-black/60"><p className="text-[10px] font-black text-white">Distribución de paneles</p><p className="mt-1 text-[8px] leading-relaxed text-zinc-500">Elige un orden o arrastra los títulos de los cuadros.</p><div className="mt-2 space-y-1.5">{[
+              { label: 'Mapa · Carreras · Móviles', order: ['map', 'trips', 'mobiles'] as PanelId[] },
+              { label: 'Móviles · Carreras · Mapa', order: ['mobiles', 'trips', 'map'] as PanelId[] },
+              { label: 'Carreras · Mapa · Móviles', order: ['trips', 'map', 'mobiles'] as PanelId[] },
+            ].map((preset) => <button key={preset.label} type="button" onClick={() => { setPanelOrder(preset.order); setLayoutMenuOpen(false); }} className="flex w-full items-center justify-between rounded-lg border border-white/[0.06] bg-white/[0.025] px-2.5 py-2 text-left text-[9px] font-bold text-zinc-300 hover:border-blue-400/25">{preset.label}{panelOrder.join(',') === preset.order.join(',') ? <Check className="h-3.5 w-3.5 text-emerald-300" /> : null}</button>)}</div><button type="button" onClick={resetPanelLayout} className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-zinc-700 px-2 py-2 text-[8px] font-black text-zinc-400"><RotateCcw className="h-3.5 w-3.5" />Restablecer</button></div>}
+          </div>
         </div>
       </section>
 
       <section ref={gridRef} style={gridStyle} className="cg-operator-grid grid items-start gap-3 lg:grid-cols-[240px_minmax(0,1fr)]">
         <aside
-          className={`overflow-visible rounded-2xl border border-zinc-800 bg-[#0d0d0f] shadow-xl shadow-black/20 lg:sticky lg:top-2 ${manualMenuOpen ? 'cg-radio-panel-viewport-anchor' : ''}`}
+          style={{ '--cg-panel-column': panelColumn('mobiles') } as React.CSSProperties}
+          onDragOver={(event) => { if (dragPanelId) event.preventDefault(); }}
+          onDrop={(event) => { event.preventDefault(); if (dragPanelId) movePanel(dragPanelId, 'mobiles'); setDragPanelId(null); }}
+          className={`cg-layout-panel overflow-visible rounded-2xl border border-zinc-800 bg-[#0d0d0f] shadow-xl shadow-black/20 lg:sticky lg:top-2 ${manualMenuOpen ? 'cg-radio-panel-viewport-anchor' : ''}`}
         >
           <div
+            draggable
+            onDragStart={(event) => { event.dataTransfer.effectAllowed = 'move'; setDragPanelId('mobiles'); }}
+            onDragEnd={() => setDragPanelId(null)}
             className={`relative rounded-t-2xl border-b border-zinc-800 bg-[#0d0d0f] px-3 py-3 ${manualMenuOpen ? 'cg-radio-panel-viewport-anchor' : ''}`}
+            title="Arrastra para mover el cuadro de móviles"
           >
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">
@@ -507,107 +514,14 @@ export const OperatorConsole: React.FC = () => {
             </div>
 
             {manualMenuOpen && (
-              <div className="fixed inset-x-2 bottom-2 top-auto z-[80] flex max-h-[calc(100dvh-1rem)] w-auto flex-col overflow-hidden rounded-xl border border-amber-400/20 bg-[#111216] shadow-2xl shadow-black/60 sm:absolute sm:inset-x-auto sm:bottom-auto sm:left-0 sm:top-[58px] sm:max-h-[calc(100dvh-5rem)] sm:w-[min(330px,calc(100vw-2rem))]">
-                <div className="flex items-start justify-between gap-2 border-b border-white/[0.06] px-3 py-2.5">
-                  <div className="min-w-0">
-                    <p className="text-[10px] font-black text-white">Fila / operación por radio</p>
-                    <p className="mt-0.5 text-[8px] leading-snug text-zinc-500">Busca un móvil y agrégalo por radio sin borrar su cuenta, vehículo ni historial.</p>
-                  </div>
-                  <button type="button" onClick={() => setManualMenuOpen(false)} className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-white/[0.06] text-zinc-500" aria-label="Cerrar lista de conductores manuales">
-                    <ChevronUp className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-                <div className="border-b border-white/[0.06] p-2.5">
-                  <div className="relative">
-                    <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-500" />
-                    <input
-                      value={manualSearch}
-                      onChange={(event) => setManualSearch(event.target.value)}
-                      onKeyDown={(event) => {
-                        if (event.key !== 'Enter' || manualBusyId || filteredManualDriversManageable.length !== 1) return;
-                        const item = filteredManualDriversManageable[0];
-                        const alreadyInQueue = item.operationMode === 'traditional' && item.serviceEnabled && item.status === 'available';
-                        if (!alreadyInQueue) {
-                          event.preventDefault();
-                          void addManualDriverToQueue(item);
-                        }
-                      }}
-                      placeholder="Buscar móvil, nombre, teléfono o patente"
-                      autoComplete="off"
-                      autoFocus
-                      className="h-9 w-full rounded-lg border border-zinc-700 bg-zinc-950 pl-8 pr-8 text-[10px] font-bold text-white outline-none transition placeholder:text-zinc-600 focus:border-amber-400/60 focus:ring-2 focus:ring-amber-400/10"
-                      aria-label="Buscar móvil para operación por radio"
-                    />
-                    {manualSearch && (
-                      <button
-                        type="button"
-                        onClick={() => setManualSearch('')}
-                        className="absolute right-1.5 top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded-md text-zinc-500 transition hover:bg-white/[0.06] hover:text-white"
-                        title="Limpiar búsqueda"
-                        aria-label="Limpiar búsqueda de móviles"
-                      >
-                        <XCircle className="h-3.5 w-3.5" />
-                      </button>
-                    )}
-                  </div>
-                  <p className="mt-1.5 text-[7px] font-bold text-zinc-600">Escribe, por ejemplo: 6, Juan, 927... o una patente.</p>
-                </div>
-                {manualError && <p className="mx-2 mt-2 rounded-lg border border-rose-400/20 bg-rose-400/[0.07] px-2 py-1.5 text-[8px] font-bold text-rose-200">{manualError}</p>}
-                <div className="min-h-0 flex-1 divide-y divide-white/[0.055] overflow-y-auto">
-                  {filteredManualDriversManageable.map((item) => {
-                    const driver = drivers.find((candidate) => candidate.id === item.driverId);
-                    const phone = driver?.phone?.trim() || '';
-                    const vehicle = driver?.vehicleId ? vehicleById.get(driver.vehicleId) : undefined;
-                    const isManualInQueue = item.operationMode === 'traditional' && item.serviceEnabled && item.status === 'available';
-                    const sourceLabel = item.operationMode === 'traditional'
-                      ? (item.userId ? 'Radio temporal' : 'Sin app')
-                      : 'App fuera de línea · disponible para radio';
-                    return (
-                      <div key={item.driverId} className="flex items-center gap-2 px-2.5 py-2.5">
-                        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-amber-400/20 bg-amber-400/10 text-[9px] font-black text-amber-200">{item.unitNumber}</span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-[9px] font-black text-white">{item.name}</span>
-                          <span className="mt-0.5 block truncate text-[7px] text-zinc-500">{[phone || 'Sin teléfono', vehicle?.licensePlate ? `Patente ${vehicle.licensePlate}` : '', sourceLabel].filter(Boolean).join(' · ')}</span>
-                        </span>
-                        {phone && (
-                          <a href={`tel:${phone}`} className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-cyan-400/20 bg-cyan-400/[0.07] text-cyan-200" title={`Llamar a ${item.name}`} aria-label={`Llamar a ${item.name}`}>
-                            <PhoneCall className="h-3 w-3" />
-                          </a>
-                        )}
-                        {isManualInQueue ? (
-                          <button
-                            type="button"
-                            disabled={Boolean(manualBusyId)}
-                            onClick={() => void removeManualDriverFromQueue(item)}
-                            className="inline-flex h-7 shrink-0 items-center gap-1 rounded-lg border border-rose-400/25 bg-rose-400/10 px-2 text-[7px] font-black text-rose-200 disabled:opacity-40"
-                          >
-                            {manualBusyId === item.driverId ? <Loader2 className="h-3 w-3 animate-spin" /> : <XCircle className="h-3 w-3" />}
-                            Sacar
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            disabled={Boolean(manualBusyId)}
-                            onClick={() => void addManualDriverToQueue(item)}
-                            className="inline-flex h-7 shrink-0 items-center gap-1 rounded-lg bg-emerald-400 px-2 text-[7px] font-black text-emerald-950 disabled:opacity-40"
-                          >
-                            {manualBusyId === item.driverId ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
-                            Por radio
-                          </button>
-                        )}
-                      </div>
-                    );
-                  })}
-                  {!manualDriversManageable.length ? (
-                    <p className="px-4 py-6 text-center text-[9px] text-zinc-500">No hay móviles fuera de fila para gestionar.</p>
-                  ) : !filteredManualDriversManageable.length ? (
-                    <p className="px-4 py-6 text-center text-[9px] text-zinc-500">No encontramos un móvil con esa búsqueda.</p>
-                  ) : null}
-                </div>
-                <div className="flex items-center justify-between border-t border-white/[0.06] px-3 py-2 text-[7px] font-bold text-zinc-500">
-                  <span>{manualSearch ? `${filteredManualDriversManageable.length} de ${manualDriversManageable.length} resultados` : `${manualDriversManageable.length} disponibles para gestionar`}</span>
-                  <span>{outsideQueueCount} fuera de fila</span>
-                </div>
+              <div className="fixed inset-x-3 top-24 z-[80] rounded-xl border border-amber-400/25 bg-[#11151a] p-3 shadow-2xl shadow-black/60 sm:absolute sm:inset-x-auto sm:left-0 sm:top-[58px] sm:w-[280px]">
+                <div className="flex items-start justify-between gap-2"><div><p className="text-[10px] font-black text-white">Incorporar móvil</p><p className="mt-0.5 text-[8px] text-zinc-500">Escribe el número y presiona Agregar.</p></div><button type="button" onClick={() => setManualMenuOpen(false)} className="grid h-7 w-7 place-items-center rounded-lg text-zinc-500" aria-label="Cerrar incorporación"><ChevronUp className="h-3.5 w-3.5" /></button></div>
+                <form onSubmit={submitQuickManualDriver} className="mt-3 flex items-center gap-2">
+                  <input value={manualSearch} onChange={(event) => { setManualSearch(event.target.value.replace(/[^0-9A-Za-z-]/g, '')); setManualError(''); }} inputMode="numeric" autoComplete="off" autoFocus placeholder="N° móvil" className="h-10 min-w-0 flex-1 rounded-xl border border-zinc-700 bg-zinc-950 px-3 text-center text-sm font-black text-white outline-none focus:border-amber-400/60" aria-label="Número de móvil a incorporar" />
+                  <button type="submit" disabled={Boolean(manualBusyId)} className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-emerald-400 px-3 text-[9px] font-black text-emerald-950 disabled:opacity-40">{manualBusyId ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}Agregar</button>
+                </form>
+                {quickManualMatch && <p className="mt-2 flex items-center gap-1.5 rounded-lg border border-emerald-400/15 bg-emerald-400/[0.06] px-2 py-1.5 text-[8px] font-bold text-emerald-200"><Check className="h-3 w-3" />Móvil {quickManualMatch.unitNumber} · {quickManualMatch.name}</p>}
+                {manualError && <p className="mt-2 rounded-lg border border-rose-400/20 bg-rose-400/[0.07] px-2 py-1.5 text-[8px] font-bold text-rose-200">{manualError}</p>}
               </div>
             )}
           </div>
@@ -693,12 +607,17 @@ export const OperatorConsole: React.FC = () => {
           </div>
         </aside>
 
-        <div className="cg-panel-resizer h-[540px] cursor-col-resize items-center justify-center text-zinc-700 hover:bg-blue-500/10 hover:text-blue-400" onPointerDown={(event) => startResize('left', event)} title="Arrastra para cambiar el ancho de móviles">
+        <div style={{ gridColumn: 2 }} className="cg-panel-resizer h-[540px] cursor-col-resize items-center justify-center rounded-lg text-zinc-700 transition hover:bg-blue-500/10 hover:text-blue-400" onPointerDown={(event) => startResize(0, event)} title="Arrastra para redimensionar los cuadros">
           <GripVertical className="h-5 w-5" />
         </div>
 
-        <div className="min-w-0 overflow-hidden rounded-2xl border border-zinc-800 bg-[#0d0d0f] shadow-xl shadow-black/20">
-          <div className="border-b border-zinc-800 px-3 py-2.5">
+        <div
+          style={{ '--cg-panel-column': panelColumn('trips') } as React.CSSProperties}
+          onDragOver={(event) => { if (dragPanelId) event.preventDefault(); }}
+          onDrop={(event) => { event.preventDefault(); if (dragPanelId) movePanel(dragPanelId, 'trips'); setDragPanelId(null); }}
+          className="cg-layout-panel min-w-0 overflow-hidden rounded-2xl border border-zinc-800 bg-[#0d0d0f] shadow-xl shadow-black/20"
+        >
+          <div draggable onDragStart={(event) => { event.dataTransfer.effectAllowed = 'move'; setDragPanelId('trips'); }} onDragEnd={() => setDragPanelId(null)} className="cursor-move border-b border-zinc-800 px-3 py-2.5" title="Arrastra para mover el cuadro de carreras">
             <h2 className="text-sm font-black text-white">Carreras en curso</h2>
             <p className="mt-0.5 truncate text-[10px] text-zinc-500" title="Pendientes, asignadas y activas. Las reservas aparecen aquí 20 minutos antes.">Pendientes, asignadas y activas · reservas 20 min antes</p>
           </div>
@@ -817,101 +736,24 @@ export const OperatorConsole: React.FC = () => {
           )}
         </div>
 
-        <div className="cg-panel-resizer h-[540px] cursor-col-resize items-center justify-center text-zinc-700 hover:bg-blue-500/10 hover:text-blue-400" onPointerDown={(event) => startResize('map', event)} title="Arrastra para cambiar el ancho del mapa">
+        <div style={{ gridColumn: 4 }} className="cg-panel-resizer h-[540px] cursor-col-resize items-center justify-center rounded-lg text-zinc-700 transition hover:bg-blue-500/10 hover:text-blue-400" onPointerDown={(event) => startResize(1, event)} title="Arrastra para redimensionar los cuadros">
           <GripVertical className="h-5 w-5" />
         </div>
 
-        <aside className="cg-map-panel overflow-hidden rounded-2xl border border-zinc-800 bg-[#0d0d0f] shadow-xl shadow-black/20 lg:col-span-2 xl:col-span-1 xl:sticky xl:top-2">
-          <div className="flex items-center justify-between gap-2 border-b border-zinc-800 px-3 py-3">
+        <aside
+          style={{ '--cg-panel-column': panelColumn('map') } as React.CSSProperties}
+          onDragOver={(event) => { if (dragPanelId) event.preventDefault(); }}
+          onDrop={(event) => { event.preventDefault(); if (dragPanelId) movePanel(dragPanelId, 'map'); setDragPanelId(null); }}
+          className="cg-layout-panel cg-map-panel overflow-hidden rounded-2xl border border-zinc-800 bg-[#0d0d0f] shadow-xl shadow-black/20 lg:col-span-2 xl:col-span-1 xl:sticky xl:top-2"
+        >
+          <div draggable onDragStart={(event) => { event.dataTransfer.effectAllowed = 'move'; setDragPanelId('map'); }} onDragEnd={() => setDragPanelId(null)} className="flex cursor-move items-center justify-between gap-2 border-b border-zinc-800 px-3 py-3" title="Arrastra para mover el mapa">
             <div className="min-w-0 flex-1">
-              <h2 className="text-sm font-black text-white">{mapPanelView === 'map' ? 'Mapa' : 'Lista de móviles'}</h2>
-              <p className="mt-0.5 truncate text-[10px] text-zinc-500">{mapPanelView === 'map' ? 'Referencia visual de móviles y carrera seleccionada' : 'Estado operativo de los móviles registrados'}</p>
+              <h2 className="text-sm font-black text-white">Mapa</h2>
+              <p className="mt-0.5 truncate text-[10px] text-zinc-500">Referencia visual de móviles y carrera seleccionada</p>
             </div>
-            <div className="flex shrink-0 items-center gap-1">
-              {selectedTrip && <span className="hidden max-w-[100px] truncate text-[9px] font-black text-blue-300 sm:block">{selectedTrip.code}</span>}
-              <div className="flex rounded-lg border border-zinc-800 bg-zinc-950 p-0.5">
-                <button
-                  type="button"
-                  onClick={() => setMapPanelView('map')}
-                  className={`flex h-7 items-center gap-1 rounded-md px-2 text-[8px] font-black transition ${mapPanelView === 'map' ? 'bg-blue-500/20 text-blue-200' : 'text-zinc-500 hover:text-white'}`}
-                  title="Ver mapa"
-                  aria-pressed={mapPanelView === 'map'}
-                >
-                  <MapIcon className="h-3 w-3" />
-                  Mapa
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMapPanelView('list')}
-                  className={`flex h-7 items-center gap-1 rounded-md px-2 text-[8px] font-black transition ${mapPanelView === 'list' ? 'bg-emerald-500/20 text-emerald-200' : 'text-zinc-500 hover:text-white'}`}
-                  title="Ver lista"
-                  aria-pressed={mapPanelView === 'list'}
-                >
-                  <List className="h-3 w-3" />
-                  Lista
-                </button>
-              </div>
-            </div>
+            {selectedTrip && <span className="hidden max-w-[120px] truncate text-[9px] font-black text-blue-300 sm:block">{selectedTrip.code}</span>}
           </div>
-
-          {mapPanelView === 'map' ? (
-            <LiveMap height="h-[410px]" selectedTrip={selectedTrip} focusDriverId={focusDriverId} onSelectDriver={(driver) => setFocusDriverId(driver?.id ?? null)} />
-          ) : (
-            <div className="flex h-[410px] flex-col">
-              <div className="border-b border-zinc-800 p-2.5">
-                <div className="relative">
-                  <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-500" />
-                  <input
-                    value={mapListSearch}
-                    onChange={(event) => setMapListSearch(event.target.value)}
-                    placeholder="Buscar móvil, nombre, teléfono o patente"
-                    autoComplete="off"
-                    className="h-9 w-full rounded-lg border border-zinc-700 bg-zinc-950 pl-8 pr-3 text-[10px] font-bold text-white outline-none transition placeholder:text-zinc-600 focus:border-emerald-400/60 focus:ring-2 focus:ring-emerald-400/10"
-                    aria-label="Buscar en lista de móviles"
-                  />
-                </div>
-              </div>
-              <div className="min-h-0 flex-1 divide-y divide-zinc-800/80 overflow-y-auto">
-                {mapListDrivers.map(({ item, driver }) => {
-                  const vehicle = driver.vehicleId ? vehicleById.get(driver.vehicleId) : undefined;
-                  const isBusyDriver = activeTripDriverIds.has(item.driverId);
-                  const connected = isQueueConnected(item);
-                  const isAvailable = !isBusyDriver && connected && item.status === 'available';
-                  const statusLabel = isBusyDriver ? 'En carrera' : isAvailable ? 'Disponible' : connected ? 'Conectado' : 'Fuera de fila';
-                  const statusClass = isBusyDriver
-                    ? 'border-amber-400/20 bg-amber-400/10 text-amber-200'
-                    : isAvailable
-                      ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-200'
-                      : connected
-                        ? 'border-sky-400/20 bg-sky-400/10 text-sky-200'
-                        : 'border-zinc-700 bg-zinc-900 text-zinc-500';
-                  const focused = focusDriverId === driver.id;
-                  return (
-                    <button
-                      key={driver.id}
-                      type="button"
-                      onClick={() => setFocusDriverId(focused ? null : driver.id)}
-                      className={`flex w-full items-center gap-2.5 px-3 py-2.5 text-left transition ${focused ? 'bg-blue-500/[0.10]' : 'hover:bg-zinc-900/70'}`}
-                    >
-                      <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl border text-[11px] font-black ${isAvailable ? 'border-emerald-400/25 bg-emerald-400/10 text-emerald-200' : isBusyDriver ? 'border-amber-400/25 bg-amber-400/10 text-amber-200' : 'border-zinc-700 bg-zinc-900 text-zinc-400'}`}>{item.unitNumber}</span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[10px] font-black text-white">{driver.name}</span>
-                        <span className="mt-0.5 block truncate text-[8px] text-zinc-500">{[vehicle?.licensePlate ? `Patente ${vehicle.licensePlate}` : '', driver.phone || '', item.operationMode === 'traditional' ? 'Radio' : 'App'].filter(Boolean).join(' · ')}</span>
-                      </span>
-                      <span className={`shrink-0 rounded-md border px-1.5 py-1 text-[7px] font-black ${statusClass}`}>{statusLabel}</span>
-                    </button>
-                  );
-                })}
-                {!mapListDrivers.length && (
-                  <div className="flex h-full min-h-40 items-center justify-center px-5 text-center text-[10px] font-bold text-zinc-500">No encontramos móviles con esa búsqueda.</div>
-                )}
-              </div>
-              <div className="flex items-center justify-between border-t border-zinc-800 bg-zinc-950/40 px-3 py-2 text-[8px] font-bold text-zinc-500">
-                <span>{mapListDrivers.length} visibles · {queueItems.length} registrados</span>
-                <span>{availableDrivers.length} disponibles</span>
-              </div>
-            </div>
-          )}
+          <LiveMap height="h-[410px]" selectedTrip={selectedTrip} focusDriverId={focusDriverId} onSelectDriver={(driver) => setFocusDriverId(driver?.id ?? null)} />
         </aside>
       </section>
     </div>
