@@ -453,7 +453,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const originLng = data.origin?.lng ?? -71.5979;
 
     // Auto-GPS / Auto-dispatch if no explicit driver chosen
-    if (!assignedDriverId) {
+    if (!assignedDriverId && data.dispatchMode !== 'manual') {
       const avail = drivers.filter((d) => d.status === 'available');
       if (avail.length > 0) {
         let closest = avail[0];
@@ -504,6 +504,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       fixedFareAmount: data.fixedFareAmount,
       finalFare: data.isFixedFare ? data.fixedFareAmount : data.finalFare,
       paymentMethod: data.paymentMethod || 'efectivo',
+      dispatchMode: data.dispatchMode ?? 'automatic',
       notes: data.notes,
       createdAt: new Date().toISOString(),
       assignedAt: assignedDriverId ? new Date().toISOString() : undefined,

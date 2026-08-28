@@ -60,10 +60,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     { id: 'history', group: 'Administración', label: currentRole === 'super_admin' ? 'Auditoría Global' : 'Historial Auditoría', icon: History, roles: ['super_admin', 'company_admin'] },
     { id: 'settings', group: 'Administración', label: currentRole === 'super_admin' ? 'Configuración Global' : 'Configuración Tarifas', icon: Settings, roles: ['super_admin', 'company_admin'] },
     { id: 'profile', group: 'Cuenta', label: 'Mi Perfil', icon: User, roles: ['super_admin', 'regional_partner', 'sales_partner', 'company_admin', 'operator'] },
-    { id: 'help', group: 'Cuenta', label: isNetworkRole ? 'Material y Ayuda' : 'Ayuda y Protocolos', icon: HelpCircle, roles: ['super_admin', 'regional_partner', 'sales_partner', 'company_admin', 'operator'] },
+    { id: 'help', group: 'Cuenta', label: isNetworkRole ? 'Material y Ayuda' : 'Soporte e información', icon: HelpCircle, roles: ['super_admin', 'regional_partner', 'sales_partner', 'company_admin', 'operator'] },
   ];
 
-  const operatorCore = new Set(['dashboard', 'trips', 'reservations', 'drivers']);
+  const operatorCore = new Set(['dashboard', 'trips', 'reservations', 'drivers', 'help']);
   const allowedItems = navItems
     .filter((item) => item.roles.includes(currentRole))
     .filter((item) => currentRole !== 'operator' || operatorCore.has(item.id));

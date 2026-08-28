@@ -11,7 +11,7 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
   headers: { ...corsHeaders, 'Content-Type': 'application/json' },
 });
 
-const GEOCODER_VERSION = 'street-first-v3';
+const GEOCODER_VERSION = 'city-aware-v4';
 
 const normalize = (value: string) => value
   .normalize('NFD')
@@ -58,6 +58,23 @@ type NominatimResult = {
   address?: Record<string, string>;
 };
 
+type PhotonFeature = {
+  geometry?: { coordinates?: [number, number] };
+  properties?: {
+    name?: string;
+    street?: string;
+    housenumber?: string;
+    city?: string;
+    district?: string;
+    county?: string;
+    state?: string;
+    country?: string;
+    osm_key?: string;
+    osm_value?: string;
+    type?: string;
+  };
+};
+
 const roadLikeTypes = new Set([
   'road', 'residential', 'living_street', 'unclassified', 'tertiary', 'secondary',
   'primary', 'pedestrian', 'service', 'path', 'footway', 'track', 'house', 'building',
@@ -67,6 +84,11 @@ const placeLikeTypes = new Set([
   'city', 'town', 'village', 'municipality', 'administrative', 'state', 'county',
   'square', 'park', 'neighbourhood', 'suburb',
 ]);
+
+const namedPlacePattern = /\b(hospital|clinica|consultorio|cesfam|plaza|parque|terminal|estacion|aeropuerto|municipalidad|colegio|escuela|liceo|universidad|estadio|mall|supermercado|iglesia|cementerio|comisaria|bomberos)\b/;
+const streetPattern = /\b(calle|avenida|av|pasaje|camino|ruta|carretera|callejon)\b|\d/;
+const hospitalPattern = /\b(hospital|clinica|consultorio|cesfam)\b/;
+const plazaPattern = /\b(plaza|parque)\b/;
 
 const resultCity = (result: NominatimResult) => String(
   result.address?.city || result.address?.town || result.address?.municipality ||
@@ -86,20 +108,30 @@ const scoreResult = (
   const rawTokens = normalize(rawAddress).split(' ').filter((token) => token.length > 2);
   const resultType = normalize(result.addresstype || result.type || '');
   const resultCategory = normalize(result.category || result.class || '');
+  const rawNormalized = normalize(rawAddress);
+  const namedPlaceIntent = namedPlacePattern.test(rawNormalized);
+  const streetIntent = streetPattern.test(rawNormalized) || !namedPlaceIntent;
   let score = 0;
 
+  if (rawNormalized.length >= 3 && display.includes(rawNormalized)) score += 90;
   if (street && display.includes(street)) score += 70;
   for (const token of rawTokens) if (display.includes(token)) score += 6;
 
-  if (resultCategory === 'highway' || roadLikeTypes.has(resultType)) score += 55;
-  if (result.address?.road || result.address?.pedestrian || result.address?.house_number) score += 30;
+  if (resultCategory === 'highway' || roadLikeTypes.has(resultType)) score += streetIntent ? 55 : 18;
+  if (result.address?.road || result.address?.pedestrian || result.address?.house_number) score += streetIntent ? 30 : 12;
+
+  if (namedPlaceIntent && ['amenity', 'healthcare', 'tourism', 'leisure', 'shop', 'office', 'building'].includes(resultCategory)) score += 55;
+  if (hospitalPattern.test(rawNormalized) && (hospitalPattern.test(display) || ['hospital', 'clinic', 'doctors'].includes(resultType))) score += 85;
+  if (hospitalPattern.test(rawNormalized) && ['hospital', 'clinic', 'doctors'].includes(resultType)) score += 80;
+  if (plazaPattern.test(rawNormalized) && (plazaPattern.test(display) || ['square', 'park'].includes(resultType))) score += 85;
+  if (plazaPattern.test(rawNormalized) && ['square', 'park'].includes(resultType)) score += 80;
 
   const foundCity = normalize(resultCity(result));
   if (cityNorm && foundCity && (foundCity.includes(cityNorm) || cityNorm.includes(foundCity))) score += 28;
   if (cityNorm && display.includes(cityNorm)) score += 16;
 
-  if (placeLikeTypes.has(resultType)) score -= 45;
-  if (resultType === 'square' || /\bplaza\b/.test(display)) score -= 80;
+  if (placeLikeTypes.has(resultType) && !namedPlaceIntent) score -= 45;
+  if ((resultType === 'square' || /\bplaza\b/.test(display)) && !plazaPattern.test(rawNormalized)) score -= 80;
 
   if (center) {
     const lat = Number(result.lat);
@@ -127,6 +159,52 @@ const fetchNominatim = async (params: URLSearchParams) => {
   return await response.json() as NominatimResult[];
 };
 
+const fetchPhoton = async (query: string, center?: { lat: number; lng: number }) => {
+  const params = new URLSearchParams({ q: query, lang: 'default', limit: '10' });
+  if (center) {
+    params.set('lat', String(center.lat));
+    params.set('lon', String(center.lng));
+  }
+  const response = await fetch(`https://photon.komoot.io/api?${params.toString()}`, {
+    headers: { Accept: 'application/geo+json, application/json', 'User-Agent': 'CentralGO/2.0 (operator address suggestions)' },
+    signal: AbortSignal.timeout(6500),
+  });
+  if (!response.ok) throw new Error(`Photon ${response.status}`);
+  const data = await response.json() as { features?: PhotonFeature[] };
+  return data.features ?? [];
+};
+
+const photonDisplayName = (feature: PhotonFeature) => {
+  const properties = feature.properties ?? {};
+  const streetLine = [properties.street, properties.housenumber].filter(Boolean).join(' ');
+  const parts = [properties.name, streetLine, properties.district, properties.city, properties.state, properties.country]
+    .map((part) => String(part || '').trim())
+    .filter((part, index, values) => Boolean(part) && values.findIndex((candidate) => normalize(candidate) === normalize(part)) === index);
+  return parts.join(', ');
+};
+
+const photonAsSearchResult = (feature: PhotonFeature): NominatimResult | null => {
+  const coordinates = feature.geometry?.coordinates;
+  if (!coordinates || !Number.isFinite(coordinates[0]) || !Number.isFinite(coordinates[1])) return null;
+  const properties = feature.properties ?? {};
+  const displayName = photonDisplayName(feature);
+  if (!displayName) return null;
+  return {
+    lat: String(coordinates[1]),
+    lon: String(coordinates[0]),
+    display_name: displayName,
+    category: properties.osm_key,
+    type: properties.osm_value || properties.type,
+    addresstype: properties.type,
+    address: {
+      city: properties.city || '',
+      town: properties.county || '',
+      road: properties.street || '',
+      house_number: properties.housenumber || '',
+    },
+  };
+};
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return json({ error: 'Método no permitido' }, 405);
@@ -135,9 +213,10 @@ Deno.serve(async (req) => {
     const authorization = req.headers.get('Authorization');
     if (!authorization) return json({ error: 'Sesión requerida' }, 401);
 
-    const body = await req.json().catch(() => null) as { companyId?: string; address?: string } | null;
+    const body = await req.json().catch(() => null) as { companyId?: string; address?: string; mode?: 'geocode' | 'suggest' } | null;
     const companyId = body?.companyId?.trim();
     const address = body?.address?.trim();
+    const mode = body?.mode === 'suggest' ? 'suggest' : 'geocode';
     if (!companyId || !address || address.length < 3 || address.length > 240) {
       return json({ error: 'Central y dirección válidas son obligatorias' }, 400);
     }
@@ -174,20 +253,22 @@ Deno.serve(async (req) => {
     const queryText = [streetCandidate, city, countryLabel].filter(Boolean).join(', ');
     const queryKey = await sha256(`${GEOCODER_VERSION}|${companyId}|${normalize(queryText)}`);
 
-    const { data: cached } = await serviceClient.from('geocoding_cache')
-      .select('display_name,lat,lng,provider,expires_at')
-      .eq('query_key', queryKey)
-      .gt('expires_at', new Date().toISOString())
-      .maybeSingle();
-    if (cached) {
-      return json({
-        lat: cached.lat,
-        lng: cached.lng,
-        displayName: cached.display_name,
-        provider: cached.provider,
-        cached: true,
-        approximate: false,
-      });
+    if (mode === 'geocode') {
+      const { data: cached } = await serviceClient.from('geocoding_cache')
+        .select('display_name,lat,lng,provider,expires_at')
+        .eq('query_key', queryKey)
+        .gt('expires_at', new Date().toISOString())
+        .maybeSingle();
+      if (cached) {
+        return json({
+          lat: cached.lat,
+          lng: cached.lng,
+          displayName: cached.display_name,
+          provider: cached.provider,
+          cached: true,
+          approximate: false,
+        });
+      }
     }
 
     const fallbackToCompanyCenter = (reason: string) => {
@@ -205,7 +286,7 @@ Deno.serve(async (req) => {
 
     const commonParams = new URLSearchParams({
       format: 'jsonv2',
-      limit: '8',
+      limit: mode === 'suggest' ? '10' : '8',
       addressdetails: '1',
       namedetails: '1',
       dedupe: '1',
@@ -217,13 +298,39 @@ Deno.serve(async (req) => {
       commonParams.set('viewbox', `${centerLng - 0.35},${centerLat + 0.35},${centerLng + 0.35},${centerLat - 0.35}`);
     }
 
+    if (mode === 'suggest') {
+      try {
+        const features = await fetchPhoton(queryText, center);
+        const results = features.map(photonAsSearchResult).filter((result): result is NominatimResult => Boolean(result));
+        const deduplicated = new Map<string, NominatimResult>();
+        for (const result of results) deduplicated.set(`${result.lat}|${result.lon}`, result);
+        const suggestions = [...deduplicated.values()]
+          .map((result) => ({ result, score: scoreResult(result, address, streetCandidate, city, center) }))
+          .sort((a, b) => b.score - a.score)
+          .slice(0, 6)
+          .map(({ result }) => ({
+            lat: Number(result.lat),
+            lng: Number(result.lon),
+            displayName: result.display_name,
+            provider: 'photon-suggest',
+            cached: false,
+            matchType: result.addresstype || result.type || null,
+          }))
+          .filter((result) => Number.isFinite(result.lat) && Number.isFinite(result.lng));
+        return json({ suggestions, city });
+      } catch {
+        return json({ suggestions: [], city });
+      }
+    }
+
     let results: NominatimResult[] = [];
     let provider = 'nominatim-freeform';
+    const namedPlaceIntent = namedPlacePattern.test(normalize(address));
 
     try {
       // Structured street search is much better for inputs such as "Hualqui Arica",
       // "Pasaje Las Rosas" or a street without a house number.
-      if (city && streetCandidate.length >= 3) {
+      if (!namedPlaceIntent && city && streetCandidate.length >= 3) {
         const structured = new URLSearchParams(commonParams);
         structured.set('street', streetCandidate);
         structured.set('city', city);
@@ -260,7 +367,7 @@ Deno.serve(async (req) => {
     // compare both sets. A road match must beat a plaza or city-center match.
     const chosenType = normalize(chosen?.addresstype || chosen?.type || '');
     const chosenDisplay = normalize(chosen?.display_name || '');
-    if (chosen && city && (placeLikeTypes.has(chosenType) || /\bplaza\b/.test(chosenDisplay))) {
+    if (chosen && city && !namedPlaceIntent && (placeLikeTypes.has(chosenType) || /\bplaza\b/.test(chosenDisplay))) {
       try {
         const freeForm = new URLSearchParams(commonParams);
         freeForm.set('q', queryText);

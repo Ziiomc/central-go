@@ -1,11 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { CalendarClock, Clock3, Eraser, Loader2, MapPin, MessageSquareText, Phone, Plus, UserRound, WalletCards, X, Zap } from 'lucide-react';
+import { CalendarClock, Clock3, Eraser, Loader2, MessageSquareText, Phone, Plus, UserRound, WalletCards, X, Zap } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import type { Client, DispatchMode, PaymentMethod } from '../../types';
 import { runtimeConfig } from '../../config/runtime';
 import { geocodeCommercialAddress } from '../../lib/geocoding';
 import { estimateDrivingDistanceKm } from '../../lib/tripDistance';
 import { rememberClientAddress } from '../../lib/clientMemoryRepository';
+import { readOperatorDispatchMode, saveOperatorDispatchMode } from '../../lib/operatorDispatchPreference';
+import { AddressAutocomplete } from '../inputs/AddressAutocomplete';
 
 type TripDraft = {
   origin: string;
@@ -16,7 +18,8 @@ type TripDraft = {
   notes: string;
   scheduleEnabled: boolean;
   scheduledLocal: string;
-  reservationDispatchMode: DispatchMode;
+  dispatchMode: DispatchMode;
+  reservationDispatchMode?: DispatchMode;
   fixedFareEnabled: boolean;
   fixedFareAmount: string;
   savedAt: number;
@@ -55,7 +58,7 @@ export const NewTripModal: React.FC = () => {
   const [notes, setNotes] = useState('');
   const [scheduleEnabled, setScheduleEnabled] = useState(false);
   const [scheduledLocal, setScheduledLocal] = useState(nextHourLocal());
-  const [reservationDispatchMode, setReservationDispatchMode] = useState<DispatchMode>('manual');
+  const [dispatchMode, setDispatchMode] = useState<DispatchMode>(() => readOperatorDispatchMode(currentCompany.id));
   const [fixedFareEnabled, setFixedFareEnabled] = useState(false);
   const [fixedFareAmount, setFixedFareAmount] = useState('');
   const [error, setError] = useState('');
@@ -97,7 +100,7 @@ export const NewTripModal: React.FC = () => {
     setNotes('');
     setScheduleEnabled(false);
     setScheduledLocal(nextHourLocal());
-    setReservationDispatchMode('manual');
+    setDispatchMode(readOperatorDispatchMode(currentCompany.id));
     setFixedFareEnabled(false);
     setFixedFareAmount('');
     setError('');
@@ -122,7 +125,8 @@ export const NewTripModal: React.FC = () => {
         setNotes(draft.notes ?? '');
         setScheduleEnabled(Boolean(draft.scheduleEnabled));
         setScheduledLocal(draft.scheduledLocal || nextHourLocal());
-        setReservationDispatchMode(draft.reservationDispatchMode === 'automatic' ? 'automatic' : 'manual');
+        const savedMode = draft.dispatchMode ?? draft.reservationDispatchMode ?? readOperatorDispatchMode(currentCompany.id);
+        setDispatchMode(savedMode === 'automatic' ? 'automatic' : 'manual');
         setFixedFareEnabled(Boolean(draft.fixedFareEnabled));
         setFixedFareAmount(draft.fixedFareAmount ?? '');
       } else {
@@ -167,7 +171,7 @@ export const NewTripModal: React.FC = () => {
           notes,
           scheduleEnabled,
           scheduledLocal,
-          reservationDispatchMode,
+          dispatchMode,
           fixedFareEnabled,
           fixedFareAmount,
           savedAt: Date.now(),
@@ -189,7 +193,7 @@ export const NewTripModal: React.FC = () => {
     notes,
     scheduleEnabled,
     scheduledLocal,
-    reservationDispatchMode,
+    dispatchMode,
     fixedFareEnabled,
     fixedFareAmount,
   ]);
@@ -323,7 +327,7 @@ export const NewTripModal: React.FC = () => {
         destination: { ...destinationPoint, address: cleanDestination },
         paymentMethod: payment,
         notes: notes.trim() || undefined,
-        dispatchMode: scheduleEnabled ? reservationDispatchMode : 'manual',
+        dispatchMode,
         scheduledFor,
         estimatedDistanceKm: distanceKm,
         estimatedDurationMins: distanceKm > 0 ? Math.max(5, Math.round(distanceKm * 3)) : 0,
@@ -374,23 +378,23 @@ export const NewTripModal: React.FC = () => {
             {scheduleEnabled && <section className="mb-3 rounded-xl border border-blue-500/25 bg-blue-500/[0.06] p-3">
               <div className="grid items-end gap-3 md:grid-cols-[minmax(0,1fr)_280px]">
                 <label className="space-y-1.5"><span className="flex items-center gap-1.5 text-xs font-black text-blue-200"><Clock3 className="h-3.5 w-3.5" />Fecha y hora de retiro</span><input type="datetime-local" value={scheduledLocal} onChange={(event) => setScheduledLocal(event.target.value)} className={`${inputClass} [color-scheme:dark]`} /></label>
-                <div className="space-y-1.5"><span className="text-xs font-black text-blue-200">Al acercarse la hora</span><div className="grid grid-cols-2 gap-1.5">
-                  <button type="button" onClick={() => setReservationDispatchMode('manual')} className={`h-10 rounded-xl border text-[10px] font-black ${reservationDispatchMode === 'manual' ? 'border-cyan-400/40 bg-cyan-400/10 text-cyan-200' : 'border-zinc-800 bg-zinc-950 text-zinc-500'}`}>Manual</button>
-                  <button type="button" onClick={() => setReservationDispatchMode('automatic')} className={`h-10 rounded-xl border text-[10px] font-black ${reservationDispatchMode === 'automatic' ? 'border-emerald-400/40 bg-emerald-400/10 text-emerald-200' : 'border-zinc-800 bg-zinc-950 text-zinc-500'}`}>Automático</button>
+                <div className="space-y-1.5"><span className="text-xs font-black text-blue-200">Modo de despacho guardado</span><div className="grid grid-cols-2 gap-1.5">
+                  <button type="button" onClick={() => { setDispatchMode('manual'); saveOperatorDispatchMode(currentCompany.id, 'manual'); }} className={`h-10 rounded-xl border text-[10px] font-black ${dispatchMode === 'manual' ? 'border-cyan-400/40 bg-cyan-400/10 text-cyan-200' : 'border-zinc-800 bg-zinc-950 text-zinc-500'}`}>Manual</button>
+                  <button type="button" onClick={() => { setDispatchMode('automatic'); saveOperatorDispatchMode(currentCompany.id, 'automatic'); }} className={`h-10 rounded-xl border text-[10px] font-black ${dispatchMode === 'automatic' ? 'border-emerald-400/40 bg-emerald-400/10 text-emerald-200' : 'border-zinc-800 bg-zinc-950 text-zinc-500'}`}>Inteligente</button>
                 </div></div>
               </div>
               <p className="mt-2 text-[10px] leading-relaxed text-blue-200/70">La reserva queda fuera de la planilla principal hasta la ventana operativa y conserva las alarmas de aviso.</p>
             </section>}
 
             <div className="grid gap-x-3 gap-y-2.5 md:grid-cols-2">
-              <label className="space-y-1 md:col-span-2"><span className="flex items-center gap-1.5 text-xs font-black text-zinc-300"><MapPin className="h-3.5 w-3.5 text-amber-300" />Retiro *</span><input ref={originRef} required value={origin} onChange={(event) => setOrigin(event.target.value)} placeholder="Dirección de retiro" className={inputClass} /></label>
+              <AddressAutocomplete ref={originRef} companyId={currentCompany.id} label="Retiro" required value={origin} onChange={setOrigin} placeholder="Escribe calle, número o lugar" inputClassName={inputClass} iconClassName="text-amber-300" />
 
               {activeClient?.frequentAddresses.length ? <div className="md:col-span-2 rounded-xl border border-emerald-400/20 bg-emerald-400/[0.05] p-2.5">
                 <div className="flex flex-wrap items-center justify-between gap-2"><div><p className="text-[9px] font-black uppercase tracking-[.14em] text-emerald-300">Direcciones guardadas</p><p className="text-[10px] text-zinc-500">Toca una dirección para completar el retiro.</p></div><span className="text-[9px] font-black text-emerald-200">{activeClient.frequentAddresses.length} guardada{activeClient.frequentAddresses.length === 1 ? '' : 's'}</span></div>
                 <div className="mt-2 flex flex-wrap gap-1.5">{activeClient.frequentAddresses.map((address, index) => <button key={`${address.address}-${index}`} type="button" onClick={() => setOrigin(address.address)} className={`max-w-full rounded-lg border px-2.5 py-2 text-left text-[10px] font-bold ${origin.trim().toLocaleLowerCase('es-CL') === address.address.trim().toLocaleLowerCase('es-CL') ? 'border-emerald-300/50 bg-emerald-300/15 text-emerald-100' : 'border-zinc-800 bg-zinc-950 text-zinc-300 hover:border-emerald-400/30'}`}><span className="block text-[8px] font-black uppercase text-emerald-400">{address.label || `Dirección ${index + 1}`}</span><span className="block truncate">{address.address}</span></button>)}</div>
               </div> : null}
 
-              <label className="space-y-1 md:col-span-2"><span className="flex items-center gap-1.5 text-xs font-black text-zinc-300"><MapPin className="h-3.5 w-3.5 text-blue-300" />Destino</span><input value={destination} onChange={(event) => setDestination(event.target.value)} placeholder="Opcional · si queda vacío se usa taxímetro" className={inputClass} /></label>
+              <AddressAutocomplete companyId={currentCompany.id} label="Destino" value={destination} onChange={setDestination} placeholder="Lugar o dirección · opcional" inputClassName={inputClass} />
 
               <label className="space-y-1"><span className="flex items-center gap-1.5 text-xs font-black text-zinc-300"><UserRound className="h-3.5 w-3.5" />Cliente</span><input value={clientName} onChange={(event) => { setClientName(event.target.value); if (selectedClientId && event.target.value !== activeClient?.name) setSelectedClientId(null); }} placeholder="Nombre opcional" className={inputClass} /></label>
               <label className="space-y-1"><span className="flex items-center gap-1.5 text-xs font-black text-zinc-300"><Phone className="h-3.5 w-3.5" />Teléfono</span><input value={clientPhone} onChange={(event) => { setClientPhone(event.target.value); if (selectedClientId && normalizePhone(event.target.value) !== normalizePhone(activeClient?.phone ?? '')) setSelectedClientId(null); }} placeholder="Teléfono opcional" className={inputClass} /></label>
@@ -420,7 +424,7 @@ export const NewTripModal: React.FC = () => {
           </div>
 
           <footer className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-zinc-800 bg-[#0d0d0f] px-4 py-3 sm:px-5">
-            <p className="min-w-0 flex-1 text-[11px] text-zinc-500">{fixedFareEnabled && Number(fixedFareAmount) > 0 ? `Tarifa fija ${formatMoney(Number(fixedFareAmount))}. ` : ''}{scheduleEnabled ? 'Se guardará como reserva programada.' : activeClient ? `Cliente frecuente: ${activeClient.name}.` : 'La carrera entra a la cola y luego eliges el móvil.'}</p>
+            <p className="min-w-0 flex-1 text-[11px] text-zinc-500">{fixedFareEnabled && Number(fixedFareAmount) > 0 ? `Tarifa fija ${formatMoney(Number(fixedFareAmount))}. ` : ''}{scheduleEnabled ? 'Se guardará como reserva programada. ' : ''}{dispatchMode === 'automatic' ? 'Despacho inteligente activo: buscará automáticamente el móvil más conveniente.' : 'Despacho manual activo: la operadora elegirá el móvil.'}</p>
             <div className="flex shrink-0 gap-2"><button type="button" onClick={close} className="h-10 rounded-xl border border-zinc-700 bg-zinc-900 px-4 text-xs font-black text-zinc-300">Cerrar</button><button type="submit" disabled={submitting} className="flex h-10 items-center gap-2 rounded-xl bg-amber-400 px-4 text-xs font-black text-zinc-950 disabled:opacity-50">{submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" strokeWidth={3} />}{submitting ? 'Guardando…' : scheduleEnabled ? 'Crear reserva' : 'Crear carrera'}</button></div>
           </footer>
         </form>

@@ -3,15 +3,17 @@ import { ArrowLeft, CalendarClock, Car, Check, ChevronUp, Eye, GripVertical, Lay
 import { useApp } from '../../context/AppContext';
 import { DRIVER_STATUS_LABELS, TRIP_STATUS_LABELS } from '../../lib/labels';
 import { isQueueConnected, loadDispatchQueue, moveDispatchPriority, setTraditionalDriverAvailability, subscribeDispatchQueue, type DispatchQueueItem } from '../../lib/dispatchPriorityRepository';
-import type { Driver, Trip, TripStatus } from '../../types';
+import { readOperatorDispatchMode, saveOperatorDispatchMode } from '../../lib/operatorDispatchPreference';
+import type { DispatchMode, Driver, Trip, TripStatus } from '../../types';
 import { LiveMap } from '../map/LiveMap';
 
 const ACTIVE_STATUSES: TripStatus[] = ['pending', 'assigned', 'en_route', 'arrived', 'in_progress'];
 const DRIVER_BUSY_STATUSES: TripStatus[] = ['assigned', 'en_route', 'arrived', 'in_progress'];
 type PanelId = 'map' | 'trips' | 'mobiles';
-const PANEL_LAYOUT_KEY = 'centralgo:operator-panel-layout:v4';
+const PANEL_LAYOUT_KEY = 'centralgo:operator-panel-layout:v5';
 const DEFAULT_PANEL_ORDER: PanelId[] = ['map', 'trips', 'mobiles'];
 const DEFAULT_PANEL_RATIOS: Record<PanelId, number> = { map: 0.44, trips: 0.35, mobiles: 0.21 };
+const MINIMUM_PANEL_WIDTH: Record<PanelId, number> = { map: 320, trips: 300, mobiles: 190 };
 const DRIVER_MIME = 'application/x-centralgo-driver';
 const PRIORITY_HOLD_KEY = 'centralgo:operator-priority-holds:v1';
 
@@ -70,10 +72,16 @@ const nextTripAction = (status: TripStatus): { status: TripStatus; label: string
 const readPanelLayout = () => {
   try {
     const parsed = JSON.parse(window.localStorage.getItem(PANEL_LAYOUT_KEY) || '{}') as { order?: PanelId[]; ratios?: Partial<Record<PanelId, number>> };
-    const order = Array.isArray(parsed.order) && parsed.order.length === 3 && DEFAULT_PANEL_ORDER.every((panel) => parsed.order?.includes(panel))
+    const order = Array.isArray(parsed.order) && parsed.order.length === 3 && new Set(parsed.order).size === 3 && DEFAULT_PANEL_ORDER.every((panel) => parsed.order?.includes(panel))
       ? parsed.order
       : DEFAULT_PANEL_ORDER;
-    const ratios = { ...DEFAULT_PANEL_RATIOS, ...(parsed.ratios ?? {}) };
+    const candidate = { ...DEFAULT_PANEL_RATIOS, ...(parsed.ratios ?? {}) };
+    const values = DEFAULT_PANEL_ORDER.map((panel) => Number(candidate[panel]));
+    const total = values.reduce((sum, value) => sum + value, 0);
+    const valid = values.every((value) => Number.isFinite(value) && value >= 0.12 && value <= 0.7) && total >= 0.98 && total <= 1.02;
+    const ratios = valid
+      ? Object.fromEntries(DEFAULT_PANEL_ORDER.map((panel) => [panel, Number(candidate[panel]) / total])) as Record<PanelId, number>
+      : { ...DEFAULT_PANEL_RATIOS };
     return { order: [...order], ratios };
   } catch {
     return { order: [...DEFAULT_PANEL_ORDER], ratios: { ...DEFAULT_PANEL_RATIOS } };
@@ -118,6 +126,7 @@ export const OperatorConsole: React.FC = () => {
   const [panelOrder, setPanelOrder] = useState<PanelId[]>(initialLayout.order);
   const [panelRatios, setPanelRatios] = useState<Record<PanelId, number>>(initialLayout.ratios);
   const [dragPanelId, setDragPanelId] = useState<PanelId | null>(null);
+  const [dispatchMode, setDispatchMode] = useState<DispatchMode>(() => readOperatorDispatchMode(currentCompany.id));
   const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
@@ -127,6 +136,38 @@ export const OperatorConsole: React.FC = () => {
 
   useEffect(() => {
     try { window.localStorage.setItem(PANEL_LAYOUT_KEY, JSON.stringify({ order: panelOrder, ratios: panelRatios })); } catch { /* layout remains for this session */ }
+  }, [panelOrder, panelRatios]);
+
+  useEffect(() => {
+    setDispatchMode(readOperatorDispatchMode(currentCompany.id));
+    const sync = (event: Event) => {
+      const detail = (event as CustomEvent<{ companyId?: string; mode?: DispatchMode }>).detail;
+      if (detail?.companyId === currentCompany.id && (detail.mode === 'automatic' || detail.mode === 'manual')) setDispatchMode(detail.mode);
+    };
+    window.addEventListener('centralgo:dispatch-mode', sync);
+    return () => window.removeEventListener('centralgo:dispatch-mode', sync);
+  }, [currentCompany.id]);
+
+  useEffect(() => {
+    const ensureVisiblePanels = () => {
+      if (window.innerWidth < 1280) return;
+      const usableWidth = Math.max(1, (gridRef.current?.getBoundingClientRect().width ?? 0) - 20);
+      if (usableWidth <= 1) return;
+      const total = DEFAULT_PANEL_ORDER.reduce((sum, panel) => sum + panelRatios[panel], 0);
+      const invalid = !Number.isFinite(total) || Math.abs(total - 1) > 0.02 || DEFAULT_PANEL_ORDER.some((panel) => panelRatios[panel] * usableWidth < MINIMUM_PANEL_WIDTH[panel]);
+      const alreadyDefault = panelOrder.every((panel, index) => panel === DEFAULT_PANEL_ORDER[index]) && DEFAULT_PANEL_ORDER.every((panel) => Math.abs(panelRatios[panel] - DEFAULT_PANEL_RATIOS[panel]) < 0.001);
+      if (invalid && !alreadyDefault) {
+        setPanelOrder([...DEFAULT_PANEL_ORDER]);
+        setPanelRatios({ ...DEFAULT_PANEL_RATIOS });
+        window.setTimeout(() => window.dispatchEvent(new Event('resize')), 0);
+      }
+    };
+    const frame = window.requestAnimationFrame(ensureVisiblePanels);
+    window.addEventListener('resize', ensureVisiblePanels);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener('resize', ensureVisiblePanels);
+    };
   }, [panelOrder, panelRatios]);
 
   useEffect(() => {
@@ -374,6 +415,7 @@ export const OperatorConsole: React.FC = () => {
     setPanelOrder([...DEFAULT_PANEL_ORDER]);
     setPanelRatios({ ...DEFAULT_PANEL_RATIOS });
     setLayoutMenuOpen(false);
+    window.setTimeout(() => window.dispatchEvent(new Event('resize')), 0);
   };
 
   const startResize = (boundary: 0 | 1, event: React.PointerEvent<HTMLDivElement>) => {
@@ -384,10 +426,13 @@ export const OperatorConsole: React.FC = () => {
     const leftPanel = panelOrder[boundary];
     const rightPanel = panelOrder[boundary + 1];
     const usableWidth = Math.max(1, (gridRef.current?.getBoundingClientRect().width ?? window.innerWidth) - 20);
-    const minimumWidth: Record<PanelId, number> = { map: 320, trips: 300, mobiles: 190 };
-    const minimumLeftRatio = minimumWidth[leftPanel] / usableWidth;
-    const minimumRightRatio = minimumWidth[rightPanel] / usableWidth;
+    const minimumLeftRatio = MINIMUM_PANEL_WIDTH[leftPanel] / usableWidth;
+    const minimumRightRatio = MINIMUM_PANEL_WIDTH[rightPanel] / usableWidth;
     const pairTotal = startRatios[leftPanel] + startRatios[rightPanel];
+    if (!Number.isFinite(pairTotal) || pairTotal < minimumLeftRatio + minimumRightRatio) {
+      resetPanelLayout();
+      return;
+    }
 
     const onMove = (moveEvent: PointerEvent) => {
       const deltaRatio = (moveEvent.clientX - startX) / usableWidth;
@@ -431,7 +476,7 @@ export const OperatorConsole: React.FC = () => {
         @media (min-width:1280px){
           .cg-operator-grid{grid-template-columns:minmax(0,var(--cg-slot-a)) 10px minmax(0,var(--cg-slot-b)) 10px minmax(0,var(--cg-slot-c))!important;gap:0!important}
           .cg-panel-resizer{display:flex}
-          .cg-layout-panel{grid-column:var(--cg-panel-column)!important}
+          .cg-layout-panel{grid-column:var(--cg-panel-column)!important;min-width:0}
         }
       `}</style>
 
@@ -455,6 +500,10 @@ export const OperatorConsole: React.FC = () => {
               </div>}
             </div>
           </div>
+          <div role="radiogroup" aria-label="Modo de despacho" className="flex h-10 shrink-0 items-center rounded-xl border border-zinc-700 bg-zinc-950 p-1">
+            <button type="button" role="radio" aria-checked={dispatchMode === 'automatic'} onClick={() => { setDispatchMode('automatic'); saveOperatorDispatchMode(currentCompany.id, 'automatic'); }} className={`flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[9px] font-black transition ${dispatchMode === 'automatic' ? 'bg-emerald-500 text-emerald-950' : 'text-zinc-500 hover:text-white'}`} title="Asignación automática según ubicación, disponibilidad y prioridad"><Wand2 className="h-3.5 w-3.5" />Inteligente</button>
+            <button type="button" role="radio" aria-checked={dispatchMode === 'manual'} onClick={() => { setDispatchMode('manual'); saveOperatorDispatchMode(currentCompany.id, 'manual'); }} className={`flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[9px] font-black transition ${dispatchMode === 'manual' ? 'bg-cyan-500 text-cyan-950' : 'text-zinc-500 hover:text-white'}`} title="La operadora elige el móvil para cada carrera"><UserRound className="h-3.5 w-3.5" />Manual</button>
+          </div>
           <div className="relative w-full lg:min-w-[220px] lg:flex-[0_1_340px]">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
             <input
@@ -470,11 +519,11 @@ export const OperatorConsole: React.FC = () => {
           </button>
           <div className="relative">
             <button type="button" onClick={() => { setLayoutMenuOpen((open) => !open); setReservationsOpen(false); }} className={`flex h-10 items-center justify-center gap-1.5 rounded-xl border px-3 text-[10px] font-black transition ${layoutMenuOpen ? 'border-blue-300/45 bg-blue-500/20 text-blue-100' : 'border-zinc-700 bg-zinc-950 text-zinc-400 hover:text-white'}`} aria-expanded={layoutMenuOpen}><LayoutPanelTop className="h-4 w-4" />Organizar</button>
-            {layoutMenuOpen && <div className="absolute right-0 top-[calc(100%+8px)] z-[85] w-64 rounded-xl border border-blue-400/20 bg-[#11151a] p-3 shadow-2xl shadow-black/60"><p className="text-[10px] font-black text-white">Distribución de paneles</p><p className="mt-1 text-[8px] leading-relaxed text-zinc-500">Elige un orden o arrastra los títulos de los cuadros.</p><div className="mt-2 space-y-1.5">{[
+            {layoutMenuOpen && <div className="absolute right-0 top-[calc(100%+8px)] z-[85] w-64 rounded-xl border border-blue-400/20 bg-[#11151a] p-3 shadow-2xl shadow-black/60"><p className="text-[10px] font-black text-white">Distribución de paneles</p><p className="mt-1 text-[8px] leading-relaxed text-zinc-500">Los cuadros se reparan automáticamente si dejan de caber en la pantalla.</p><div className="mt-2 space-y-1.5">{[
               { label: 'Mapa · Carreras · Móviles', order: ['map', 'trips', 'mobiles'] as PanelId[] },
               { label: 'Móviles · Carreras · Mapa', order: ['mobiles', 'trips', 'map'] as PanelId[] },
               { label: 'Carreras · Mapa · Móviles', order: ['trips', 'map', 'mobiles'] as PanelId[] },
-            ].map((preset) => <button key={preset.label} type="button" onClick={() => { setPanelOrder(preset.order); setLayoutMenuOpen(false); }} className="flex w-full items-center justify-between rounded-lg border border-white/[0.06] bg-white/[0.025] px-2.5 py-2 text-left text-[9px] font-bold text-zinc-300 hover:border-blue-400/25">{preset.label}{panelOrder.join(',') === preset.order.join(',') ? <Check className="h-3.5 w-3.5 text-emerald-300" /> : null}</button>)}</div><button type="button" onClick={resetPanelLayout} className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-zinc-700 px-2 py-2 text-[8px] font-black text-zinc-400"><RotateCcw className="h-3.5 w-3.5" />Restablecer</button></div>}
+            ].map((preset) => <button key={preset.label} type="button" onClick={() => { setPanelOrder(preset.order); setPanelRatios({ ...DEFAULT_PANEL_RATIOS }); setLayoutMenuOpen(false); window.setTimeout(() => window.dispatchEvent(new Event('resize')), 0); }} className="flex w-full items-center justify-between rounded-lg border border-white/[0.06] bg-white/[0.025] px-2.5 py-2 text-left text-[9px] font-bold text-zinc-300 hover:border-blue-400/25">{preset.label}{panelOrder.join(',') === preset.order.join(',') ? <Check className="h-3.5 w-3.5 text-emerald-300" /> : null}</button>)}</div><button type="button" onClick={resetPanelLayout} className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-2 py-2 text-[8px] font-black text-emerald-200"><RotateCcw className="h-3.5 w-3.5" />Ajustar automáticamente</button></div>}
           </div>
         </div>
       </section>
