@@ -484,7 +484,7 @@ export const OperatorConsole: React.FC = () => {
         }
       `}</style>
 
-      <section className="relative rounded-2xl border border-zinc-800 bg-[#0d0d0f] p-3 shadow-xl shadow-black/20">
+      <section className={`relative rounded-2xl border border-zinc-800 bg-[#0d0d0f] p-3 shadow-xl shadow-black/20 ${layoutMenuOpen || reservationsOpen ? 'z-[2100]' : 'z-10'}`}>
         <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center">
           <div className="flex min-w-0 items-center gap-2 lg:shrink-0">
             <button type="button" onClick={safeBack} className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-zinc-700 bg-zinc-950 text-zinc-300 transition hover:border-blue-400/40 hover:text-white" title="Atrás sin cerrar la sesión" aria-label="Atrás sin cerrar la sesión"><ArrowLeft className="h-4 w-4" /></button>
