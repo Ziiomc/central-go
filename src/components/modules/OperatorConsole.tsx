@@ -595,7 +595,7 @@ export const OperatorConsole: React.FC = () => {
             draggable
             onDragStart={(event) => { event.dataTransfer.effectAllowed = 'move'; setDragPanelId('mobiles'); }}
             onDragEnd={() => setDragPanelId(null)}
-            className={`relative rounded-t-2xl border-b border-zinc-800 bg-[#0d0d0f] px-3 py-3 ${manualMenuOpen ? 'cg-radio-panel-viewport-anchor' : ''}`}
+            className={`relative rounded-t-2xl border-b border-zinc-800 bg-[#0d0d0f] px-3 py-3 ${manualMenuOpen ? 'cg-radio-panel-viewport-anchor z-[2250]' : ''}`}
             title="Arrastra para mover el cuadro de móviles"
           >
             <div className="flex items-center justify-between gap-2">
