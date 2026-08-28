@@ -481,6 +481,8 @@ export const DriverMobileView: React.FC = () => {
           </button>
         </header>
 
+        <div id="driver-queue-summary-slot" />
+
         {!radioReady && (
           <section className="rounded-xl border border-blue-500/25 bg-blue-500/[0.05] px-3 py-2.5">
             <div className="flex items-center justify-between gap-3">
