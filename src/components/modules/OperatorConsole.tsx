@@ -1,16 +1,17 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Car, ChevronUp, Eye, GripVertical, List, Loader2, Map as MapIcon, MapPin, Navigation, Pencil, PhoneCall, Plus, Search, Trash2, UserPlus, UserRound, Wand2, XCircle, Zap } from 'lucide-react';
+import { Car, ChevronUp, Eye, GripVertical, List, Loader2, Map as MapIcon, MapPin, Navigation, Pencil, PhoneCall, Pin, Plus, Power, Search, Trash2, UserPlus, UserRound, Wand2, XCircle, Zap } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { DRIVER_STATUS_LABELS, TRIP_STATUS_LABELS } from '../../lib/labels';
-import { isQueueConnected, loadDispatchQueue, setTraditionalDriverAvailability, subscribeDispatchQueue, type DispatchQueueItem } from '../../lib/dispatchPriorityRepository';
+import { isQueueConnected, loadDispatchQueue, moveDispatchPriority, setTraditionalDriverAvailability, subscribeDispatchQueue, type DispatchQueueItem } from '../../lib/dispatchPriorityRepository';
 import type { Driver, Trip, TripStatus } from '../../types';
 import { LiveMap } from '../map/LiveMap';
 
 const ACTIVE_STATUSES: TripStatus[] = ['pending', 'assigned', 'en_route', 'arrived', 'in_progress'];
 const DRIVER_BUSY_STATUSES: TripStatus[] = ['assigned', 'en_route', 'arrived', 'in_progress'];
-const PANEL_KEY = 'centralgo:operator-panel-widths:v2';
+const PANEL_KEY = 'centralgo:operator-panel-widths:v3';
 const MAP_PANEL_VIEW_KEY = 'centralgo:operator-map-panel-view:v1';
 const DRIVER_MIME = 'application/x-centralgo-driver';
+const PRIORITY_HOLD_KEY = 'centralgo:operator-priority-holds:v1';
 
 const statusTone: Record<TripStatus, string> = {
   pending: 'border-amber-500/30 bg-amber-500/10 text-amber-300',
@@ -68,11 +69,11 @@ const readPanelWidths = () => {
   try {
     const parsed = JSON.parse(window.localStorage.getItem(PANEL_KEY) || '{}') as { left?: number; map?: number };
     return {
-      left: Math.min(300, Math.max(190, Number(parsed.left) || 210)),
-      map: Math.min(620, Math.max(380, Number(parsed.map) || 440)),
+      left: Math.min(300, Math.max(210, Number(parsed.left) || 240)),
+      map: Math.min(700, Math.max(420, Number(parsed.map) || 460)),
     };
   } catch {
-    return { left: 210, map: 440 };
+    return { left: 240, map: 460 };
   }
 };
 
@@ -115,6 +116,7 @@ export const OperatorConsole: React.FC = () => {
   const [manualBusyId, setManualBusyId] = useState<string | null>(null);
   const [manualError, setManualError] = useState('');
   const [manualSearch, setManualSearch] = useState('');
+  const [priorityHolds, setPriorityHolds] = useState<Record<string, number>>({});
   const [mapPanelView, setMapPanelView] = useState<'map' | 'list'>(readMapPanelView);
   const [mapListSearch, setMapListSearch] = useState('');
   const [now, setNow] = useState(Date.now());
@@ -168,8 +170,22 @@ export const OperatorConsole: React.FC = () => {
     };
   }, [currentCompany.id]);
 
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(window.localStorage.getItem(`${PRIORITY_HOLD_KEY}:${currentCompany.id}`) || '{}') as Record<string, number>;
+      setPriorityHolds(saved);
+    } catch {
+      setPriorityHolds({});
+    }
+  }, [currentCompany.id]);
+
   const queueOrder = useMemo(
     () => Object.fromEntries(queueItems.map((item) => [item.driverId, item.queueOrder])),
+    [queueItems],
+  );
+
+  const queueItemByDriverId = useMemo(
+    () => new Map(queueItems.map((item) => [item.driverId, item])),
     [queueItems],
   );
 
@@ -231,13 +247,27 @@ export const OperatorConsole: React.FC = () => {
   const noAppDriverCount = useMemo(() => queueItems.filter((item) => !item.userId).length, [queueItems]);
   const outsideQueueCount = useMemo(() => queueItems.filter((item) => !isQueueConnected(item) && !activeTripDriverIds.has(item.driverId)).length, [activeTripDriverIds, queueItems]);
 
+  const restorePriorityHold = async (driverId: string, preferredOrder: number) => {
+    const currentQueue = await loadDispatchQueue(currentCompany.id);
+    const ordered = currentQueue
+      .filter((item) => item.status !== 'offline' && item.status !== 'sos')
+      .sort((a, b) => a.queueOrder - b.queueOrder || a.unitNumber.localeCompare(b.unitNumber, 'es', { numeric: true }));
+    const currentIndex = ordered.findIndex((item) => item.driverId === driverId);
+    const targetIndex = ordered.findIndex((item) => item.driverId !== driverId && item.queueOrder >= preferredOrder);
+    if (currentIndex < 0 || targetIndex < 0 || currentIndex <= targetIndex) return;
+    for (let index = currentIndex; index > targetIndex; index -= 1) await moveDispatchPriority(driverId, 'up');
+  };
+
+  const refreshQueueAfterControl = async () => setQueueItems(await loadDispatchQueue(currentCompany.id));
+
   const addManualDriverToQueue = async (item: DispatchQueueItem) => {
     if (manualBusyId) return;
     setManualBusyId(item.driverId);
     setManualError('');
     try {
       await setTraditionalDriverAvailability(item.driverId, true);
-      setQueueItems(await loadDispatchQueue(currentCompany.id));
+      if (priorityHolds[item.driverId] != null) await restorePriorityHold(item.driverId, priorityHolds[item.driverId]);
+      await refreshQueueAfterControl();
     } catch (error) {
       setManualError(error instanceof Error ? error.message : 'No fue posible agregar el conductor a la fila.');
     } finally {
@@ -252,12 +282,40 @@ export const OperatorConsole: React.FC = () => {
     setManualError('');
     try {
       await setTraditionalDriverAvailability(item.driverId, false);
-      setQueueItems(await loadDispatchQueue(currentCompany.id));
+      await refreshQueueAfterControl();
     } catch (error) {
       setManualError(error instanceof Error ? error.message : 'No fue posible sacar el móvil de la fila.');
     } finally {
       setManualBusyId(null);
     }
+  };
+
+  const toggleQueueIncorporation = async (driver: Driver) => {
+    const queueItem = queueItemByDriverId.get(driver.id);
+    if (manualBusyId) return;
+    setManualBusyId(driver.id);
+    setManualError('');
+    try {
+      const isManualInQueue = queueItem?.operationMode === 'traditional' && queueItem.serviceEnabled;
+      await setTraditionalDriverAvailability(driver.id, !isManualInQueue);
+      if (!isManualInQueue && priorityHolds[driver.id] != null) await restorePriorityHold(driver.id, priorityHolds[driver.id]);
+      await refreshQueueAfterControl();
+    } catch (error) {
+      setManualError(error instanceof Error ? error.message : 'No fue posible actualizar la incorporación del móvil.');
+    } finally {
+      setManualBusyId(null);
+    }
+  };
+
+  const togglePriorityHold = (driver: Driver) => {
+    const queueItem = queueItemByDriverId.get(driver.id);
+    setPriorityHolds((current) => {
+      const next = { ...current };
+      if (next[driver.id] != null) delete next[driver.id];
+      else next[driver.id] = queueItem?.queueOrder ?? queueOrder[driver.id] ?? 0;
+      try { window.localStorage.setItem(`${PRIORITY_HOLD_KEY}:${currentCompany.id}`, JSON.stringify(next)); } catch { /* preference remains for this session */ }
+      return next;
+    });
   };
 
   const activeTrips = useMemo(() => {
@@ -353,10 +411,10 @@ export const OperatorConsole: React.FC = () => {
       const delta = moveEvent.clientX - startX;
       if (side === 'left') {
         const maxLeft = Math.min(300, containerWidth - startMap - minimumCenter - 20);
-        setLeftWidth(Math.max(190, Math.min(maxLeft, startLeft + delta)));
+        setLeftWidth(Math.max(210, Math.min(maxLeft, startLeft - delta)));
       } else {
         const maxMap = Math.min(620, containerWidth - startLeft - minimumCenter - 20);
-        setMapWidth(Math.max(380, Math.min(maxMap, startMap - delta)));
+        setMapWidth(Math.max(420, Math.min(maxMap, startMap + delta)));
       }
     };
 
@@ -383,7 +441,12 @@ export const OperatorConsole: React.FC = () => {
       <style>{`
         .cg-panel-resizer{display:none}
         @media (min-width:1280px){
-          .cg-operator-grid{grid-template-columns:var(--cg-left-panel) 10px minmax(320px,350px) 10px minmax(var(--cg-map-panel),1fr)!important;gap:0!important}
+          .cg-operator-grid{grid-template-areas:"map map-resizer trips mobiles-resizer mobiles";grid-template-columns:minmax(var(--cg-map-panel),1fr) 10px minmax(360px,450px) 10px var(--cg-left-panel)!important;gap:0!important}
+          .cg-operator-grid>aside:first-of-type{grid-area:mobiles}
+          .cg-operator-grid>.cg-panel-resizer:nth-child(2){grid-area:mobiles-resizer}
+          .cg-operator-grid>div:nth-child(3){grid-area:trips}
+          .cg-operator-grid>.cg-panel-resizer:nth-child(4){grid-area:map-resizer}
+          .cg-operator-grid>.cg-map-panel{grid-area:map}
           .cg-panel-resizer{display:flex}
           .cg-map-panel{grid-column:auto!important}
         }
@@ -391,7 +454,7 @@ export const OperatorConsole: React.FC = () => {
 
       <section className="rounded-2xl border border-zinc-800 bg-[#0d0d0f] p-3 shadow-xl shadow-black/20">
         <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center">
-          <div className="min-w-0 lg:flex-1">
+          <div className="min-w-0 lg:shrink-0">
             <p className="text-[10px] font-black uppercase tracking-[.18em] text-zinc-500">Central GO</p>
             <h1 className="text-xl font-black text-white">Despacho</h1>
           </div>
@@ -554,6 +617,7 @@ export const OperatorConsole: React.FC = () => {
             ) : availableDrivers.map((driver: Driver, index) => {
               const focused = focusDriverId === driver.id;
               const dragging = dragDriverId === driver.id;
+              const vehicle = driver.vehicleId ? vehicleById.get(driver.vehicleId) : undefined;
               return (
                 <button
                   key={driver.id}
@@ -567,14 +631,42 @@ export const OperatorConsole: React.FC = () => {
                   }}
                   onDragEnd={() => { setDragDriverId(null); setDragOverTripId(null); }}
                   onClick={() => setFocusDriverId(focused ? null : driver.id)}
-                  className={`flex w-full cursor-grab items-center gap-2 px-3 py-2 text-left transition active:cursor-grabbing ${dragging ? 'opacity-45' : ''} ${focused ? 'bg-emerald-500/[0.10]' : 'hover:bg-zinc-900/70'}`}
+                  className={`group relative flex w-full cursor-grab items-center gap-2 px-3 py-2 text-left transition active:cursor-grabbing ${dragging ? 'opacity-45' : ''} ${focused ? 'bg-emerald-500/[0.10]' : 'hover:bg-zinc-900/70'}`}
                   title={`${driver.name} · ${driver.currentLocation.address || DRIVER_STATUS_LABELS[driver.status]}. Puedes arrastrar este móvil sobre una carrera pendiente.`}
                 >
-                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-emerald-400/25 bg-emerald-500/10 text-sm font-black text-emerald-300" title={`Posición ${index + 1} en la fila`}>{index + 1}</span>
+                  <span className="grid h-6 w-6 shrink-0 place-items-center rounded-md border border-emerald-400/25 bg-emerald-500/10 text-[10px] font-black text-emerald-300" title={`Posición ${index + 1} en la fila`}>{index + 1}</span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-base font-black leading-none text-white">{driver.unitNumber}</span>
+                    <span className="block truncate text-lg font-black leading-none text-white">{driver.unitNumber}</span>
+                  </span>
+                  <span className="flex shrink-0 items-center gap-1" onClick={(event) => event.stopPropagation()}>
+                    <button
+                      type="button"
+                      disabled={Boolean(manualBusyId)}
+                      onClick={() => void toggleQueueIncorporation(driver)}
+                      className="grid h-8 w-8 place-items-center rounded-lg border border-emerald-400/35 bg-emerald-500/15 text-emerald-200 transition hover:bg-emerald-500 hover:text-emerald-950 disabled:opacity-40"
+                      title="Incorporar o retirar de la fila manual"
+                      aria-label={`Incorporar o retirar el móvil ${driver.unitNumber} de la fila manual`}
+                    >
+                      {manualBusyId === driver.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Power className="h-3.5 w-3.5" />}
+                    </button>
+                    <button
+                      type="button"
+                      aria-pressed={priorityHolds[driver.id] != null}
+                      onClick={() => togglePriorityHold(driver)}
+                      className={`grid h-8 w-8 place-items-center rounded-lg border transition ${priorityHolds[driver.id] != null ? 'border-amber-300/50 bg-amber-400 text-zinc-950' : 'border-zinc-700 bg-zinc-900 text-zinc-400 hover:border-amber-400/40 hover:text-amber-200'}`}
+                      title={priorityHolds[driver.id] != null ? 'Prioridad fija: al reincorporar vuelve a este lugar de la fila' : 'Mantener esta posición de prioridad al reincorporar'}
+                      aria-label={`Mantener la posición de prioridad del móvil ${driver.unitNumber}`}
+                    >
+                      <Pin className="h-3.5 w-3.5" />
+                    </button>
                   </span>
                   <GripVertical className="h-4 w-4 shrink-0 text-zinc-700" />
+                  <span role="tooltip" className="pointer-events-none absolute right-[calc(100%+8px)] top-1/2 z-50 hidden w-56 -translate-y-1/2 rounded-xl border border-emerald-400/25 bg-zinc-950 p-3 text-left shadow-2xl shadow-black/60 group-hover:block group-focus-visible:block">
+                    <span className="flex items-center justify-between gap-2"><strong className="truncate text-xs text-white">{driver.name}</strong><b className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[8px] text-emerald-300">Móvil {driver.unitNumber}</b></span>
+                    <span className="mt-1 block truncate text-[9px] text-zinc-400">{driver.phone || 'Sin teléfono registrado'}</span>
+                    <span className="mt-1 block truncate text-[9px] text-zinc-500">{vehicle?.licensePlate ? `Patente ${vehicle.licensePlate} · ` : ''}{driver.currentLocation.address || 'Ubicación sin dirección'}</span>
+                    <span className="mt-2 block border-t border-zinc-800 pt-2 text-[9px] font-black text-emerald-300">● {DRIVER_STATUS_LABELS[driver.status]}</span>
+                  </span>
                 </button>
               );
             })}
@@ -701,22 +793,22 @@ export const OperatorConsole: React.FC = () => {
                               placeholder="N° móvil"
                               inputMode="numeric"
                               autoComplete="off"
-                              className="h-11 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-2 text-center text-xs font-black text-zinc-100 outline-none transition placeholder:text-zinc-600 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 sm:h-8"
+                              className="h-11 w-full rounded-lg border border-zinc-600 bg-zinc-950 px-2 text-center text-xs font-black text-zinc-100 outline-none transition placeholder:text-zinc-600 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 sm:h-9"
                               aria-label={`Número de móvil para asignar la carrera de ${trip.origin.address}`}
                             />
                           </div>
-                          <button type="button" data-operator-action disabled={!driverChoice[trip.id] || isBusy} onClick={() => { const id = driverChoice[trip.id]; if (id) assignDriverToTrip(trip, id); }} className="grid h-11 w-11 touch-manipulation place-items-center rounded-lg border border-blue-400/35 bg-blue-600 text-white disabled:opacity-40 sm:h-8 sm:w-8" title="Asignar" aria-label={`Asignar móvil escrito a ${trip.code}`}><Zap className="h-3.5 w-3.5" /></button>
-                          <button type="button" data-operator-action disabled={!availableDrivers.length || isBusy} onClick={() => handleAutoAssign(trip)} className="grid h-11 w-11 touch-manipulation place-items-center rounded-lg border border-violet-400/30 bg-violet-500/15 text-violet-200 disabled:opacity-40 sm:h-8 sm:w-8" title="Autoasignar al móvil más cercano" aria-label={`Autoasignar ${trip.code}`}><Wand2 className="h-3.5 w-3.5" /></button>
+                          <button type="button" data-operator-action disabled={!driverChoice[trip.id] || isBusy} onClick={() => { const id = driverChoice[trip.id]; if (id) assignDriverToTrip(trip, id); }} className="grid h-11 w-11 touch-manipulation place-items-center rounded-lg border border-blue-300/60 bg-blue-600 text-white shadow-lg shadow-blue-950/40 transition hover:bg-blue-500 disabled:opacity-40 sm:h-9 sm:w-9" title="Asignar" aria-label={`Asignar móvil escrito a ${trip.code}`}><Zap className="h-3.5 w-3.5" /></button>
+                          <button type="button" data-operator-action disabled={!availableDrivers.length || isBusy} onClick={() => handleAutoAssign(trip)} className="grid h-11 w-11 touch-manipulation place-items-center rounded-lg border border-violet-300/50 bg-violet-600 text-white shadow-lg shadow-violet-950/35 transition hover:bg-violet-500 disabled:opacity-40 sm:h-9 sm:w-9" title="Autoasignar al móvil más cercano" aria-label={`Autoasignar ${trip.code}`}><Wand2 className="h-3.5 w-3.5" /></button>
                         </>
                       )}
 
                       {next && <button type="button" data-operator-action disabled={isBusy} onClick={() => void runTripAction(trip.id, () => updateTripStatus(trip.id, next.status))} className="h-11 touch-manipulation rounded-lg border border-emerald-400/30 bg-emerald-600 px-2.5 text-[11px] font-black text-white disabled:opacity-40 sm:h-8">{next.label}</button>}
                       {trip.status === 'assigned' && <button type="button" data-operator-action disabled={isBusy} onClick={() => void runTripAction(trip.id, () => unassignTrip(trip.id))} className="h-11 touch-manipulation rounded-lg border border-zinc-600 bg-zinc-800 px-2 text-[11px] font-black text-zinc-200 disabled:opacity-40 sm:h-8">Liberar</button>}
                       {trip.status === 'in_progress' && <button type="button" data-operator-action onClick={() => setSelectedTripForDetail(trip)} className="h-11 touch-manipulation rounded-lg border border-emerald-400/30 bg-emerald-600 px-2.5 text-[11px] font-black text-white sm:h-8">Finalizar</button>}
-                      {trip.clientPhone && trip.clientPhone !== 'Sin teléfono' && <a data-operator-action href={`tel:${trip.clientPhone}`} onClick={(event) => event.stopPropagation()} className="grid h-11 w-11 touch-manipulation place-items-center rounded-lg border border-emerald-400/25 bg-emerald-500/10 text-emerald-200 sm:h-8 sm:w-8" title="Llamar al cliente" aria-label={`Llamar a ${trip.clientName}`}><PhoneCall className="h-3.5 w-3.5" /></a>}
-                      <button type="button" data-operator-action onClick={() => editTrip(trip)} className="grid h-11 w-11 touch-manipulation place-items-center rounded-lg border border-cyan-400/30 bg-cyan-500/15 text-cyan-200 sm:h-8 sm:w-8" title="Editar carrera" aria-label={`Editar ${trip.code}`}><Pencil className="h-3.5 w-3.5" /></button>
-                      <button type="button" data-operator-action onClick={() => setSelectedTripForDetail(trip)} className="grid h-11 w-11 touch-manipulation place-items-center rounded-lg border border-zinc-600 bg-zinc-800 text-zinc-300 sm:h-8 sm:w-8" title="Ver detalle" aria-label={`Ver detalle de ${trip.code}`}><Eye className="h-3.5 w-3.5" /></button>
-                      <button type="button" data-operator-action disabled={isBusy} onClick={() => handleCancel(trip)} className="grid h-11 w-11 touch-manipulation place-items-center rounded-lg border border-rose-400/30 bg-rose-500/15 text-rose-200 disabled:opacity-40 sm:h-8 sm:w-8" title="Cancelar carrera" aria-label={`Cancelar ${trip.code}`}><Trash2 className="h-3.5 w-3.5" /></button>
+                      {trip.clientPhone && trip.clientPhone !== 'Sin teléfono' && <a data-operator-action href={`tel:${trip.clientPhone}`} onClick={(event) => event.stopPropagation()} className="grid h-11 w-11 touch-manipulation place-items-center rounded-lg border border-emerald-300/50 bg-emerald-600 text-white shadow-lg shadow-emerald-950/30 transition hover:bg-emerald-500 sm:h-9 sm:w-9" title="Llamar al cliente" aria-label={`Llamar a ${trip.clientName}`}><PhoneCall className="h-3.5 w-3.5" /></a>}
+                      <button type="button" data-operator-action onClick={() => editTrip(trip)} className="grid h-11 w-11 touch-manipulation place-items-center rounded-lg border border-cyan-300/50 bg-cyan-600 text-white shadow-lg shadow-cyan-950/30 transition hover:bg-cyan-500 sm:h-9 sm:w-9" title="Editar carrera" aria-label={`Editar ${trip.code}`}><Pencil className="h-3.5 w-3.5" /></button>
+                      <button type="button" data-operator-action onClick={() => setSelectedTripForDetail(trip)} className="grid h-11 w-11 touch-manipulation place-items-center rounded-lg border border-zinc-500 bg-zinc-700 text-white shadow-lg shadow-black/25 transition hover:bg-zinc-600 sm:h-9 sm:w-9" title="Ver detalle" aria-label={`Ver detalle de ${trip.code}`}><Eye className="h-3.5 w-3.5" /></button>
+                      <button type="button" data-operator-action disabled={isBusy} onClick={() => handleCancel(trip)} className="grid h-11 w-11 touch-manipulation place-items-center rounded-lg border border-rose-300/55 bg-rose-600 text-white shadow-lg shadow-rose-950/30 transition hover:bg-rose-500 disabled:opacity-40 sm:h-9 sm:w-9" title="Cancelar carrera" aria-label={`Cancelar ${trip.code}`}><Trash2 className="h-3.5 w-3.5" /></button>
                     </div>
                   </article>
                 );

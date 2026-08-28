@@ -32,7 +32,7 @@ export const LiveMap: React.FC<LiveMapProps> = ({
   const tripMarkersRef = useRef<L.Marker[]>([]);
   const userGpsMarkerRef = useRef<L.Marker | null>(null);
 
-  const { drivers, trips, activeSOSDriver, setNewTripModalOpen, setVHFModalDriver } = useApp();
+  const { drivers, trips, vehicles, activeSOSDriver, setNewTripModalOpen, setVHFModalDriver } = useApp();
   const { theme } = useColorTheme();
   const [tileMode, setTileMode] = useState<'dark' | 'street'>(theme === 'light' ? 'street' : 'dark');
   type MapFilterStatus = DriverStatus | 'assigned' | 'arrived' | 'all';
@@ -147,6 +147,7 @@ export const LiveMap: React.FC<LiveMapProps> = ({
       const { lat, lng } = driver.currentLocation;
       if (!isValidMapCoordinate(lat,lng)) return;
       const activeTrip = trips.find((trip) => trip.driverId === driver.id && !['completed', 'cancelled'].includes(trip.status));
+      const vehicle = driver.vehicleId ? vehicles.find((item) => item.id === driver.vehicleId) : undefined;
       const mapStatus = getMapDriverStatus(driver, activeTrip);
       let statusColor = '#10b981';
       let statusBadge = 'bg-emerald-500/95 text-slate-950 border-emerald-300 font-extrabold shadow-emerald-500/30';
@@ -171,7 +172,7 @@ export const LiveMap: React.FC<LiveMapProps> = ({
       const heading = driver.currentLocation.heading || 0;
       const speed = driver.currentLocation.speed || 0;
       const customIcon = L.divIcon({
-        html: `<div class="relative flex flex-col items-center justify-center group cursor-pointer pointer-events-auto" style="width:70px;height:70px"><div class="absolute -top-3 z-20 flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono border shadow-lg whitespace-nowrap ${statusBadge}"><span class="w-1.5 h-1.5 rounded-full" style="background-color:${statusColor}"></span><span>${driver.unitNumber}</span></div><div class="absolute inset-0 m-auto w-10 h-10 rounded-full" style="background:radial-gradient(circle,${haloGlow} 0%,transparent 70%)"></div><div class="relative z-10 w-10 h-10 flex items-center justify-center" style="transform:rotate(${heading}deg)"><svg viewBox="0 0 40 56" class="w-8 h-11 drop-shadow-[0_4px_8px_rgba(0,0,0,0.85)]"><rect x="5" y="8" width="4" height="9" rx="2" fill="#09090b"/><rect x="31" y="8" width="4" height="9" rx="2" fill="#09090b"/><rect x="5" y="38" width="4" height="9" rx="2" fill="#09090b"/><rect x="31" y="38" width="4" height="9" rx="2" fill="#09090b"/><rect x="8" y="4" width="24" height="48" rx="7" fill="#18181b" stroke="#27272a"/><path d="M 10 14 Q 20 12 30 14 L 29 42 Q 20 44 11 42 Z" fill="#eab308"/><path d="M 12 14 L 28 14 L 26 21 L 14 21 Z" fill="#0f172a"/><rect x="13" y="21" width="14" height="15" rx="2" fill="#facc15"/><rect x="14" y="26" width="12" height="5" rx="1" fill="#fff" stroke="#18181b"/><text x="20" y="29.8" font-size="3" font-weight="900" fill="#000" text-anchor="middle">TAXI</text><circle cx="11" cy="4" r="2" fill="#fef08a"/><circle cx="29" cy="4" r="2" fill="#fef08a"/><circle cx="11" cy="51" r="1.5" fill="#ef4444"/><circle cx="29" cy="51" r="1.5" fill="#ef4444"/></svg></div><div class="absolute top-12 z-30 hidden group-hover:flex flex-col items-center bg-slate-900/95 text-white border border-slate-700 px-2.5 py-1 rounded-lg text-[10px] font-mono shadow-2xl pointer-events-none whitespace-nowrap"><span class="font-bold text-amber-400">${driver.unitNumber} - ${driver.name}</span><span class="text-slate-300">${speed} km/h • ${statusText}</span></div></div>`,
+        html: `<div class="relative flex flex-col items-center justify-center group cursor-pointer pointer-events-auto" style="width:70px;height:70px"><div class="absolute -top-3 z-20 flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono border shadow-lg whitespace-nowrap ${statusBadge}"><span class="w-1.5 h-1.5 rounded-full" style="background-color:${statusColor}"></span><span>${escapePopupText(driver.unitNumber)}</span></div><div class="absolute inset-0 m-auto w-10 h-10 rounded-full" style="background:radial-gradient(circle,${haloGlow} 0%,transparent 70%)"></div><div class="relative z-10 w-10 h-10 flex items-center justify-center" style="transform:rotate(${heading}deg)"><svg viewBox="0 0 40 56" class="w-8 h-11 drop-shadow-[0_4px_8px_rgba(0,0,0,0.85)]"><rect x="5" y="8" width="4" height="9" rx="2" fill="#09090b"/><rect x="31" y="8" width="4" height="9" rx="2" fill="#09090b"/><rect x="5" y="38" width="4" height="9" rx="2" fill="#09090b"/><rect x="31" y="38" width="4" height="9" rx="2" fill="#09090b"/><rect x="8" y="4" width="24" height="48" rx="7" fill="#18181b" stroke="#27272a"/><path d="M 10 14 Q 20 12 30 14 L 29 42 Q 20 44 11 42 Z" fill="#eab308"/><path d="M 12 14 L 28 14 L 26 21 L 14 21 Z" fill="#0f172a"/><rect x="13" y="21" width="14" height="15" rx="2" fill="#facc15"/><rect x="14" y="26" width="12" height="5" rx="1" fill="#fff" stroke="#18181b"/><text x="20" y="29.8" font-size="3" font-weight="900" fill="#000" text-anchor="middle">TAXI</text><circle cx="11" cy="4" r="2" fill="#fef08a"/><circle cx="29" cy="4" r="2" fill="#fef08a"/><circle cx="11" cy="51" r="1.5" fill="#ef4444"/><circle cx="29" cy="51" r="1.5" fill="#ef4444"/></svg></div><div class="absolute top-12 z-30 hidden min-w-[190px] group-hover:flex flex-col items-start bg-slate-900/95 text-white border border-slate-700 px-2.5 py-2 rounded-lg text-[10px] font-mono shadow-2xl pointer-events-none"><span class="font-bold text-amber-400">Móvil ${escapePopupText(driver.unitNumber)} · ${escapePopupText(driver.name)}</span><span class="mt-0.5 text-slate-300">${escapePopupText(driver.phone || 'Sin teléfono')}</span><span class="mt-0.5 text-slate-400">${vehicle?.licensePlate ? `Patente ${escapePopupText(vehicle.licensePlate)} · ` : ''}${speed} km/h · ${statusText}</span></div></div>`,
         className: 'custom-taxi-pin', iconSize: [70, 70], iconAnchor: [35, 35],
       });
       const buildDriverPopup = () => {
@@ -219,7 +220,7 @@ export const LiveMap: React.FC<LiveMapProps> = ({
         enableSmoothMarkerTransition(marker);
       }
     });
-  }, [drivers, trips, filterStatus, tileMode]);
+  }, [drivers, trips, vehicles, filterStatus, tileMode]);
 
   useEffect(() => {
     if (focusDriverId || !mapInstanceRef.current) return;
