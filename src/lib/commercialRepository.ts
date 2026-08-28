@@ -282,8 +282,17 @@ export async function unassignTripAtomic(tripId: string, reason?: string): Promi
 }
 
 export async function rejectDriverTripAtomic(tripId: string, reason?: string): Promise<Trip> {
-  const { data, error } = await requireSupabase().rpc('centralgo_driver_reject_trip', { p_trip_id: tripId, p_reason: reason ?? 'Rechazado por conductor' });
-  if (error) throw error;
+  const db = requireSupabase();
+  const { data, error } = await db.rpc('centralgo_driver_reject_trip', { p_trip_id: tripId, p_reason: reason ?? 'Rechazado por conductor' });
+  if (error) {
+    const { data: current, error: readError } = await db.from('trips').select('*').eq('id', tripId).maybeSingle();
+    // Expiration, reassignment and an explicit rejection can race on mobile.
+    // If the server has already removed this offer, the requested outcome is
+    // achieved and showing an error would be both noisy and misleading.
+    const alreadyResolved = /no pertenece al conductor|ya no est[aá] pendiente/i.test(error.message ?? '');
+    if (!readError && current && (current.status !== 'assigned' || !current.driver_id || alreadyResolved)) return mapTripRow(current);
+    throw error;
+  }
   return mapTripRow(data);
 }
 

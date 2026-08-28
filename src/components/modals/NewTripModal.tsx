@@ -7,6 +7,7 @@ import { geocodeCommercialAddress } from '../../lib/geocoding';
 import { estimateDrivingDistanceKm } from '../../lib/tripDistance';
 import { rememberClientAddress } from '../../lib/clientMemoryRepository';
 import { readOperatorDispatchMode, saveOperatorDispatchMode } from '../../lib/operatorDispatchPreference';
+import { rememberAddressHistory, type CachedAddress } from '../../lib/addressHistoryCache';
 import { AddressAutocomplete } from '../inputs/AddressAutocomplete';
 
 type TripDraft = {
@@ -205,6 +206,17 @@ export const NewTripModal: React.FC = () => {
     if (!origin.trim() && client.frequentAddresses[0]) setOrigin(client.frequentAddresses[0].address);
   };
 
+  const selectCachedOrigin = (entry: CachedAddress) => {
+    const contact = entry.contacts?.[0];
+    if (!contact) return;
+    setClientName(contact.name);
+    setClientPhone(contact.phone);
+    const phone = normalizePhone(contact.phone);
+    const knownClient = clients.find((client) => phone.length >= 7 && normalizePhone(client.phone) === phone)
+      ?? clients.find((client) => contact.name && client.name.toLocaleLowerCase('es-CL') === contact.name.toLocaleLowerCase('es-CL'));
+    setSelectedClientId(knownClient?.id ?? null);
+  };
+
   const close = () => {
     submissionRequestRef.current = null;
     setError('');
@@ -336,6 +348,10 @@ export const NewTripModal: React.FC = () => {
         fixedFareAmount: fixedFareEnabled ? parsedFixedFare : undefined,
       }));
 
+      rememberAddressHistory(currentCompany.id, [cleanOrigin, cleanDestination], {
+        contact: { name: resolvedName, phone: resolvedPhone },
+      });
+
       try {
         window.localStorage.removeItem(draftKey(currentCompany.id));
       } catch {
@@ -386,8 +402,16 @@ export const NewTripModal: React.FC = () => {
               <p className="mt-2 text-[10px] leading-relaxed text-blue-200/70">La reserva queda fuera de la planilla principal hasta la ventana operativa y conserva las alarmas de aviso.</p>
             </section>}
 
+            {!scheduleEnabled ? <section className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-zinc-800 bg-zinc-950/70 p-2.5">
+              <div><p className="text-xs font-black text-zinc-200">Modo para esta carrera</p><p className="mt-0.5 text-[9px] text-zinc-500">La selección también queda guardada para las siguientes.</p></div>
+              <div className="grid min-w-[220px] grid-cols-2 gap-1.5">
+                <button type="button" onClick={() => { setDispatchMode('manual'); saveOperatorDispatchMode(currentCompany.id, 'manual'); }} className={`h-9 rounded-xl border text-[10px] font-black ${dispatchMode === 'manual' ? 'border-cyan-400/40 bg-cyan-400/10 text-cyan-200' : 'border-zinc-800 bg-zinc-950 text-zinc-500'}`}>Manual</button>
+                <button type="button" onClick={() => { setDispatchMode('automatic'); saveOperatorDispatchMode(currentCompany.id, 'automatic'); }} className={`h-9 rounded-xl border text-[10px] font-black ${dispatchMode === 'automatic' ? 'border-emerald-400/40 bg-emerald-400/10 text-emerald-200' : 'border-zinc-800 bg-zinc-950 text-zinc-500'}`}>Inteligente</button>
+              </div>
+            </section> : null}
+
             <div className="grid gap-x-3 gap-y-2.5 md:grid-cols-2">
-              <AddressAutocomplete ref={originRef} companyId={currentCompany.id} label="Retiro" required value={origin} onChange={setOrigin} placeholder="Escribe calle, número o lugar" inputClassName={inputClass} iconClassName="text-amber-300" />
+              <AddressAutocomplete ref={originRef} companyId={currentCompany.id} label="Retiro" required value={origin} onChange={setOrigin} onSelectHistory={selectCachedOrigin} placeholder="Escribe calle, número o lugar" inputClassName={inputClass} iconClassName="text-amber-300" />
 
               {activeClient?.frequentAddresses.length ? <div className="md:col-span-2 rounded-xl border border-emerald-400/20 bg-emerald-400/[0.05] p-2.5">
                 <div className="flex flex-wrap items-center justify-between gap-2"><div><p className="text-[9px] font-black uppercase tracking-[.14em] text-emerald-300">Direcciones guardadas</p><p className="text-[10px] text-zinc-500">Toca una dirección para completar el retiro.</p></div><span className="text-[9px] font-black text-emerald-200">{activeClient.frequentAddresses.length} guardada{activeClient.frequentAddresses.length === 1 ? '' : 's'}</span></div>

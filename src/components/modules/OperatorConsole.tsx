@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, CalendarClock, Car, Check, ChevronUp, Eye, GripVertical, LayoutPanelTop, Loader2, MapPin, Navigation, Pencil, PhoneCall, Pin, Plus, Power, RotateCcw, Search, Trash2, UserPlus, UserRound, Wand2, XCircle, Zap } from 'lucide-react';
+import { ArrowDown, ArrowLeft, ArrowUp, CalendarClock, Car, Check, ChevronUp, Eye, GripVertical, LayoutPanelTop, Loader2, MapPin, Navigation, Pencil, PhoneCall, Pin, Plus, Power, RotateCcw, Search, Trash2, UserPlus, UserRound, Wand2, XCircle, Zap } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { DRIVER_STATUS_LABELS, TRIP_STATUS_LABELS } from '../../lib/labels';
 import { isQueueConnected, loadDispatchQueue, moveDispatchPriority, setTraditionalDriverAvailability, subscribeDispatchQueue, type DispatchQueueItem } from '../../lib/dispatchPriorityRepository';
@@ -127,6 +127,8 @@ export const OperatorConsole: React.FC = () => {
   const [panelRatios, setPanelRatios] = useState<Record<PanelId, number>>(initialLayout.ratios);
   const [dragPanelId, setDragPanelId] = useState<PanelId | null>(null);
   const [dispatchMode, setDispatchMode] = useState<DispatchMode>(() => readOperatorDispatchMode(currentCompany.id));
+  const [dispatchModeBusy, setDispatchModeBusy] = useState(false);
+  const [dispatchModeMessage, setDispatchModeMessage] = useState('');
   const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
@@ -258,6 +260,33 @@ export const OperatorConsole: React.FC = () => {
 
   const refreshQueueAfterControl = async () => setQueueItems(await loadDispatchQueue(currentCompany.id));
 
+  const moveDriverInQueue = async (driver: Driver, direction: 'up' | 'down') => {
+    if (manualBusyId) return;
+    const visibleBefore = availableDrivers.map((item) => item.id);
+    const startIndex = visibleBefore.indexOf(driver.id);
+    if (startIndex < 0 || (direction === 'up' ? startIndex === 0 : startIndex === visibleBefore.length - 1)) return;
+    setManualBusyId(driver.id);
+    setManualError('');
+    try {
+      let latest = queueItems;
+      // The database queue also contains temporarily busy/paused mobiles. Move
+      // through those hidden entries until the visible waiting order changes.
+      for (let attempt = 0; attempt < Math.max(1, queueItems.length); attempt += 1) {
+        await moveDispatchPriority(driver.id, direction);
+        latest = await loadDispatchQueue(currentCompany.id);
+        const visibleAfter = latest
+          .filter((item) => item.status === 'available' && isQueueConnected(item) && !activeTripDriverIds.has(item.driverId))
+          .sort((a, b) => a.queueOrder - b.queueOrder || a.unitNumber.localeCompare(b.unitNumber, 'es', { numeric: true }));
+        if (visibleAfter.findIndex((item) => item.driverId === driver.id) !== startIndex) break;
+      }
+      setQueueItems(latest);
+    } catch (error) {
+      setManualError(error instanceof Error ? error.message : 'No fue posible cambiar el orden de la fila.');
+    } finally {
+      setManualBusyId(null);
+    }
+  };
+
   const addManualDriverToQueue = async (item: DispatchQueueItem) => {
     if (manualBusyId) return;
     setManualBusyId(item.driverId);
@@ -345,6 +374,26 @@ export const OperatorConsole: React.FC = () => {
   const selectedTrip = activeTrips.find((trip) => trip.id === selectedTripId) ?? null;
   const pendingCount = activeTrips.filter((trip) => trip.status === 'pending').length;
   const activeCount = activeTrips.filter((trip) => trip.status !== 'pending').length;
+
+  const chooseDispatchMode = async (mode: DispatchMode) => {
+    if (dispatchModeBusy) return;
+    setDispatchMode(mode);
+    saveOperatorDispatchMode(currentCompany.id, mode);
+    setDispatchModeMessage(mode === 'manual' ? 'Despacho manual activo.' : 'Activando despacho inteligente…');
+    if (mode === 'manual') return;
+    const candidates = activeTrips.filter((trip) => trip.status === 'pending' && !trip.driverId);
+    if (!candidates.length) {
+      setDispatchModeMessage('Despacho inteligente activo para las próximas carreras.');
+      return;
+    }
+    setDispatchModeBusy(true);
+    const results = await Promise.allSettled(candidates.map((trip) => Promise.resolve(autoAssignClosestDriver(trip.id))));
+    const failed = results.filter((result) => result.status === 'rejected').length;
+    setDispatchModeMessage(failed
+      ? `Inteligente activo · ${candidates.length - failed} enviadas · ${failed} pendientes de reintento.`
+      : `Inteligente activo · ${candidates.length} carrera${candidates.length === 1 ? '' : 's'} enviada${candidates.length === 1 ? '' : 's'} automáticamente.`);
+    setDispatchModeBusy(false);
+  };
 
   const runTripAction = async (tripId: string, action: () => Promise<unknown> | unknown) => {
     if (busyTripIdsRef.current.has(tripId)) return;
@@ -504,9 +553,12 @@ export const OperatorConsole: React.FC = () => {
               </div>}
             </div>
           </div>
-          <div role="radiogroup" aria-label="Modo de despacho" className="flex h-10 shrink-0 items-center rounded-xl border border-zinc-700 bg-zinc-950 p-1">
-            <button type="button" role="radio" aria-checked={dispatchMode === 'automatic'} onClick={() => { setDispatchMode('automatic'); saveOperatorDispatchMode(currentCompany.id, 'automatic'); }} className={`flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[9px] font-black transition ${dispatchMode === 'automatic' ? 'bg-emerald-500 text-emerald-950' : 'text-zinc-500 hover:text-white'}`} title="Asignación automática según ubicación, disponibilidad y prioridad"><Wand2 className="h-3.5 w-3.5" />Inteligente</button>
-            <button type="button" role="radio" aria-checked={dispatchMode === 'manual'} onClick={() => { setDispatchMode('manual'); saveOperatorDispatchMode(currentCompany.id, 'manual'); }} className={`flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[9px] font-black transition ${dispatchMode === 'manual' ? 'bg-cyan-500 text-cyan-950' : 'text-zinc-500 hover:text-white'}`} title="La operadora elige el móvil para cada carrera"><UserRound className="h-3.5 w-3.5" />Manual</button>
+          <div className="shrink-0">
+            <div role="radiogroup" aria-label="Modo de despacho" className="flex h-10 items-center rounded-xl border border-zinc-700 bg-zinc-950 p-1">
+              <button type="button" role="radio" disabled={dispatchModeBusy} aria-checked={dispatchMode === 'automatic'} onClick={() => void chooseDispatchMode('automatic')} className={`flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[9px] font-black transition disabled:opacity-50 ${dispatchMode === 'automatic' ? 'bg-emerald-500 text-emerald-950' : 'text-zinc-500 hover:text-white'}`} title="Activa y envía las carreras pendientes automáticamente según ubicación, disponibilidad y prioridad">{dispatchModeBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wand2 className="h-3.5 w-3.5" />}Inteligente</button>
+              <button type="button" role="radio" disabled={dispatchModeBusy} aria-checked={dispatchMode === 'manual'} onClick={() => void chooseDispatchMode('manual')} className={`flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[9px] font-black transition disabled:opacity-50 ${dispatchMode === 'manual' ? 'bg-cyan-500 text-cyan-950' : 'text-zinc-500 hover:text-white'}`} title="La operadora elige el móvil para cada carrera"><UserRound className="h-3.5 w-3.5" />Manual</button>
+            </div>
+            {dispatchModeMessage ? <p aria-live="polite" className="mt-1 max-w-56 text-[8px] font-bold text-emerald-300">{dispatchModeMessage}</p> : null}
           </div>
           <div className="relative w-full lg:min-w-[220px] lg:flex-[0_1_340px]">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
@@ -537,7 +589,7 @@ export const OperatorConsole: React.FC = () => {
           style={{ '--cg-panel-column': panelColumn('mobiles') } as React.CSSProperties}
           onDragOver={(event) => { if (dragPanelId) event.preventDefault(); }}
           onDrop={(event) => { event.preventDefault(); if (dragPanelId) movePanel(dragPanelId, 'mobiles'); setDragPanelId(null); }}
-          className={`cg-layout-panel overflow-visible rounded-2xl border border-zinc-800 bg-[#0d0d0f] shadow-xl shadow-black/20 lg:sticky lg:top-2 ${manualMenuOpen ? 'cg-radio-panel-viewport-anchor' : ''}`}
+          className={`cg-layout-panel overflow-visible rounded-2xl border border-zinc-800 bg-[#0d0d0f] shadow-xl shadow-black/20 lg:sticky lg:top-2 ${manualMenuOpen ? 'cg-radio-panel-viewport-anchor z-[2200]' : ''}`}
         >
           <div
             draggable
@@ -554,7 +606,7 @@ export const OperatorConsole: React.FC = () => {
               <div className="flex shrink-0 items-center gap-1.5">
                 <button
                   type="button"
-                  onClick={() => { setManualMenuOpen((open) => !open); setManualSearch(''); setManualError(''); }}
+                  onClick={() => { setManualMenuOpen((open) => !open); setLayoutMenuOpen(false); setReservationsOpen(false); setManualSearch(''); setManualError(''); }}
                   className={`grid h-8 w-8 place-items-center rounded-lg border transition ${manualMenuOpen ? 'border-amber-400/35 bg-amber-400/10 text-amber-200' : 'border-zinc-800 bg-zinc-950 text-zinc-400 hover:border-amber-400/25 hover:text-amber-200'}`}
                   title="Gestionar móviles por radio"
                   aria-label="Gestionar móviles por radio"
@@ -567,7 +619,7 @@ export const OperatorConsole: React.FC = () => {
             </div>
 
             {manualMenuOpen && (
-              <div className="fixed inset-x-3 top-24 z-[80] rounded-xl border border-amber-400/25 bg-[#11151a] p-3 shadow-2xl shadow-black/60 sm:absolute sm:inset-x-auto sm:left-0 sm:top-[58px] sm:w-[280px]">
+              <div className="fixed inset-x-3 top-24 z-[2300] rounded-xl border border-amber-400/25 bg-[#11151a] p-3 shadow-2xl shadow-black/60 sm:absolute sm:inset-x-auto sm:left-0 sm:top-[58px] sm:w-[280px]">
                 <div className="flex items-start justify-between gap-2"><div><p className="text-[10px] font-black text-white">Incorporar móvil</p><p className="mt-0.5 text-[8px] text-zinc-500">Escribe el número y presiona Agregar.</p></div><button type="button" onClick={() => setManualMenuOpen(false)} className="grid h-7 w-7 place-items-center rounded-lg text-zinc-500" aria-label="Cerrar incorporación"><ChevronUp className="h-3.5 w-3.5" /></button></div>
                 <form onSubmit={submitQuickManualDriver} className="mt-3 flex items-center gap-2">
                   <input value={manualSearch} onChange={(event) => { setManualSearch(event.target.value.replace(/[^0-9A-Za-z-]/g, '')); setManualError(''); }} inputMode="numeric" autoComplete="off" autoFocus placeholder="N° móvil" className="h-10 min-w-0 flex-1 rounded-xl border border-zinc-700 bg-zinc-950 px-3 text-center text-sm font-black text-white outline-none focus:border-amber-400/60" aria-label="Número de móvil a incorporar" />
@@ -586,9 +638,10 @@ export const OperatorConsole: React.FC = () => {
               const dragging = dragDriverId === driver.id;
               const vehicle = driver.vehicleId ? vehicleById.get(driver.vehicleId) : undefined;
               return (
-                <button
+                <div
                   key={driver.id}
-                  type="button"
+                  role="button"
+                  tabIndex={0}
                   draggable
                   onDragStart={(event) => {
                     event.dataTransfer.effectAllowed = 'move';
@@ -598,6 +651,7 @@ export const OperatorConsole: React.FC = () => {
                   }}
                   onDragEnd={() => { setDragDriverId(null); setDragOverTripId(null); }}
                   onClick={() => setFocusDriverId(focused ? null : driver.id)}
+                  onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setFocusDriverId(focused ? null : driver.id); } }}
                   className={`group relative flex w-full cursor-grab items-center gap-2 px-3 py-2 text-left transition active:cursor-grabbing ${dragging ? 'opacity-45' : ''} ${focused ? 'bg-emerald-500/[0.10]' : 'hover:bg-zinc-900/70'}`}
                   title={`${driver.name} · ${driver.currentLocation.address || DRIVER_STATUS_LABELS[driver.status]}. Puedes arrastrar este móvil sobre una carrera pendiente.`}
                 >
@@ -606,6 +660,8 @@ export const OperatorConsole: React.FC = () => {
                     <span className="block truncate text-lg font-black leading-none text-white">{driver.unitNumber}</span>
                   </span>
                   <span className="flex shrink-0 items-center gap-1" onClick={(event) => event.stopPropagation()}>
+                    <button type="button" disabled={Boolean(manualBusyId) || index === 0} onClick={() => void moveDriverInQueue(driver, 'up')} className="grid h-8 w-8 place-items-center rounded-lg border border-zinc-700 bg-zinc-900 text-zinc-300 transition hover:border-blue-400/40 hover:text-blue-200 disabled:opacity-25" title="Subir un lugar en la fila" aria-label={`Subir el móvil ${driver.unitNumber} en la fila`}><ArrowUp className="h-3.5 w-3.5" /></button>
+                    <button type="button" disabled={Boolean(manualBusyId) || index === availableDrivers.length - 1} onClick={() => void moveDriverInQueue(driver, 'down')} className="grid h-8 w-8 place-items-center rounded-lg border border-zinc-700 bg-zinc-900 text-zinc-300 transition hover:border-blue-400/40 hover:text-blue-200 disabled:opacity-25" title="Bajar un lugar en la fila" aria-label={`Bajar el móvil ${driver.unitNumber} en la fila`}><ArrowDown className="h-3.5 w-3.5" /></button>
                     <button
                       type="button"
                       disabled={Boolean(manualBusyId)}
@@ -634,7 +690,7 @@ export const OperatorConsole: React.FC = () => {
                     <span className="mt-1 block truncate text-[9px] text-zinc-500">{vehicle?.licensePlate ? `Patente ${vehicle.licensePlate} · ` : ''}{driver.currentLocation.address || 'Ubicación sin dirección'}</span>
                     <span className="mt-2 block border-t border-zinc-800 pt-2 text-[9px] font-black text-emerald-300">● {DRIVER_STATUS_LABELS[driver.status]}</span>
                   </span>
-                </button>
+                </div>
               );
             })}
           </div>

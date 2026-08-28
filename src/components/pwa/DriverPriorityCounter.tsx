@@ -14,14 +14,17 @@ export const DriverPriorityCounter:React.FC=()=>{
  useEffect(()=>{void load();if(currentRole!=='driver'||currentCompany.id==='network')return;const unsubscribe=subscribeDispatchQueue(currentCompany.id,()=>void load());const timer=window.setInterval(()=>void load(),30000);return()=>{unsubscribe();window.clearInterval(timer);};},[currentRole,currentCompany.id,currentUser.id]);
  useEffect(()=>{
   if(currentRole!=='driver')return;
-  const mount=document.getElementById('driver-queue-summary-slot');
-  setHost(mount);
-  return()=>setHost(null);
+  const locate=()=>setHost(document.getElementById('driver-queue-summary-slot'));
+  locate();
+  const observer=new MutationObserver(locate);
+  observer.observe(document.body,{childList:true,subtree:true});
+  return()=>{observer.disconnect();setHost(null);};
  },[currentRole]);
  const own=queue.find(item=>item.userId===currentUser.id);
  const connected=useMemo(()=>queue.filter(isQueueConnected).sort((a,b)=>a.queueOrder-b.queueOrder||a.unitNumber.localeCompare(b.unitNumber,'es',{numeric:true})),[queue]);
+ const waiting=useMemo(()=>connected.filter(item=>item.status==='available'),[connected]);
  if(currentRole!=='driver'||currentCompany.id==='network')return null;
- const position=own?connected.findIndex(item=>item.driverId===own.driverId):-1;
+ const position=own?waiting.findIndex(item=>item.driverId===own.driverId):-1;
  const inQueue=position>=0;
  const positionLabel=error?'…':inQueue?String(position+1):'—';
  const driversLabel=error?'…':String(connected.length);
