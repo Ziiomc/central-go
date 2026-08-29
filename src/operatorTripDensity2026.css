@@ -163,3 +163,30 @@
 .cg-operational div.relative:has(> button > .lucide-layout-panel-top) {
   display: none !important;
 }
+
+/* Recupera la geometría premium de los paneles principales. Las capas visuales
+   anteriores podían aplanar las esquinas aunque el JSX conservara rounded-2xl. */
+.cg-operational .cg-map-panel,
+.cg-operational .cg-operator-grid > div.cg-layout-panel {
+  border-radius: 20px !important;
+  overflow: hidden !important;
+}
+
+.cg-operational .cg-map-panel > div:first-child,
+.cg-operational .cg-operator-grid > div.cg-layout-panel > div:first-child {
+  border-top-left-radius: 20px !important;
+  border-top-right-radius: 20px !important;
+}
+
+.cg-operational .cg-map-panel .leaflet-container {
+  border-bottom-left-radius: 18px !important;
+  border-bottom-right-radius: 18px !important;
+  overflow: hidden !important;
+}
+
+/* La tarjeta visible dentro de Carreras en curso conserva también una curva
+   suave sin aumentar su altura operativa. */
+.cg-operational [data-dispatch-trip-id] {
+  border-radius: 14px !important;
+  overflow: hidden !important;
+}
