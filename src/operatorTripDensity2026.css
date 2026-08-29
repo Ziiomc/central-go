@@ -1,0 +1,159 @@
+/* Central GO · Carreras en curso · densidad operativa 2026
+   Objetivo: mostrar más carreras simultáneas sin ocultar información ni acciones.
+   En escritorio, las acciones de carreras ya asignadas/activas se alojan junto
+   a la dirección. Las carreras pendientes conservan su fila de asignación. */
+
+[data-dispatch-trip-id] {
+  position: relative;
+}
+
+/* Menos aire muerto en todas las tarjetas, conservando lectura rápida. */
+[data-dispatch-trip-id] > .min-w-0 > div:first-child {
+  min-height: 18px;
+}
+
+[data-dispatch-trip-id] > .min-w-0 > p[class*='mt-1.5'] {
+  margin-top: 4px !important;
+  line-height: 1.15 !important;
+}
+
+[data-dispatch-trip-id] > .min-w-0 > p[class*='mt-1'] {
+  margin-top: 2px !important;
+  line-height: 1.12 !important;
+}
+
+[data-dispatch-trip-id] > .min-w-0 > p[class*='mt-0.5'] {
+  margin-top: 1px !important;
+  line-height: 1.1 !important;
+}
+
+[data-dispatch-trip-id] > .min-w-0 > div[class*='mt-1'] {
+  margin-top: 2px !important;
+}
+
+/* El texto de ruta nunca empuja las acciones: se recorta visualmente y el
+   title existente mantiene disponible la dirección completa al pasar el mouse. */
+[data-dispatch-trip-id] > .min-w-0 > p strong,
+[data-dispatch-trip-id] > .min-w-0 > p span {
+  min-width: 0;
+}
+
+/* Desktop / puesto de operadora: integra las acciones dentro de la tarjeta. */
+@media (min-width: 900px) {
+  [data-dispatch-trip-id] {
+    padding: 6px 8px !important;
+  }
+
+  /* Una carrera activa ya no necesita una fila completa debajo sólo para botones. */
+  [data-dispatch-trip-id]:not(:has(input[placeholder='N° móvil'])) > .min-w-0 {
+    padding-right: min(48%, 206px);
+  }
+
+  [data-dispatch-trip-id]:not(:has(input[placeholder='N° móvil'])) > div:last-child {
+    position: absolute !important;
+    z-index: 3;
+    top: 30px;
+    right: 7px;
+    display: flex !important;
+    width: auto !important;
+    max-width: min(48%, 206px) !important;
+    margin: 0 !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    flex-wrap: wrap !important;
+    gap: 3px !important;
+  }
+
+  /* Botones de transición: Llegó / En camino / Iniciar viaje / Finalizar / Liberar. */
+  [data-dispatch-trip-id]:not(:has(input[placeholder='N° móvil'])) > div:last-child > button:not([title]) {
+    box-sizing: border-box !important;
+    height: 28px !important;
+    min-height: 28px !important;
+    max-height: 28px !important;
+    padding: 0 7px !important;
+    border-radius: 7px !important;
+    font-size: 10px !important;
+    line-height: 1 !important;
+    white-space: nowrap !important;
+  }
+
+  /* Acciones por icono: teléfono, editar, detalle y cancelar. */
+  [data-dispatch-trip-id]:not(:has(input[placeholder='N° móvil'])) > div:last-child > a[href^='tel:'],
+  [data-dispatch-trip-id]:not(:has(input[placeholder='N° móvil'])) > div:last-child > button[title='Editar carrera'],
+  [data-dispatch-trip-id]:not(:has(input[placeholder='N° móvil'])) > div:last-child > button[title='Ver detalle'],
+  [data-dispatch-trip-id]:not(:has(input[placeholder='N° móvil'])) > div:last-child > button[title='Cancelar carrera'] {
+    box-sizing: border-box !important;
+    display: inline-grid !important;
+    place-items: center !important;
+    flex: 0 0 28px !important;
+    width: 28px !important;
+    min-width: 28px !important;
+    max-width: 28px !important;
+    height: 28px !important;
+    min-height: 28px !important;
+    max-height: 28px !important;
+    padding: 0 !important;
+    border-radius: 7px !important;
+  }
+
+  [data-dispatch-trip-id]:not(:has(input[placeholder='N° móvil'])) > div:last-child svg {
+    width: 13px !important;
+    height: 13px !important;
+  }
+
+  /* Pendientes: seguimos necesitando el número de móvil y asignación, pero la
+     fila ocupa menos altura y deja el contenido principal más compacto. */
+  [data-dispatch-trip-id]:has(input[placeholder='N° móvil']) > div:last-child {
+    margin-top: 5px !important;
+    gap: 4px !important;
+  }
+
+  [data-dispatch-trip-id]:has(input[placeholder='N° móvil']) input[placeholder='N° móvil'] {
+    height: 32px !important;
+    min-height: 32px !important;
+  }
+
+  [data-dispatch-trip-id]:has(input[placeholder='N° móvil']) > div:last-child > button,
+  [data-dispatch-trip-id]:has(input[placeholder='N° móvil']) > div:last-child > a[href^='tel:'] {
+    height: 32px !important;
+    min-height: 32px !important;
+  }
+}
+
+/* Pantallas intermedias: mantiene densidad sin crear una columna lateral demasiado estrecha. */
+@media (min-width: 700px) and (max-width: 899px) {
+  [data-dispatch-trip-id] {
+    padding-block: 7px !important;
+  }
+
+  [data-dispatch-trip-id] > div:last-child {
+    margin-top: 5px !important;
+    gap: 5px !important;
+  }
+}
+
+/* Teléfono: prioriza tacto. No se fuerza el layout lateral ni botones diminutos. */
+@media (max-width: 699px) {
+  [data-dispatch-trip-id] {
+    padding-block: 8px !important;
+  }
+
+  [data-dispatch-trip-id] > div:last-child {
+    margin-top: 6px !important;
+  }
+}
+
+/* En accesibilidad XL evitamos que las acciones invadan el texto; se vuelve a
+   flujo normal si el usuario pidió tipografía muy grande. */
+@media (min-width: 900px) {
+  html[data-cg-font-size='xlarge'] [data-dispatch-trip-id]:not(:has(input[placeholder='N° móvil'])) > .min-w-0 {
+    padding-right: 0;
+  }
+
+  html[data-cg-font-size='xlarge'] [data-dispatch-trip-id]:not(:has(input[placeholder='N° móvil'])) > div:last-child {
+    position: static !important;
+    max-width: 100% !important;
+    margin-top: 5px !important;
+    justify-content: flex-start !important;
+  }
+}
