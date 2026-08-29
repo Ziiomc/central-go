@@ -157,3 +157,9 @@
     justify-content: flex-start !important;
   }
 }
+
+/* La operadora ya no necesita el selector de distribución manual en la cabecera.
+   Se oculta el contenedor completo para que tampoco deje un hueco en el toolbar. */
+.cg-operational div.relative:has(> button > .lucide-layout-panel-top) {
+  display: none !important;
+}
