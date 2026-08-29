@@ -16,6 +16,7 @@ import './operatorLightReadability.css';
 import './designSystem.css';
 import './fireModePremium.css';
 import './collectionListViews.css';
+import './matureProductTheme.css';
 import {registerServiceWorker} from './lib/pwa';
 import {registerRegionalPartnerReferralBootstrap} from './lib/regionalPartnerReferralBootstrap';
 import {registerGoogleOnboardingRoleBootstrap} from './lib/googleOnboardingRoleBootstrap';
