@@ -589,13 +589,13 @@ export const OperatorConsole: React.FC = () => {
           style={{ '--cg-panel-column': panelColumn('mobiles') } as React.CSSProperties}
           onDragOver={(event) => { if (dragPanelId) event.preventDefault(); }}
           onDrop={(event) => { event.preventDefault(); if (dragPanelId) movePanel(dragPanelId, 'mobiles'); setDragPanelId(null); }}
-          className={`cg-layout-panel overflow-visible rounded-2xl border border-zinc-800 bg-[#0d0d0f] shadow-xl shadow-black/20 lg:sticky lg:top-2 ${manualMenuOpen ? 'cg-radio-panel-viewport-anchor z-[2200]' : ''}`}
+          className={`cg-layout-panel overflow-visible rounded-2xl border border-zinc-800 bg-[var(--cg-surface-solid)] shadow-xl shadow-black/20 lg:sticky lg:top-2 ${manualMenuOpen ? 'z-[2200]' : ''}`}
         >
           <div
             draggable
             onDragStart={(event) => { event.dataTransfer.effectAllowed = 'move'; setDragPanelId('mobiles'); }}
             onDragEnd={() => setDragPanelId(null)}
-            className={`relative rounded-t-2xl border-b border-zinc-800 bg-[#0d0d0f] px-3 py-3 ${manualMenuOpen ? 'cg-radio-panel-viewport-anchor z-[2250]' : ''}`}
+            className={`relative rounded-t-2xl border-b border-zinc-800 bg-[var(--cg-surface-solid)] px-3 py-3 ${manualMenuOpen ? 'z-[2250]' : ''}`}
             title="Arrastra para mover el cuadro de móviles"
           >
             <div className="flex items-center justify-between gap-2">
