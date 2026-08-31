@@ -1,0 +1,301 @@
+/* Central GO · Premium visual polish 2026
+   Presentation-only layer. No product logic, permissions, flows or API behavior.
+   Loaded last so old low-saturation theme rules can coexist without muting actions. */
+
+:root{
+  --cg-polish-blue-top:#42bdff;
+  --cg-polish-blue:#168fe8;
+  --cg-polish-blue-deep:#0759b6;
+  --cg-polish-line:rgba(111,201,255,.34);
+  --cg-polish-highlight:rgba(255,255,255,.24);
+  --cg-polish-shadow:0 12px 28px rgba(2,83,156,.28),inset 0 1px 0 rgba(255,255,255,.24),inset 0 -1px 0 rgba(0,21,48,.28);
+  --cg-polish-neutral-top:#1a2b3d;
+  --cg-polish-neutral-bottom:#0e1824;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Entry / auth experience · restore the professional blue metallic identity. */
+/* -------------------------------------------------------------------------- */
+.cg-auth-shell{
+  background:
+    radial-gradient(70% 52% at 8% -8%,rgba(52,178,255,.34),transparent 68%),
+    radial-gradient(58% 44% at 96% 88%,rgba(16,104,207,.24),transparent 70%),
+    linear-gradient(116deg,rgba(255,255,255,.035),transparent 28% 72%,rgba(103,202,255,.045)),
+    linear-gradient(145deg,#061426 0%,#0a2c50 48%,#061522 100%)!important;
+}
+
+[data-theme='dark'] .cg-auth-shell{
+  --cg-primary:#3bb7ff;
+  --cg-primary-strong:#0d74d8;
+  --cg-primary-soft:rgba(42,165,242,.16);
+  --cg-border:rgba(112,194,247,.23);
+  --cg-text:#f4faff;
+  --cg-muted:#9db6ca;
+}
+
+.cg-auth-grid{
+  opacity:.56!important;
+  background-image:
+    linear-gradient(rgba(102,196,255,.035) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(102,196,255,.035) 1px,transparent 1px),
+    radial-gradient(circle at 16% 22%,rgba(126,216,255,.50) 0 1px,transparent 1.8px),
+    radial-gradient(circle at 77% 64%,rgba(50,158,242,.32) 0 1.1px,transparent 1.9px)!important;
+  background-size:72px 72px,72px 72px,260px 260px,340px 340px!important;
+  mask-image:linear-gradient(to bottom,#000,rgba(0,0,0,.72) 70%,transparent 100%);
+}
+
+.cg-auth-card{
+  border-color:rgba(120,199,250,.23)!important;
+  background:
+    linear-gradient(145deg,rgba(255,255,255,.075),transparent 30%),
+    linear-gradient(180deg,rgba(13,36,58,.94),rgba(8,23,38,.96))!important;
+  box-shadow:0 1px 0 rgba(255,255,255,.10) inset,0 30px 78px rgba(0,8,24,.45),0 0 0 1px rgba(60,169,238,.035)!important;
+}
+
+.cg-auth-story h1{
+  text-shadow:0 12px 44px rgba(0,60,126,.28);
+}
+
+.cg-story-points>div{
+  border-color:rgba(104,190,244,.18)!important;
+  background:linear-gradient(145deg,rgba(25,62,91,.68),rgba(8,27,44,.70))!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.055),0 12px 30px rgba(0,12,28,.18)!important;
+}
+.cg-story-points>div:hover{
+  border-color:rgba(85,188,255,.42)!important;
+  background:linear-gradient(145deg,rgba(29,77,115,.78),rgba(9,31,51,.78))!important;
+}
+.cg-story-points svg{color:#4cc1ff!important;filter:none!important;}
+
+.cg-kicker,.cg-card-kicker,.cg-eyebrow{
+  border-color:rgba(95,187,244,.30)!important;
+  background:linear-gradient(180deg,rgba(35,126,188,.18),rgba(18,67,109,.13))!important;
+  color:#6bcaff!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.08)!important;
+}
+
+.cg-google-button,.cg-theme-toggle,.cg-document-link{
+  border-color:rgba(110,188,238,.24)!important;
+  background:linear-gradient(180deg,rgba(28,52,72,.96),rgba(13,31,47,.96))!important;
+  color:#edf8ff!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.09),0 8px 20px rgba(0,12,30,.23)!important;
+}
+
+.cg-primary-button{
+  border-color:rgba(118,210,255,.58)!important;
+  background:linear-gradient(180deg,var(--cg-polish-blue-top) 0%,var(--cg-polish-blue) 45%,var(--cg-polish-blue-deep) 100%)!important;
+  color:#fff!important;
+  text-shadow:0 1px 0 rgba(0,34,76,.32);
+  box-shadow:var(--cg-polish-shadow)!important;
+}
+.cg-primary-button:hover{
+  filter:brightness(1.08) saturate(1.12)!important;
+  box-shadow:0 15px 34px rgba(2,105,195,.36),inset 0 1px 0 rgba(255,255,255,.30)!important;
+}
+
+.cg-role-card{
+  border-color:rgba(99,181,232,.20)!important;
+  background:linear-gradient(160deg,rgba(18,43,64,.86),rgba(8,25,40,.88))!important;
+  color:#9fb8cb!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.045),0 7px 18px rgba(0,10,24,.14)!important;
+}
+.cg-role-card:hover{
+  border-color:rgba(82,187,255,.42)!important;
+  background:linear-gradient(160deg,rgba(23,63,93,.94),rgba(9,31,50,.94))!important;
+}
+.cg-role-card[data-active='true']{
+  border-color:rgba(103,205,255,.68)!important;
+  background:linear-gradient(145deg,rgba(27,139,214,.42),rgba(8,72,135,.44))!important;
+  color:#8ed8ff!important;
+  box-shadow:0 10px 25px rgba(3,95,174,.20),inset 0 1px 0 rgba(255,255,255,.13)!important;
+}
+.cg-role-icon{
+  background:linear-gradient(145deg,rgba(47,129,187,.26),rgba(12,46,76,.50))!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.07);
+}
+
+/* Keep alternate themes intentional. */
+[data-theme='light'] .cg-auth-shell{
+  background:
+    radial-gradient(70% 48% at 5% -8%,rgba(69,176,235,.20),transparent 70%),
+    radial-gradient(56% 40% at 98% 12%,rgba(18,105,190,.10),transparent 72%),
+    linear-gradient(145deg,#f5faff,#e8f3fb 56%,#edf6fc)!important;
+}
+[data-theme='light'] .cg-auth-card{
+  border-color:rgba(24,112,174,.18)!important;
+  background:linear-gradient(145deg,rgba(255,255,255,.98),rgba(245,250,253,.96))!important;
+  box-shadow:0 1px 0 #fff inset,0 28px 70px rgba(31,89,130,.15)!important;
+}
+[data-theme='light'] :is(.cg-google-button,.cg-theme-toggle,.cg-document-link){
+  border-color:rgba(27,104,158,.18)!important;
+  background:linear-gradient(180deg,#fff,#edf5fa)!important;
+  color:#18364e!important;
+}
+[data-theme='light'] .cg-role-card{
+  border-color:rgba(32,108,161,.16)!important;
+  background:linear-gradient(160deg,#fff,#edf5fa)!important;
+  color:#597186!important;
+}
+[data-theme='light'] .cg-role-card[data-active='true']{
+  border-color:rgba(12,130,205,.48)!important;
+  background:linear-gradient(145deg,rgba(39,163,228,.16),rgba(14,111,187,.12))!important;
+  color:#0874b8!important;
+}
+[data-theme='executive'] .cg-auth-shell{
+  background:linear-gradient(145deg,#22272d,#171b20 58%,#111419)!important;
+}
+[data-theme='fire'] .cg-auth-shell{
+  background:radial-gradient(72% 52% at 88% -10%,rgba(255,73,0,.18),transparent 70%),#030303!important;
+}
+[data-theme='executive'] .cg-auth-card,[data-theme='fire'] .cg-auth-card{background:var(--cg-surface)!important;border-color:var(--cg-border)!important;}
+[data-theme='executive'] :is(.cg-story-points>div,.cg-role-card),[data-theme='fire'] :is(.cg-story-points>div,.cg-role-card){background:var(--cg-surface)!important;border-color:var(--cg-border)!important;}
+
+/* -------------------------------------------------------------------------- */
+/* Operational canvas · richer dark blue, without changing layout or density. */
+/* -------------------------------------------------------------------------- */
+[data-theme='dark'] .cg-operational{
+  background:
+    radial-gradient(74% 46% at 4% -9%,rgba(30,142,222,.21),transparent 70%),
+    radial-gradient(58% 42% at 96% 5%,rgba(21,105,194,.10),transparent 72%),
+    linear-gradient(180deg,#06111d 0%,#081522 56%,#07111b 100%)!important;
+}
+
+/* Every real button gets a visible tactile edge, but semantic colors stay semantic. */
+.cg-operational button{
+  -webkit-font-smoothing:antialiased;
+}
+.cg-operational button:not(:disabled):hover{
+  filter:brightness(1.07) saturate(1.08);
+}
+.cg-operational button:disabled{
+  opacity:.52!important;
+  filter:saturate(.64) brightness(.84);
+}
+
+/* Primary / blue actions. Works with every theme through the theme variables. */
+.cg-operational button:is([class*='bg-blue-'],[class*='bg-sky-'],[class*='bg-cyan-']),
+.cg-operational a:is([class*='bg-blue-'],[class*='bg-sky-'],[class*='bg-cyan-']){
+  border-color:color-mix(in srgb,var(--cg-primary) 70%,white 10%)!important;
+  background:linear-gradient(180deg,color-mix(in srgb,var(--cg-primary) 76%,white 24%),var(--cg-primary-strong))!important;
+  color:#fff!important;
+  text-shadow:0 1px 0 rgba(0,25,58,.26);
+  box-shadow:0 10px 24px color-mix(in srgb,var(--cg-primary) 25%,transparent),inset 0 1px 0 rgba(255,255,255,.25),inset 0 -1px 0 rgba(0,20,48,.24)!important;
+}
+
+/* Success actions. */
+.cg-operational button:is([class*='bg-emerald-'],[class*='bg-green-']){
+  border-color:rgba(79,231,184,.58)!important;
+  background:linear-gradient(180deg,#42d9ad,#15916f 100%)!important;
+  color:#f5fffb!important;
+  text-shadow:0 1px 0 rgba(0,65,47,.25);
+  box-shadow:0 10px 24px rgba(14,145,105,.23),inset 0 1px 0 rgba(255,255,255,.25)!important;
+}
+
+/* Attention / pause actions. */
+.cg-operational button:is([class*='bg-amber-'],[class*='bg-yellow-']){
+  border-color:rgba(255,213,104,.62)!important;
+  background:linear-gradient(180deg,#f8ca55,#c88416 100%)!important;
+  color:#18140b!important;
+  text-shadow:0 1px 0 rgba(255,255,255,.20);
+  box-shadow:0 10px 22px rgba(183,111,9,.23),inset 0 1px 0 rgba(255,255,255,.32)!important;
+}
+
+/* Destructive / SOS / finish actions. */
+.cg-operational button:is([class*='bg-red-'],[class*='bg-rose-']){
+  border-color:rgba(255,116,132,.56)!important;
+  background:linear-gradient(180deg,#ff667b,#c92c49 100%)!important;
+  color:#fff!important;
+  text-shadow:0 1px 0 rgba(90,0,18,.28);
+  box-shadow:0 10px 23px rgba(192,34,65,.24),inset 0 1px 0 rgba(255,255,255,.24)!important;
+}
+
+/* Violet actions remain distinct when used by analytics/profile features. */
+.cg-operational button:is([class*='bg-violet-'],[class*='bg-purple-'],[class*='bg-indigo-']){
+  border-color:rgba(178,145,255,.54)!important;
+  background:linear-gradient(180deg,#9675ec,#6548b8 100%)!important;
+  color:#fff!important;
+  box-shadow:0 10px 23px rgba(92,61,171,.23),inset 0 1px 0 rgba(255,255,255,.22)!important;
+}
+
+/* Neutral buttons are no longer flat black/grey: they become dark blue steel. */
+.cg-operational button:is([class*='bg-zinc-950'],[class*='bg-zinc-900'],[class*='bg-zinc-800'],[class*='bg-black']){
+  border-color:color-mix(in srgb,var(--cg-primary) 24%,var(--cg-border))!important;
+  background:linear-gradient(180deg,color-mix(in srgb,var(--cg-surface-raised,#1b1f25) 84%,var(--cg-primary) 16%),color-mix(in srgb,var(--cg-surface-solid) 94%,#06101a 6%))!important;
+  color:color-mix(in srgb,var(--cg-text) 94%,#bfe8ff 6%)!important;
+  box-shadow:0 7px 17px rgba(0,9,22,.24),inset 0 1px 0 rgba(255,255,255,.075),inset 0 -1px 0 rgba(0,0,0,.24)!important;
+}
+.cg-operational button[class*='border-zinc-']:not([class*='bg-']):not(.cg-subtle-button){
+  border-color:color-mix(in srgb,var(--cg-primary) 24%,var(--cg-border))!important;
+  background:linear-gradient(180deg,color-mix(in srgb,var(--cg-surface-solid) 92%,var(--cg-primary) 8%),var(--cg-surface-solid))!important;
+  color:var(--cg-text)!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 6px 16px rgba(0,8,20,.16)!important;
+}
+
+/* Fire keeps its own identity while benefiting from the stronger contrast. */
+[data-theme='fire'] .cg-operational button:is([class*='bg-blue-'],[class*='bg-sky-'],[class*='bg-cyan-'],[class*='bg-emerald-'],[class*='bg-green-'],[class*='bg-amber-'],[class*='bg-yellow-']){
+  border-color:rgba(255,125,38,.72)!important;
+  background:linear-gradient(180deg,#ff7b16,#d83900 100%)!important;
+  color:#fff!important;
+  box-shadow:0 0 22px rgba(255,72,0,.20),0 10px 24px rgba(0,0,0,.34),inset 0 1px 0 rgba(255,224,190,.26)!important;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Driver app · stronger hierarchy and saturated operational controls.        */
+/* -------------------------------------------------------------------------- */
+[data-theme='dark'] .cg-driver-app{
+  background:
+    radial-gradient(80% 44% at 50% -8%,rgba(30,145,226,.17),transparent 70%),
+    linear-gradient(180deg,#06111d,#08121d 55%,#06101a)!important;
+}
+[data-theme='light'] .cg-driver-app{
+  background:linear-gradient(180deg,#eef7fd,#e7f1f8)!important;
+}
+[data-theme='executive'] .cg-driver-app{background:linear-gradient(180deg,#20242a,#171a1f)!important;}
+[data-theme='fire'] .cg-driver-app{background:#030303!important;}
+
+[data-theme='dark'] .cg-driver-app :is(header,section)[class*='bg-[#111'],
+[data-theme='dark'] .cg-driver-app :is(header,section)[class*='bg-[#121']{
+  border-color:rgba(91,176,232,.22)!important;
+  background:linear-gradient(180deg,rgba(15,31,46,.98),rgba(9,21,33,.98))!important;
+  box-shadow:0 12px 28px rgba(0,8,20,.22),inset 0 1px 0 rgba(255,255,255,.045)!important;
+}
+
+.cg-driver-app button:is([class*='bg-blue-500/10'],[class*='bg-blue-500/15']){
+  border-color:rgba(95,194,255,.50)!important;
+  background:linear-gradient(180deg,#219ee9,#0a68c7)!important;
+  color:#fff!important;
+}
+.cg-driver-app button:is([class*='bg-emerald-500/10'],[class*='bg-emerald-400']){
+  border-color:rgba(80,230,184,.58)!important;
+  background:linear-gradient(180deg,#43dbad,#138b69)!important;
+  color:#fff!important;
+}
+.cg-driver-app button[class*='bg-zinc-950'][class*='text-zinc-500']{
+  color:#b7c9d8!important;
+}
+
+/* The driver status trio must be readable at a glance even when inactive. */
+.cg-driver-app section.grid.grid-cols-3 button:not(:disabled){
+  min-height:48px;
+}
+.cg-driver-app section.grid.grid-cols-3 button[class*='bg-zinc-950']{
+  border-color:rgba(99,167,216,.22)!important;
+  background:linear-gradient(180deg,#132337,#0b1623)!important;
+  color:#a9bfd1!important;
+}
+
+/* Focus is visible on phone, desktop and keyboard operation. */
+:where(.cg-auth-shell,.cg-operational) button:focus-visible,
+:where(.cg-auth-shell,.cg-operational) a:focus-visible{
+  outline:2px solid color-mix(in srgb,var(--cg-primary) 80%,white 12%)!important;
+  outline-offset:2px!important;
+}
+
+@media(max-width:767px){
+  .cg-operational button{letter-spacing:-.005em;}
+  .cg-auth-card{box-shadow:0 18px 48px rgba(0,8,24,.32),inset 0 1px 0 rgba(255,255,255,.08)!important;}
+}
+
+@media(prefers-reduced-motion:reduce){
+  .cg-operational button,.cg-auth-shell button{transition:none!important;}
+}
