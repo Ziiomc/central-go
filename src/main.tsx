@@ -21,6 +21,7 @@ import './theme2026.css';
 import './operatorTheme2026Fix.css';
 import './operatorTripDensity2026.css';
 import './visualPolish2026.css';
+import './driverCompactControls2026.css';
 import {registerServiceWorker} from './lib/pwa';
 import {registerRegionalPartnerReferralBootstrap} from './lib/regionalPartnerReferralBootstrap';
 import {registerGoogleOnboardingRoleBootstrap} from './lib/googleOnboardingRoleBootstrap';
