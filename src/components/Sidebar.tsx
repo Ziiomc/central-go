@@ -58,12 +58,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     { id: 'users', group: 'Administración', label: 'Usuarios y Permisos', icon: Lock, roles: ['super_admin'] },
     { id: 'reports', group: 'Administración', label: 'Reportes de Operación', icon: BarChart3, roles: ['company_admin'] },
     { id: 'history', group: 'Administración', label: currentRole === 'super_admin' ? 'Auditoría Global' : 'Historial Auditoría', icon: History, roles: ['super_admin', 'company_admin'] },
-    { id: 'settings', group: 'Administración', label: currentRole === 'super_admin' ? 'Configuración Global' : 'Configuración Tarifas', icon: Settings, roles: ['super_admin', 'company_admin'] },
+    { id: 'settings', group: currentRole === 'operator' ? 'Operación' : 'Administración', label: currentRole === 'super_admin' ? 'Configuración Global' : currentRole === 'operator' ? 'Tarifario' : 'Configuración y Tarifas', icon: Settings, roles: ['super_admin', 'company_admin', 'operator'] },
     { id: 'profile', group: 'Cuenta', label: 'Mi Perfil', icon: User, roles: ['super_admin', 'regional_partner', 'sales_partner', 'company_admin', 'operator'] },
     { id: 'help', group: 'Cuenta', label: isNetworkRole ? 'Material y Ayuda' : 'Soporte e información', icon: HelpCircle, roles: ['super_admin', 'regional_partner', 'sales_partner', 'company_admin', 'operator'] },
   ];
 
-  const operatorCore = new Set(['dashboard', 'trips', 'reservations', 'drivers', 'help']);
+  const operatorCore = new Set(['dashboard', 'trips', 'reservations', 'drivers', 'settings', 'help']);
   const allowedItems = navItems
     .filter((item) => item.roles.includes(currentRole))
     .filter((item) => currentRole !== 'operator' || operatorCore.has(item.id));

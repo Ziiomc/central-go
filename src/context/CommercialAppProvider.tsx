@@ -240,6 +240,9 @@ export const CommercialAppProvider: React.FC<React.PropsWithChildren> = ({ child
         setNotifications((items) => upsertById(items, notification));
         if(currentRole==='driver'&&notification.relatedId)void loadTripById(notification.relatedId).then(trip=>{if(trip)setTrips(items=>upsertById(items,trip));}).catch(()=>{});
         if (notification.type === 'sos' && !soundMuted) playSOSSiren();
+        if(['operator','company_admin'].includes(currentRole)&&notification.type==='warning'&&notification.title.toUpperCase().includes('RESERVA')&&!soundMuted){
+          void soundManager.prime().then(ready=>{if(ready)soundManager.playReservationAlarmOnce(`due:${notification.relatedId??notification.id}`);});
+        }
       },
       onStatus:status=>{if(currentRole==='driver'&&status==='SUBSCRIBED')void loadDriverVisibleTrips(currentCompany.id).then(setTrips).catch(()=>{});},
     });

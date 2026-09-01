@@ -16,6 +16,13 @@ class SoundManager{
   this.simpleSequence([[880,0,.46,.55],[1175,.18,.5,.58],[880,.72,.46,.55],[1319,.9,.58,.6],[880,1.58,.46,.55],[1175,1.76,.5,.58],[1480,2.32,.7,.62]],'square',1);
   if(typeof navigator!=='undefined'&&'vibrate'in navigator)navigator.vibrate([300,120,300,180,500]);
  }
+ public playReservationAlarmOnce(key:string){
+  if(this.muted)return false;
+  const storageKey=`centralgo:reservation-alarm:v2:${key}`;
+  try{const previous=Number(window.localStorage.getItem(storageKey)||0);if(previous&&Date.now()-previous<24*60*60*1000)return false;window.localStorage.setItem(storageKey,String(Date.now()));}catch{}
+  this.playReservationAlarm();
+  return true;
+ }
  public playTripStartConfirmation(){this.simpleSequence([[523,0,.32,.17],[659,.09,.36,.19],[784,.19,.44,.21]],'sine',.72);}
  public playArrivalDing(){this.simpleSequence([[523,0,.28,.3],[659,.12,.3,.3],[784,.24,.36,.3]],'triangle',.7);}
  public playSOSAlarm(){this.simpleSequence([[960,0,.38,.4],[700,.4,.38,.4],[960,.8,.38,.4]],'sawtooth',.95);}

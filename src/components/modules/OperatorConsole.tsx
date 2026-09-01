@@ -4,6 +4,7 @@ import { useApp } from '../../context/AppContext';
 import { DRIVER_STATUS_LABELS, TRIP_STATUS_LABELS } from '../../lib/labels';
 import { isQueueConnected, loadDispatchQueue, moveDispatchPriority, setTraditionalDriverAvailability, subscribeDispatchQueue, type DispatchQueueItem } from '../../lib/dispatchPriorityRepository';
 import { readOperatorDispatchMode, saveOperatorDispatchMode } from '../../lib/operatorDispatchPreference';
+import { RESERVATION_DISPATCH_WINDOW_MS, synchronizedNow, synchronizeServerClock, tripDelayMinutes, tripMinutesUntil, tripReferenceTimeMs, tripUrgency } from '../../lib/tripTiming';
 import type { DispatchMode, Driver, Trip, TripStatus } from '../../types';
 import { LiveMap } from '../map/LiveMap';
 
@@ -52,14 +53,19 @@ const resolveDriverSearch = (value: string, drivers: Driver[]) => {
   return '';
 };
 
-const tripWaitMinutes = (createdAt: string, now: number) => Math.max(0, Math.floor((now - new Date(createdAt).getTime()) / 60000));
-
 const tripEntryTone = (trip: Trip, now: number) => {
   if (trip.status !== 'pending') return 'border-zinc-700 bg-zinc-900 text-zinc-300';
-  const minutes = tripWaitMinutes(trip.createdAt, now);
-  if (minutes >= 10) return 'border-rose-400/40 bg-rose-500/15 text-rose-200';
-  if (minutes >= 5) return 'border-amber-400/40 bg-amber-500/15 text-amber-200';
+  const urgency = tripUrgency(trip, now);
+  if (urgency === 'critical') return 'border-rose-400/40 bg-rose-500/15 text-rose-200';
+  if (urgency === 'warning') return 'border-amber-400/40 bg-amber-500/15 text-amber-200';
+  if (urgency === 'scheduled') return 'border-sky-400/35 bg-sky-500/[0.12] text-sky-200';
   return 'border-emerald-400/35 bg-emerald-500/[0.12] text-emerald-200';
+};
+
+const tripTimingLabel = (trip: Trip, now: number) => {
+  if (trip.scheduledFor && tripReferenceTimeMs(trip) > now) return `faltan ${tripMinutesUntil(trip, now)} min`;
+  const delay = tripDelayMinutes(trip, now);
+  return trip.scheduledFor ? `${delay} min atraso` : `${delay} min`;
 };
 
 const nextTripAction = (status: TripStatus): { status: TripStatus; label: string } | null => {
@@ -129,11 +135,19 @@ export const OperatorConsole: React.FC = () => {
   const [dispatchMode, setDispatchMode] = useState<DispatchMode>(() => readOperatorDispatchMode(currentCompany.id));
   const [dispatchModeBusy, setDispatchModeBusy] = useState(false);
   const [dispatchModeMessage, setDispatchModeMessage] = useState('');
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState(synchronizedNow());
 
   useEffect(() => {
-    const timer = window.setInterval(() => setNow(Date.now()), 30000);
-    return () => window.clearInterval(timer);
+    let active = true;
+    const tick = () => setNow(synchronizedNow());
+    const sync = () => { void synchronizeServerClock().then(() => { if (active) tick(); }).catch(() => { if (active) tick(); }); };
+    sync();
+    const timer = window.setInterval(tick, 15000);
+    const syncTimer = window.setInterval(sync, 5 * 60 * 1000);
+    const resync = () => { if (navigator.onLine) void synchronizeServerClock(true).then(() => { if (active) tick(); }).catch(() => {}); };
+    window.addEventListener('focus', resync);
+    window.addEventListener('online', resync);
+    return () => { active = false; window.clearInterval(timer); window.clearInterval(syncTimer); window.removeEventListener('focus', resync); window.removeEventListener('online', resync); };
   }, []);
 
   useEffect(() => {
@@ -346,7 +360,7 @@ export const OperatorConsole: React.FC = () => {
 
   const activeTrips = useMemo(() => {
     const term = search.trim().toLowerCase();
-    const reservationWindow = now + 20 * 60 * 1000;
+    const reservationWindow = now + RESERVATION_DISPATCH_WINDOW_MS;
     return trips
       .filter((trip) => ACTIVE_STATUSES.includes(trip.status))
       .filter((trip) => !trip.scheduledFor || new Date(trip.scheduledFor).getTime() <= reservationWindow)
@@ -361,8 +375,8 @@ export const OperatorConsole: React.FC = () => {
       .sort((a, b) => {
         const statusDifference = ACTIVE_STATUSES.indexOf(a.status) - ACTIVE_STATUSES.indexOf(b.status);
         if (statusDifference) return statusDifference;
-        const aTime = a.scheduledFor ? new Date(a.scheduledFor).getTime() : new Date(a.createdAt).getTime();
-        const bTime = b.scheduledFor ? new Date(b.scheduledFor).getTime() : new Date(b.createdAt).getTime();
+        const aTime = tripReferenceTimeMs(a);
+        const bTime = tripReferenceTimeMs(b);
         return aTime - bTime;
       });
   }, [trips, search, now]);
@@ -778,17 +792,18 @@ export const OperatorConsole: React.FC = () => {
                       <div className="flex items-center justify-between gap-1.5">
                         <span className={`rounded-md border px-1.5 py-0.5 text-[9px] font-black ${statusTone[trip.status]}`}>{TRIP_STATUS_LABELS[trip.status]}</span>
                         {trip.scheduledFor && <span className="rounded-md border border-sky-500/25 bg-sky-500/10 px-1.5 py-0.5 text-[8px] font-black text-sky-300">RESERVA · {formatTime(trip.scheduledFor)}</span>}
-                        <span className={`ml-auto rounded-md border px-1.5 py-0.5 text-[9px] font-black tabular-nums ${tripEntryTone(trip, now)}`} title={`Ingresó a las ${formatTime(trip.createdAt)}`}>
-                          {formatTime(trip.createdAt)}{trip.status === 'pending' ? ` · ${tripWaitMinutes(trip.createdAt, now)} min` : ''}
+                        <span className={`ml-auto rounded-md border px-1.5 py-0.5 text-[9px] font-black tabular-nums ${tripEntryTone(trip, now)}`} title={trip.scheduledFor ? `Reserva para las ${formatTime(trip.scheduledFor)}` : `Ingresó a las ${formatTime(trip.createdAt)}`}>
+                          {formatTime(trip.scheduledFor ?? trip.createdAt)}{trip.status === 'pending' ? ` · ${tripTimingLabel(trip, now)}` : ''}
                         </span>
                       </div>
                       <p className="mt-1.5 flex min-w-0 items-start gap-1 text-xs text-white" title={trip.origin.address}>
                         <MapPin className="mt-px h-3.5 w-3.5 shrink-0 text-amber-300" />
                         <strong className="min-w-0 truncate">{trip.origin.address}</strong>
                       </p>
-                      <p className="mt-1 flex min-w-0 items-center gap-1 text-[10px] font-bold text-zinc-200" title={[trip.clientName, trip.clientPhone].filter(Boolean).join(' · ')}>
+                      <p className="mt-1 flex min-w-0 items-center gap-1 text-[10px] font-bold text-zinc-200" title={[trip.clientName, trip.clientPhone, trip.paymentMethod === 'transferencia' ? 'Transferencia' : ''].filter(Boolean).join(' · ')}>
                         <UserRound className="h-3 w-3 shrink-0 text-cyan-300" />
                         <span className="min-w-0 truncate">{trip.clientName}{trip.clientPhone && trip.clientPhone !== 'Sin teléfono' ? ` · ${trip.clientPhone}` : ''}</span>
+                        {trip.paymentMethod === 'transferencia' && <span className="shrink-0 rounded-md border border-cyan-400/30 bg-cyan-400/10 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wide text-cyan-200">Transferencia</span>}
                       </p>
                       <p className="mt-0.5 flex min-w-0 items-start gap-1 text-[10px] text-zinc-500" title={trip.destination.address}>
                         <Navigation className="mt-px h-3 w-3 shrink-0 text-sky-400" />
