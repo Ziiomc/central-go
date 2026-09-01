@@ -220,7 +220,7 @@ export const LoginScreen: React.FC = () => {
         </label>
         <label className="cg-field">
           <span>Contraseña</span>
-          <input required minLength={10} type="password" autoComplete={mode === 'register' ? 'new-password' : 'current-password'} value={password} onChange={(event) => setPassword(event.target.value)} placeholder={mode === 'register' ? 'Mínimo 10 caracteres' : 'Tu contraseña'} />
+          <input required minLength={mode === 'register' ? 10 : undefined} type="password" autoComplete={mode === 'register' ? 'new-password' : 'current-password'} value={password} onChange={(event) => setPassword(event.target.value)} placeholder={mode === 'register' ? 'Mínimo 10 caracteres' : 'Tu contraseña'} />
         </label>
         {mode === 'register' && (
           <label className="cg-field">
