@@ -22,11 +22,13 @@ import './operatorTheme2026Fix.css';
 import './operatorTripDensity2026.css';
 import './visualPolish2026.css';
 import './driverCompactControls2026.css';
+import './driverAlwaysOnGpsVividControls.css';
 import {registerServiceWorker} from './lib/pwa';
 import {registerRegionalPartnerReferralBootstrap} from './lib/regionalPartnerReferralBootstrap';
 import {registerGoogleOnboardingRoleBootstrap} from './lib/googleOnboardingRoleBootstrap';
 import {registerDriverWakeLock} from './lib/driverWakeLock';
 import {registerDriverStorageReliability} from './lib/driverStorageReliability';
+import {registerDriverGpsAlwaysOnPolicy} from './lib/driverGpsAlwaysOnPolicy';
 import {initializeFontSizePreference} from './lib/fontSizePreference';
 import {registerOperationalSnapshotSafety} from './lib/operationalSnapshotSafety';
 import {registerDriverFormOptionalFields} from './lib/driverFormOptionalFields';
@@ -42,6 +44,7 @@ registerRegionalPartnerReferralBootstrap();
 registerGoogleOnboardingRoleBootstrap();
 registerDriverWakeLock();
 registerDriverStorageReliability();
+registerDriverGpsAlwaysOnPolicy();
 
 const isPassengerRoute=window.location.pathname==='/pedir'||window.location.pathname.startsWith('/passenger');
 
