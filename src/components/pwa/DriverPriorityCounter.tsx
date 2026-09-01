@@ -5,6 +5,8 @@ import{useApp}from'../../context/AppContext';
 import{loadDriverQueueSnapshot,subscribeDispatchQueue,type DriverQueueSnapshotItem}from'../../lib/dispatchPriorityRepository';
 import{DriverTripCancellationControl}from'./DriverTripCancellationControl';
 
+const connectedTimestamp=(value:string)=>{const parsed=new Date(value).getTime();return Number.isFinite(parsed)?parsed:Number.MAX_SAFE_INTEGER;};
+
 export const DriverPriorityCounter:React.FC=()=>{
  const{currentRole,currentCompany,currentUser}=useApp();
  const[queue,setQueue]=useState<DriverQueueSnapshotItem[]>([]);
@@ -20,7 +22,7 @@ export const DriverPriorityCounter:React.FC=()=>{
   observer.observe(document.body,{childList:true,subtree:true});
   return()=>{observer.disconnect();setHost(null);};
  },[currentRole]);
- const connected=useMemo(()=>queue.slice().sort((a,b)=>a.queueOrder-b.queueOrder||new Date(a.connectedAt).getTime()-new Date(b.connectedAt).getTime()||a.unitNumber.localeCompare(b.unitNumber,'es',{numeric:true})),[queue]);
+ const connected=useMemo(()=>queue.slice().sort((a,b)=>connectedTimestamp(a.connectedAt)-connectedTimestamp(b.connectedAt)||a.queueOrder-b.queueOrder||a.unitNumber.localeCompare(b.unitNumber,'es',{numeric:true})),[queue]);
  const own=connected.find(item=>item.userId===currentUser.id);
  const waiting=useMemo(()=>connected.filter(item=>item.status==='available'),[connected]);
  if(currentRole!=='driver'||currentCompany.id==='network')return null;

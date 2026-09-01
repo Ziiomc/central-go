@@ -20,7 +20,18 @@ const hideGpsControl=()=>{
   gpsButton.setAttribute('aria-hidden','true');
   gpsButton.tabIndex=-1;
   gpsButton.hidden=true;
-  gpsButton.style.display='none';
+  // The legacy vivid-controls stylesheet used !important to force this button
+  // visible as a spinning sync indicator. Inline !important wins over it.
+  gpsButton.style.setProperty('display','none','important');
+
+  // Restore the GPS information card to its normal full-width layout. The old
+  // spinner stylesheet also collapsed this section to a 38 px floating circle.
+  const gpsSection=gpsButton.closest<HTMLElement>('section');
+  if(gpsSection){
+    gpsSection.style.setProperty('width','auto','important');
+    gpsSection.style.setProperty('min-width','0','important');
+    gpsSection.style.setProperty('right','auto','important');
+  }
 };
 
 /**
