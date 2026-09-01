@@ -74,7 +74,8 @@ if (!driverManifest.includes('Central GO Conductor') || !driverManifest.includes
 if (!bootstrap.includes("'/driver-manifest.json'") || !bootstrap.includes("centralgo:color-theme")) fail('Bootstrap CSP-safe de tema/PWA incompleto.');
 
 if (login.includes('Crear cuenta segura') || login.includes("setMode('signup')")) fail('El acceso oficial volvió a habilitar el registro legado por formulario.');
-if (!login.includes('Olvidé mi contraseña') || !auth.includes('resetPasswordForEmail')) fail('Falta recuperación de contraseña oficial.');
+if (login.includes('Entrar con enlace al correo') || login.includes('Crear cuenta sólo con correo') || login.includes('Olvidé mi contraseña') || auth.includes('resetPasswordForEmail')) fail('El acceso oficial volvió a depender de enlaces enviados por correo.');
+if (!login.includes('Mínimo 8 caracteres') || !auth.includes('createPasswordAccountWithoutEmail') || !auth.includes('signInWithCompatiblePassword')) fail('Falta el acceso oficial con contraseña simple y alta directa.');
 if (login.includes('Modo Demo') || app.includes("get('demo') === '1'")) fail('La demo pública volvió a quedar expuesta.');
 for (const required of ['Central', 'Conductor', 'Socio comercial', 'Crear cuenta con Google']) {
   if (!login.includes(required)) fail(`Registro unificado incompleto: ${required}`);

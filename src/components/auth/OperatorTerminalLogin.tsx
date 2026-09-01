@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Building2, KeyRound, Loader2, MonitorCheck, ShieldCheck, UserRound } from 'lucide-react';
 import { AuthShell } from './AuthShell';
 import { requireSupabase } from '../../lib/supabase';
+import { signInWithCompatiblePassword } from '../../lib/passwordAuth';
 import {
   operatorInternalEmail,
   type OperatorTerminalConfig,
@@ -34,8 +35,7 @@ export const OperatorTerminalLogin: React.FC<OperatorTerminalLoginProps> = ({ te
     const db = requireSupabase();
     try {
       const email = operatorInternalEmail(terminal.companyId, username);
-      const { data, error: signInError } = await db.auth.signInWithPassword({ email, password });
-      if (signInError) throw signInError;
+      const { data } = await signInWithCompatiblePassword(email, password);
       if (!data.user) throw new Error('No fue posible validar la cuenta del operador.');
 
       const allowed = await validateOperatorTerminalSession(terminal, data.user.id);
@@ -80,7 +80,7 @@ export const OperatorTerminalLogin: React.FC<OperatorTerminalLoginProps> = ({ te
           <span>Contraseña</span>
           <div className="relative">
             <KeyRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-600" />
-            <input required minLength={10} type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} className="pl-10" placeholder="Contraseña del turno" />
+            <input required type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} className="pl-10" placeholder="Contraseña del turno" />
           </div>
         </label>
         <button disabled={busy} className="cg-primary-button">
