@@ -7,6 +7,50 @@
   position: relative;
 }
 
+/* Prioridad por tiempo: la alerta ocupa toda la superficie de la carrera.
+   El atributo lo actualiza el watchdog; CSS conserva contraste en cada tema y
+   evita que gradientes/estados de selección oculten el color salvo en una esquina. */
+.cg-operational [data-dispatch-trip-id][data-centralgo-pending-age] {
+  background-image: none !important;
+  transition: background 180ms ease, border-color 180ms ease, box-shadow 180ms ease !important;
+}
+
+.cg-operational [data-dispatch-trip-id][data-centralgo-pending-age='yellow'] {
+  border-color: rgba(250, 204, 21, .74) !important;
+  background: linear-gradient(135deg, rgba(202, 138, 4, .42) 0%, rgba(120, 53, 15, .52) 52%, rgba(69, 26, 3, .42) 100%) !important;
+  box-shadow: inset 0 0 0 1px rgba(253, 224, 71, .28), inset 0 0 36px rgba(234, 179, 8, .13), 0 8px 22px rgba(120, 53, 15, .22) !important;
+}
+
+.cg-operational [data-dispatch-trip-id][data-centralgo-pending-age='red'] {
+  border-color: rgba(248, 113, 113, .82) !important;
+  background: linear-gradient(135deg, rgba(220, 38, 38, .46) 0%, rgba(127, 29, 29, .58) 52%, rgba(69, 10, 10, .5) 100%) !important;
+  box-shadow: inset 0 0 0 1px rgba(252, 165, 165, .3), inset 0 0 38px rgba(239, 68, 68, .16), 0 9px 24px rgba(127, 29, 29, .28) !important;
+}
+
+.cg-operational [data-dispatch-trip-id][data-centralgo-pending-age='cyan'] {
+  border-color: rgba(34, 211, 238, .65) !important;
+  background: linear-gradient(135deg, rgba(8, 145, 178, .38) 0%, rgba(14, 116, 144, .42) 52%, rgba(22, 78, 99, .36) 100%) !important;
+  box-shadow: inset 0 0 0 1px rgba(103, 232, 249, .24), inset 0 0 34px rgba(34, 211, 238, .1), 0 8px 22px rgba(14, 116, 144, .2) !important;
+}
+
+[data-theme='light'] .cg-operational [data-dispatch-trip-id][data-centralgo-pending-age='yellow'] {
+  border-color: #d6a514 !important;
+  background: linear-gradient(135deg, #fef08a 0%, #fde68a 52%, #fef3c7 100%) !important;
+  box-shadow: inset 0 0 0 1px rgba(161, 98, 7, .16), inset 0 0 32px rgba(250, 204, 21, .2), 0 8px 20px rgba(161, 98, 7, .14) !important;
+}
+
+[data-theme='light'] .cg-operational [data-dispatch-trip-id][data-centralgo-pending-age='red'] {
+  border-color: #e56b73 !important;
+  background: linear-gradient(135deg, #fecaca 0%, #fee2e2 52%, #fff1f2 100%) !important;
+  box-shadow: inset 0 0 0 1px rgba(185, 28, 28, .13), inset 0 0 34px rgba(248, 113, 113, .18), 0 8px 20px rgba(185, 28, 28, .13) !important;
+}
+
+[data-theme='light'] .cg-operational [data-dispatch-trip-id][data-centralgo-pending-age='cyan'] {
+  border-color: #4fb9cf !important;
+  background: linear-gradient(135deg, #cffafe 0%, #dff7fb 52%, #ecfeff 100%) !important;
+  box-shadow: inset 0 0 0 1px rgba(8, 145, 178, .13), inset 0 0 32px rgba(34, 211, 238, .14), 0 8px 20px rgba(14, 116, 144, .12) !important;
+}
+
 /* Menos aire muerto en todas las tarjetas, conservando lectura rápida. */
 [data-dispatch-trip-id] > .min-w-0 > div:first-child {
   min-height: 18px;
