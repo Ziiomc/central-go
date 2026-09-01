@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ArrowUpRight, Building2, CircleDollarSign, Globe2, MapPinned, RefreshCw, ShieldCheck, UsersRound, WalletCards } from 'lucide-react';
+import { Activity, ArrowUpRight, Building2, CircleDollarSign, Globe2, RefreshCw, ShieldCheck, UsersRound, WalletCards } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 import type { NetworkCentral } from '../../data/networkMockData';
 import { loadNetworkCentrals } from '../../lib/networkRepository';
 import { CountryFlag, money, NetworkKpi, StatusPill } from '../network/NetworkUi';
+import { ClientOperationsMonitor } from './ClientOperationsMonitor';
 
 export const CommercialGlobalAdminDashboard: React.FC = () => {
   const { companies, setCurrentCompany, setActiveModule } = useApp();
@@ -12,6 +13,7 @@ export const CommercialGlobalAdminDashboard: React.FC = () => {
   const [centrals, setCentrals] = useState<NetworkCentral[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [monitorOpen, setMonitorOpen] = useState(false);
 
   const reload = async () => {
     setLoading(true);
@@ -43,8 +45,10 @@ export const CommercialGlobalAdminDashboard: React.FC = () => {
       return;
     }
     setCurrentCompany(company);
-    setActiveModule('live_map');
+    setMonitorOpen(true);
   };
+
+  if (monitorOpen) return <ClientOperationsMonitor onBack={() => setMonitorOpen(false)} />;
 
   return (
     <div className="space-y-6">
@@ -95,7 +99,7 @@ export const CommercialGlobalAdminDashboard: React.FC = () => {
                   <div className="min-w-0"><p className="truncate text-sm font-black text-white">{central.name}</p><p className="mt-0.5 text-[10px] text-zinc-500"><CountryFlag code={central.countryCode} /> {central.city || 'Ciudad pendiente'}, {central.country} · {central.vehicles} móviles · Partner: {central.partner}</p></div>
                 </div>
                 <div className="flex items-center gap-3"><StatusPill status={central.status} /><span className="min-w-[100px] text-right text-xs font-black text-zinc-200">{money(central.monthlyFee)}/mes</span></div>
-                <button onClick={() => openCentral(central.id)} className="inline-flex items-center justify-center gap-2 rounded-xl border border-blue-500/25 bg-blue-500/10 px-4 py-2.5 text-xs font-black text-blue-300 hover:bg-blue-500/15"><MapPinned className="h-4 w-4" />Ver operación</button>
+                <button onClick={() => openCentral(central.id)} className="inline-flex items-center justify-center gap-2 rounded-xl border border-blue-500/25 bg-blue-500/10 px-4 py-2.5 text-xs font-black text-blue-300 hover:bg-blue-500/15"><Activity className="h-4 w-4" />Ver operación</button>
               </div>
             ))}
           </div>
