@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Building2, Loader2, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { runtimeConfig } from '../../config/runtime';
+import { googleOAuthOptions } from '../../lib/googleOAuth';
 import { requireSupabase } from '../../lib/supabase';
 import { acceptMyOperatorInvitation, loadMyOperatorInvitation, type MyOperatorInvitation } from '../../lib/operatorRepository';
 import { AuthShell } from './AuthShell';
@@ -41,7 +42,7 @@ export const OperatorInviteAcceptGate: React.FC = () => {
       await requireSupabase().auth.signOut({ scope: 'local' });
       const { error: oauthError } = await requireSupabase().auth.signInWithOAuth({
         provider: 'google',
-        options: { redirectTo: `${runtimeConfig.officialAppUrl}/?operator_invite=1` },
+        options: googleOAuthOptions(`${runtimeConfig.officialAppUrl}/?operator_invite=1`),
       });
       if (oauthError) throw oauthError;
     } catch (err) {
