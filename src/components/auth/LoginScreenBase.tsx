@@ -214,13 +214,13 @@ export const LoginScreen: React.FC = () => {
         </label>
         <label className="cg-field">
           <span>Contraseña</span>
-          <input required minLength={10} type="password" autoComplete={mode === 'register' ? 'new-password' : 'current-password'} value={password} onChange={(event) => setPassword(event.target.value)} placeholder={mode === 'register' ? '10+ caracteres, mayúscula, número y símbolo' : 'Tu contraseña'} />
+          <input required minLength={8} type="password" autoComplete={mode === 'register' ? 'new-password' : 'current-password'} value={password} onChange={(event) => setPassword(event.target.value)} placeholder={mode === 'register' ? 'Mínimo 8 caracteres' : 'Tu contraseña'} />
         </label>
         {mode === 'register' && <PasswordRequirements password={password} />}
         {mode === 'register' && (
           <label className="cg-field">
             <span>Repetir contraseña</span>
-            <input required minLength={10} type="password" autoComplete="new-password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="Repite tu contraseña" />
+            <input required minLength={8} type="password" autoComplete="new-password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="Repite tu contraseña" />
           </label>
         )}
         <button disabled={busy} className="cg-primary-button">

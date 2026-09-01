@@ -80,7 +80,7 @@ export const OperatorTerminalLogin: React.FC<OperatorTerminalLoginProps> = ({ te
           <span>Contraseña</span>
           <div className="relative">
             <KeyRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-600" />
-            <input required minLength={10} type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} className="pl-10" placeholder="Contraseña del turno" />
+            <input required minLength={8} type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} className="pl-10" placeholder="Contraseña del turno" />
           </div>
         </label>
         <button disabled={busy} className="cg-primary-button">
