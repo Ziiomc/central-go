@@ -136,7 +136,9 @@ export const LiveMap: React.FC<LiveMapProps> = ({
     if (!map) return;
     const filteredDrivers = drivers.filter((d) => {
       const activeTrip = trips.find((trip) => trip.driverId === d.id && !['completed', 'cancelled'].includes(trip.status));
-      return filterStatus === 'all' || getMapDriverStatus(d, activeTrip) === filterStatus;
+      const mapStatus = getMapDriverStatus(d, activeTrip);
+      if (!activeTrip && (mapStatus === 'offline' || mapStatus === 'paused')) return false;
+      return filterStatus === 'all' || mapStatus === filterStatus;
     });
     const activeIds = new Set(filteredDrivers.map((d) => d.id));
     Object.keys(markersRef.current).forEach((id) => {
