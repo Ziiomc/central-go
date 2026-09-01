@@ -2,15 +2,15 @@ import React,{useEffect,useMemo,useState}from'react';
 import{createPortal}from'react-dom';
 import{Users,Hash}from'lucide-react';
 import{useApp}from'../../context/AppContext';
-import{isQueueConnected,loadDispatchQueue,subscribeDispatchQueue,type DispatchQueueItem}from'../../lib/dispatchPriorityRepository';
+import{loadDriverQueueSnapshot,subscribeDispatchQueue,type DriverQueueSnapshotItem}from'../../lib/dispatchPriorityRepository';
 import{DriverTripCancellationControl}from'./DriverTripCancellationControl';
 
 export const DriverPriorityCounter:React.FC=()=>{
  const{currentRole,currentCompany,currentUser}=useApp();
- const[queue,setQueue]=useState<DispatchQueueItem[]>([]);
+ const[queue,setQueue]=useState<DriverQueueSnapshotItem[]>([]);
  const[error,setError]=useState(false);
  const[host,setHost]=useState<HTMLElement|null>(null);
- const load=async()=>{if(currentRole!=='driver'||currentCompany.id==='network')return;try{setQueue(await loadDispatchQueue(currentCompany.id));setError(false);}catch{setError(true);}};
+ const load=async()=>{if(currentRole!=='driver'||currentCompany.id==='network')return;try{setQueue(await loadDriverQueueSnapshot(currentCompany.id));setError(false);}catch{setError(true);}};
  useEffect(()=>{void load();if(currentRole!=='driver'||currentCompany.id==='network')return;const unsubscribe=subscribeDispatchQueue(currentCompany.id,()=>void load());const timer=window.setInterval(()=>void load(),30000);return()=>{unsubscribe();window.clearInterval(timer);};},[currentRole,currentCompany.id,currentUser.id]);
  useEffect(()=>{
   if(currentRole!=='driver')return;
@@ -20,8 +20,8 @@ export const DriverPriorityCounter:React.FC=()=>{
   observer.observe(document.body,{childList:true,subtree:true});
   return()=>{observer.disconnect();setHost(null);};
  },[currentRole]);
- const own=queue.find(item=>item.userId===currentUser.id);
- const connected=useMemo(()=>queue.filter(isQueueConnected).sort((a,b)=>a.queueOrder-b.queueOrder||a.unitNumber.localeCompare(b.unitNumber,'es',{numeric:true})),[queue]);
+ const connected=useMemo(()=>queue.slice().sort((a,b)=>a.queueOrder-b.queueOrder||new Date(a.connectedAt).getTime()-new Date(b.connectedAt).getTime()||a.unitNumber.localeCompare(b.unitNumber,'es',{numeric:true})),[queue]);
+ const own=connected.find(item=>item.userId===currentUser.id);
  const waiting=useMemo(()=>connected.filter(item=>item.status==='available'),[connected]);
  if(currentRole!=='driver'||currentCompany.id==='network')return null;
  const position=own?waiting.findIndex(item=>item.driverId===own.driverId):-1;
