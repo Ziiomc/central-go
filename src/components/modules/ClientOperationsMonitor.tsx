@@ -8,6 +8,7 @@ type ApplicationRow={id:string;applicant_name:string|null;status:string;created_
 type TerminalRow={id:string;label:string|null;active:boolean;last_seen_at:string|null};
 type TripRow={id:string;code:string;status:string;client_name:string|null;driver_name:string|null;driver_unit_number:string|null;scheduled_for:string|null;created_at:string;final_fare:number|null;estimated_fare:number|null;payment_method:string|null};
 type Snapshot={vehiclesTotal:number;vehiclesActive:number;drivers:DriverRow[];applications:ApplicationRow[];operatorsActive:number;terminals:TerminalRow[];driversOnline:number;tripsTotal:number;trips24h:number;trips7d:number;tripsActive:number;reservationsOpen:number;recentTrips:TripRow[]};
+interface ClientOperationsMonitorProps{onBack?:()=>void}
 
 const EMPTY:Snapshot={vehiclesTotal:0,vehiclesActive:0,drivers:[],applications:[],operatorsActive:0,terminals:[],driversOnline:0,tripsTotal:0,trips24h:0,trips7d:0,tripsActive:0,reservationsOpen:0,recentTrips:[]};
 const ACTIVE_TRIP_STATUSES=['pending','assigned','en_route','arrived','in_progress'];
@@ -16,7 +17,7 @@ const money=(value:number|null|undefined)=>`$${Math.round(Number(value)||0).toLo
 const statusLabel=(status:string)=>({pending:'Pendiente',assigned:'Asignada',en_route:'En camino',arrived:'Llegó',in_progress:'En viaje',completed:'Completada',cancelled:'Cancelada',available:'Disponible',offline:'Desconectado',busy:'Ocupado'}[status]||status.replaceAll('_',' '));
 const statusTone=(status:string)=>status==='completed'||status==='available'?'border-emerald-500/20 bg-emerald-500/10 text-emerald-300':status==='cancelled'?'border-rose-500/20 bg-rose-500/10 text-rose-300':status==='pending'?'border-amber-500/20 bg-amber-500/10 text-amber-300':'border-blue-500/20 bg-blue-500/10 text-blue-300';
 
-export const ClientOperationsMonitor:React.FC=()=>{
+export const ClientOperationsMonitor:React.FC<ClientOperationsMonitorProps>=({onBack})=>{
  const{currentCompany,currentRole,setActiveModule}=useApp();
  const[loading,setLoading]=useState(true),[error,setError]=useState(''),[snapshot,setSnapshot]=useState<Snapshot>(EMPTY);
  const companyId=currentCompany.id;
@@ -66,12 +67,13 @@ export const ClientOperationsMonitor:React.FC=()=>{
  useEffect(()=>{void load();},[load]);
  const driversWithApp=useMemo(()=>snapshot.drivers.filter(driver=>Boolean(driver.user_id)).length,[snapshot.drivers]);
  const pendingApplications=useMemo(()=>snapshot.applications.filter(item=>item.status==='pending').length,[snapshot.applications]);
- const lastTerminalSeen=useMemo(()=>snapshot.terminals.map(t=>t.last_seen_at).filter(Boolean).sort().at(-1)??null,[snapshot.terminals]);
+ const lastTerminalSeen=useMemo(()=>snapshot.terminals.map(t=>t.last_seen_at).filter((value):value is string=>Boolean(value)).sort().at(-1)??null,[snapshot.terminals]);
+ const goBack=()=>{if(onBack)onBack();else setActiveModule('dashboard');};
  if(currentRole!=='super_admin')return null;
  if(companyId==='network')return <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-5 text-sm text-amber-200">Selecciona una central desde el panel de clientes.</div>;
  return <div className="space-y-5">
   <div className="flex flex-col gap-4 rounded-3xl border border-blue-500/20 bg-gradient-to-br from-blue-950/35 via-[#0d0d0f] to-cyan-950/20 p-5 md:flex-row md:items-center md:justify-between">
-   <div><button onClick={()=>setActiveModule('dashboard')} className="mb-3 inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-zinc-500 hover:text-white"><ArrowLeft className="h-3.5 w-3.5"/>Volver a clientes</button><div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[.18em] text-blue-300"><ShieldCheck className="h-4 w-4"/>Supervisión de cliente</div><h1 className="mt-2 text-2xl font-black text-white md:text-3xl">{currentCompany.name}</h1><p className="mt-1 text-xs text-zinc-400">Panel de solo lectura para revisar adopción, flota y actividad operativa real.</p></div>
+   <div><button onClick={goBack} className="mb-3 inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-zinc-500 hover:text-white"><ArrowLeft className="h-3.5 w-3.5"/>Volver a clientes</button><div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[.18em] text-blue-300"><ShieldCheck className="h-4 w-4"/>Supervisión de cliente</div><h1 className="mt-2 text-2xl font-black text-white md:text-3xl">{currentCompany.name}</h1><p className="mt-1 text-xs text-zinc-400">Panel de solo lectura para revisar adopción, flota y actividad operativa real.</p></div>
    <button onClick={()=>void load()} disabled={loading} className="inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-xs font-black text-white disabled:opacity-50"><RefreshCw className={`h-4 w-4 ${loading?'animate-spin':''}`}/>Actualizar operación</button>
   </div>
   {error&&<div className="rounded-xl border border-rose-500/25 bg-rose-500/10 px-4 py-3 text-xs font-bold text-rose-200">{error}</div>}
