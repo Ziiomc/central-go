@@ -7,15 +7,9 @@ import {
 import { requireSupabase } from '../../lib/supabase';
 import { runtimeConfig } from '../../config/runtime';
 import { AuthShell } from './AuthShell';
+import { PasswordRequirements } from './PasswordRequirements';
+import { friendlyAuthError } from '../../lib/authPasswordPolicy';
 
-const friendlyAuthError = (error: unknown, fallback: string) => {
-  const message = error instanceof Error ? error.message : String(error ?? '');
-  if (/email rate limit exceeded|over_email_send_rate_limit|too many requests|rate limit/i.test(message)) return 'Se alcanzó temporalmente el límite de correos. Espera unos minutos antes de volver a intentarlo.';
-  if (/email link is invalid|expired|otp_expired|one-time token not found/i.test(message)) return 'Este enlace ya fue utilizado o dejó de ser válido. Solicita uno nuevo.';
-  if (/invalid login credentials/i.test(message)) return 'Correo o contraseña incorrectos.';
-  if (/user already registered|already been registered/i.test(message)) return 'Este correo ya está registrado. Inicia sesión o recupera tu contraseña.';
-  return message || fallback;
-};
 type DriverActivationPayload = { tokenHash: string; type: 'invite' | 'recovery' };
 
 const getSafeDriverActivationPayload = (): DriverActivationPayload | null => {
@@ -220,8 +214,9 @@ export const LoginScreen: React.FC = () => {
         </label>
         <label className="cg-field">
           <span>Contraseña</span>
-          <input required minLength={10} type="password" autoComplete={mode === 'register' ? 'new-password' : 'current-password'} value={password} onChange={(event) => setPassword(event.target.value)} placeholder={mode === 'register' ? 'Mínimo 10 caracteres' : 'Tu contraseña'} />
+          <input required minLength={10} type="password" autoComplete={mode === 'register' ? 'new-password' : 'current-password'} value={password} onChange={(event) => setPassword(event.target.value)} placeholder={mode === 'register' ? '10+ caracteres, mayúscula, número y símbolo' : 'Tu contraseña'} />
         </label>
+        {mode === 'register' && <PasswordRequirements password={password} />}
         {mode === 'register' && (
           <label className="cg-field">
             <span>Repetir contraseña</span>
@@ -242,7 +237,7 @@ export const LoginScreen: React.FC = () => {
       )}
 
       <p className="cg-auth-hint">
-        {mode === 'register' ? 'Registro seguro · confirmación por correo · sin cobro al crear la cuenta' : 'Acceso cifrado y protegido por permisos según tu rol'}
+        {mode === 'register' ? 'Tu usuario queda guardado en Central GO · confirmación por correo · Google es opcional' : 'Acceso cifrado con tu correo y contraseña · Google es opcional'}
       </p>
     </AuthShell>
   );
