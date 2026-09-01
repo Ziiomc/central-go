@@ -8,7 +8,7 @@ const forceGpsWanted=()=>{
   try{window.localStorage.setItem(GPS_WANTED_KEY,'1');}catch{/* Storage can be restricted; geolocation still runs normally. */}
 };
 
-const lockGpsControl=()=>{
+const hideGpsControl=()=>{
   if(!isDriverRoute())return;
   const buttons=Array.from(document.querySelectorAll<HTMLButtonElement>('.cg-driver-app button'));
   const gpsButton=buttons.find((button)=>{
@@ -17,17 +17,17 @@ const lockGpsControl=()=>{
   });
   if(!gpsButton)return;
   gpsButton.setAttribute(GPS_AUTO_ATTR,'1');
-  gpsButton.setAttribute('aria-label','Ubicación automática sincronizada');
-  gpsButton.setAttribute('role','status');
+  gpsButton.setAttribute('aria-hidden','true');
   gpsButton.tabIndex=-1;
-  gpsButton.disabled=true;
+  gpsButton.hidden=true;
+  gpsButton.style.display='none';
 };
 
 /**
  * Driver safety policy: while the driver app is open, geolocation is not a
  * driver-selectable work status. React still owns the GPS watcher and the OS
- * owns location permission; this bootstrap only makes the app always request
- * GPS and removes the manual on/off affordance from the operational UI.
+ * owns location permission; this bootstrap keeps GPS requested automatically
+ * while removing the obsolete GPS control from the driver interface.
  */
 export const registerDriverGpsAlwaysOnPolicy=()=>{
   if(!isDriverRoute())return;
@@ -36,7 +36,7 @@ export const registerDriverGpsAlwaysOnPolicy=()=>{
 
   const resume=()=>{
     if(document.visibilityState==='visible')forceGpsWanted();
-    window.requestAnimationFrame(lockGpsControl);
+    window.requestAnimationFrame(hideGpsControl);
   };
   const storage=(event:StorageEvent)=>{
     if(event.key===GPS_WANTED_KEY&&event.newValue!=='1')forceGpsWanted();
@@ -47,7 +47,7 @@ export const registerDriverGpsAlwaysOnPolicy=()=>{
   window.addEventListener('storage',storage);
   document.addEventListener('visibilitychange',resume);
 
-  const observer=new MutationObserver(()=>lockGpsControl());
+  const observer=new MutationObserver(()=>hideGpsControl());
   observer.observe(document.documentElement,{childList:true,subtree:true});
-  window.requestAnimationFrame(lockGpsControl);
+  window.requestAnimationFrame(hideGpsControl);
 };
