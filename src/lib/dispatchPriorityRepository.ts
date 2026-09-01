@@ -10,6 +10,16 @@ export interface DispatchQueueItem {
   routeDistanceKm:number|null;routeDurationSeconds:number|null;routeProvider:string|null;routeComputedAt:string|null;presenceLastSeenAt:string|null;
 }
 
+export interface DriverQueueSnapshotItem {
+  driverId:string;
+  userId:string;
+  unitNumber:string;
+  status:DispatchQueueItem['status'];
+  queueOrder:number;
+  connectedAt:string;
+  presenceLastSeenAt:string|null;
+}
+
 const APP_PRESENCE_MAX_AGE_MS=4.5*60*1000;
 const FALLBACK_RECONCILE_MS=8000;
 const isFresh=(timestamp:string|null,maxAgeMs:number)=>{if(!timestamp)return false;const ageMs=Date.now()-new Date(timestamp).getTime();return Number.isFinite(ageMs)&&ageMs>=-60*1000&&ageMs<=maxAgeMs;};
@@ -43,6 +53,26 @@ export async function loadDispatchQueue(companyId:string,tripId?:string):Promise
  const locations=new Map((locationsResult.data??[]).map((row:any)=>[row.driver_id,row]));const presence=new Map<string,any>();for(const row of presenceResult.data??[])if(!presence.has(row.driver_id))presence.set(row.driver_id,row);const routes=new Map((routeResult.data??[]).map((row:any)=>[row.driver_id,row]));
  return (driversResult.data??[]).map((row:any)=>{const location=locations.get(row.id)as any,driverPresence=presence.get(row.id)as any,route=routes.get(row.id)as any;return{driverId:row.id,companyId:row.company_id,userId:row.user_id??'',unitNumber:row.unit_number,name:row.display_name,status:row.status,serviceEnabled:row.service_enabled??false,operationMode:row.operation_mode==='traditional'?'traditional':'app',queueOrder:Number(row.dispatch_queue_order??0),queueUpdatedAt:row.dispatch_queue_updated_at??new Date().toISOString(),lat:location?.lat==null?null:Number(location.lat),lng:location?.lng==null?null:Number(location.lng),locationUpdatedAt:location?.recorded_at??null,locationAddress:location?.address??'Sin ubicación GPS reportada',presenceLastSeenAt:driverPresence?.last_seen_at??null,routeDistanceKm:route?.distance_km==null?null:Number(route.distance_km),routeDurationSeconds:route?.duration_seconds==null?null:Number(route.duration_seconds),routeProvider:route?.provider??null,routeComputedAt:route?.computed_at??null} satisfies DispatchQueueItem;});
 }
+
+/**
+ * Snapshot mínimo y seguro para la app del conductor. La RLS de `drivers`
+ * intencionalmente oculta las filas de otros móviles; este RPC devuelve sólo
+ * lo necesario para mostrar posición y cantidad de conectados de la central.
+ */
+export async function loadDriverQueueSnapshot(companyId:string):Promise<DriverQueueSnapshotItem[]>{
+ const{data,error}=await requireSupabase().rpc('centralgo_driver_queue_snapshot',{target_company:companyId});
+ if(error)throw error;
+ return (data??[]).map((row:any)=>({
+  driverId:String(row.driver_id),
+  userId:row.user_id?String(row.user_id):'',
+  unitNumber:String(row.unit_number??''),
+  status:row.status as DriverQueueSnapshotItem['status'],
+  queueOrder:Number(row.queue_order??0),
+  connectedAt:String(row.connected_at??''),
+  presenceLastSeenAt:row.presence_last_seen_at?String(row.presence_last_seen_at):null,
+ }));
+}
+
 export async function refreshDispatchRouteMatrix(tripId:string){const{error}=await requireSupabase().rpc('centralgo_operator_refresh_route_matrix',{p_trip_id:tripId});if(error)throw error;}
 export async function moveDispatchPriority(driverId:string,direction:DispatchQueueDirection){const{error}=await requireSupabase().rpc('centralgo_operator_move_driver_priority',{p_driver_id:driverId,p_direction:direction});if(error)throw error;}
 export async function setDriverOperationMode(driverId:string,mode:DriverOperationMode){const{error}=await requireSupabase().rpc('centralgo_operator_set_driver_operation_mode',{p_driver_id:driverId,p_mode:mode});if(error)throw error;}
@@ -50,8 +80,8 @@ export async function setTraditionalDriverAvailability(driverId:string,available
 
 /**
  * Realtime es la vía rápida. El sondeo visible de 8 s es deliberadamente un
- * cinturón de seguridad: una pestaña de central no puede quedar desactualizada
- * indefinidamente por una reconexión WebSocket perdida.
+ * cinturón de seguridad: una pestaña no puede quedar desactualizada
+ * indefinidamente aunque RLS o una reconexión WebSocket oculten algún evento.
  */
 export function subscribeDispatchQueue(companyId:string,onChange:()=>void){
  const db=requireSupabase();
