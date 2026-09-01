@@ -23,6 +23,7 @@ import './operatorTripDensity2026.css';
 import './visualPolish2026.css';
 import './driverCompactControls2026.css';
 import './driverAlwaysOnGpsVividControls.css';
+import './operatorTripUrgencyFill.css';
 import {registerServiceWorker} from './lib/pwa';
 import {registerRegionalPartnerReferralBootstrap} from './lib/regionalPartnerReferralBootstrap';
 import {registerGoogleOnboardingRoleBootstrap} from './lib/googleOnboardingRoleBootstrap';
