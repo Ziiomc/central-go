@@ -50,6 +50,21 @@ export const isQueueConnected=(item:DispatchQueueItem)=>{
   return isFresh(item.presenceLastSeenAt,APP_PRESENCE_MAX_AGE_MS);
 };
 
+/**
+ * Los desconectados son un bloque visual separado al final de la consola. Para
+ * ese bloque la operadora necesita encontrarlos por número de móvil (1, 2, 10),
+ * no por el instante en que se desconectaron. Esto sólo modifica el orden del
+ * snapshot del cliente; el dispatch_queue_order persistido en Postgres no cambia.
+ */
+const disconnectedDisplayOrder=(item:DispatchQueueItem)=>{
+  const disconnected=item.status==='offline'
+    ||(item.operationMode==='app'&&item.status==='available'&&!isQueueConnected(item));
+  if(!disconnected)return item.queueOrder;
+  const match=item.unitNumber.match(/\d+/);
+  const numeric=match?Number(match[0]):Number.NaN;
+  return Number.isFinite(numeric)?numeric:item.queueOrder;
+};
+
 export async function loadDispatchQueue(companyId:string,tripId?:string):Promise<DispatchQueueItem[]>{
  const db=requireSupabase();
  const[driversResult,locationsResult,presenceResult,routeResult]=await Promise.all([
@@ -60,7 +75,8 @@ export async function loadDispatchQueue(companyId:string,tripId?:string):Promise
  ]);
  if(driversResult.error)throw driversResult.error;if(locationsResult.error)throw locationsResult.error;if(presenceResult.error)throw presenceResult.error;if(routeResult.error)throw routeResult.error;
  const locations=new Map((locationsResult.data??[]).map((row:any)=>[row.driver_id,row]));const presence=new Map<string,any>();for(const row of presenceResult.data??[])if(!presence.has(row.driver_id))presence.set(row.driver_id,row);const routes=new Map((routeResult.data??[]).map((row:any)=>[row.driver_id,row]));
- return (driversResult.data??[]).map((row:any)=>{const location=locations.get(row.id)as any,driverPresence=presence.get(row.id)as any,route=routes.get(row.id)as any;return{driverId:row.id,companyId:row.company_id,userId:row.user_id??'',unitNumber:row.unit_number,name:row.display_name,status:row.status,serviceEnabled:row.service_enabled??false,operationMode:row.operation_mode==='traditional'?'traditional':'app',queueOrder:Number(row.dispatch_queue_order??0),queueUpdatedAt:row.dispatch_queue_updated_at??new Date().toISOString(),presenceStartedAt:driverPresence?.started_at??null,lat:location?.lat==null?null:Number(location.lat),lng:location?.lng==null?null:Number(location.lng),locationUpdatedAt:location?.recorded_at??null,locationAddress:location?.address??'Sin ubicación GPS reportada',presenceLastSeenAt:driverPresence?.last_seen_at??null,routeDistanceKm:route?.distance_km==null?null:Number(route.distance_km),routeDurationSeconds:route?.duration_seconds==null?null:Number(route.duration_seconds),routeProvider:route?.provider??null,routeComputedAt:route?.computed_at??null} satisfies DispatchQueueItem;});
+ const items=(driversResult.data??[]).map((row:any)=>{const location=locations.get(row.id)as any,driverPresence=presence.get(row.id)as any,route=routes.get(row.id)as any;return{driverId:row.id,companyId:row.company_id,userId:row.user_id??'',unitNumber:row.unit_number,name:row.display_name,status:row.status,serviceEnabled:row.service_enabled??false,operationMode:row.operation_mode==='traditional'?'traditional':'app',queueOrder:Number(row.dispatch_queue_order??0),queueUpdatedAt:row.dispatch_queue_updated_at??new Date().toISOString(),presenceStartedAt:driverPresence?.started_at??null,lat:location?.lat==null?null:Number(location.lat),lng:location?.lng==null?null:Number(location.lng),locationUpdatedAt:location?.recorded_at??null,locationAddress:location?.address??'Sin ubicación GPS reportada',presenceLastSeenAt:driverPresence?.last_seen_at??null,routeDistanceKm:route?.distance_km==null?null:Number(route.distance_km),routeDurationSeconds:route?.duration_seconds==null?null:Number(route.duration_seconds),routeProvider:route?.provider??null,routeComputedAt:route?.computed_at??null} satisfies DispatchQueueItem;});
+ return items.map((item)=>({...item,queueOrder:disconnectedDisplayOrder(item)}));
 }
 
 /**
