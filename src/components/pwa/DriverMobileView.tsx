@@ -16,6 +16,7 @@ import { isFlexibleDestinationAddress, isValidMapCoordinate } from '../../lib/fl
 import { useColorTheme } from '../../lib/theme';
 import centralGoLogo from '../../assets/images/central-go-logo.svg';
 import{uploadOwnAvatar}from'../../lib/profileMediaRepository';
+import{DriverPriorityCounter}from'./DriverPriorityCounter';
 
 const GPS_WANTED_KEY = 'centralgo-driver-gps-wanted';
 
@@ -492,7 +493,7 @@ export const DriverMobileView: React.FC = () => {
           </div>
         </header>
 
-        <div id="driver-queue-summary-slot" />
+        <DriverPriorityCounter/>
 
         {!radioReady && (
           <section className="rounded-xl border border-blue-500/25 bg-blue-500/[0.05] px-3 py-2.5">
