@@ -49,6 +49,29 @@
     if (themeColor) themeColor.setAttribute('content', theme === 'light' ? '#e7f0f9' : '#061120');
   }
 
+  // Operator manual-control safety patch: disconnected mobiles must remain
+  // manually incorporable. React intentionally locks drag/reorder controls for
+  // disconnected rows, but the same lock was also disabling the green power
+  // button. Re-enable only that control on rows explicitly marked DESCONECTADO;
+  // paused and in-trip mobiles remain protected.
+  var enableDisconnectedPowerButtons = function () {
+    var buttons = document.querySelectorAll('button[aria-label^="Incorporar o retirar el móvil"]');
+    buttons.forEach(function (button) {
+      var row = button.closest('[title*="DESCONECTADO"]');
+      if (row && button.disabled) button.disabled = false;
+    });
+  };
+
+  var installOperatorPowerGuard = function () {
+    enableDisconnectedPowerButtons();
+    if (!document.body || typeof MutationObserver === 'undefined') return;
+    var observer = new MutationObserver(function () { enableDisconnectedPowerButtons(); });
+    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['disabled', 'title'] });
+  };
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', installOperatorPowerGuard, { once: true });
+  else installOperatorPowerGuard();
+
   // Driver install hot path: use the early captured native prompt directly from
   // the existing button. If no native prompt exists, React keeps handling the
   // click and shows the platform-specific manual installation instructions.
