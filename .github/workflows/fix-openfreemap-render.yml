@@ -1,0 +1,43 @@
+name: Fix OpenFreeMap rendering
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/fix-openfreemap-render.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  fix-map-renderer:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Pin compatible MapLibre
+        run: npm install maplibre-gl@5.6.1 --save-exact
+
+      - name: Run full test suite
+        run: npm test
+
+      - name: Commit compatibility fix
+        run: |
+          git config user.name "central-go-automation"
+          git config user.email "actions@users.noreply.github.com"
+          git add package.json package-lock.json
+          if git diff --cached --quiet; then
+            echo "No dependency changes needed"
+            exit 0
+          fi
+          git commit -m "fix: pin MapLibre 5 for OpenFreeMap rendering"
+          git push origin HEAD:main
