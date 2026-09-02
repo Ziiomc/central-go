@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import L from 'leaflet';
+import { maplibreGL } from '@maplibre/maplibre-gl-leaflet';
+import 'maplibre-gl/dist/maplibre-gl.css';
 import 'leaflet/dist/leaflet.css';
 import {
   ArrowLeft,
@@ -422,9 +424,8 @@ export const SalesDemoScreen: React.FC = () => {
     if (!mapContainerRef.current || mapRef.current || activeView !== 'operator') return;
     const map = L.map(mapContainerRef.current, { center, zoom: 14, zoomControl: false });
     L.control.zoom({ position: 'bottomright' }).addTo(map);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      attribution: '&copy; OpenStreetMap &copy; CARTO', maxZoom: 19, subdomains: 'abcd',
-    }).addTo(map);
+    maplibreGL({ style: 'https://tiles.openfreemap.org/styles/dark', attributionControl: false }).addTo(map);
+    map.attributionControl.addAttribution('OpenFreeMap © OpenMapTiles · Datos © OpenStreetMap contributors');
     map.on('click', () => setSelectedTaxiId(null));
     mapRef.current = map;
     const observer = new ResizeObserver(() => map.invalidateSize());

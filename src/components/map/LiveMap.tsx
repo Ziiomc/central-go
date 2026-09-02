@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
+import { maplibreGL } from '@maplibre/maplibre-gl-leaflet';
+import 'maplibre-gl/dist/maplibre-gl.css';
 import { useApp } from '../../context/AppContext';
 import { Driver, Trip, DriverStatus } from '../../types';
 import { requestDrivingRoute, RoadPoint } from '../../lib/roadRouting';
@@ -9,6 +11,11 @@ import { sendDriverRadioMessage } from '../../lib/driverOperations';
 import { useColorTheme } from '../../lib/theme';
 
 const escapePopupText = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, (character) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#039;' }[character] || character));
+
+const OPENFREEMAP_STYLES = {
+  dark: 'https://tiles.openfreemap.org/styles/dark',
+  street: 'https://tiles.openfreemap.org/styles/liberty',
+} as const;
 
 interface LiveMapProps {
   height?: string;
@@ -27,6 +34,7 @@ export const LiveMap: React.FC<LiveMapProps> = ({
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
+  const baseLayerRef = useRef<L.Layer | null>(null);
   const markersRef = useRef<{ [key: string]: L.Marker }>({});
   const tripPolylineRef = useRef<L.Polyline | null>(null);
   const approachPolylineRef = useRef<L.Polyline | null>(null);
@@ -59,14 +67,7 @@ export const LiveMap: React.FC<LiveMapProps> = ({
     if (!mapContainerRef.current || mapInstanceRef.current) return;
     const map = L.map(mapContainerRef.current, { center: defaultCenter, zoom: 14, zoomControl: false });
     L.control.zoom({ position: 'bottomright' }).addTo(map);
-    const initialTileUrl = tileMode === 'dark'
-      ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-      : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
-    L.tileLayer(initialTileUrl, {
-      attribution: tileMode === 'dark' ? '&copy; CARTO' : '&copy; OpenStreetMap',
-      maxZoom: 19,
-      subdomains: 'abcd',
-    }).addTo(map);
+    map.attributionControl.addAttribution('OpenFreeMap © OpenMapTiles · Datos © OpenStreetMap contributors');
     mapInstanceRef.current = map;
     const clearDriverFocus = () => { map.closePopup(); onSelectDriver?.(null); };
     map.on('click', clearDriverFocus);
@@ -75,6 +76,7 @@ export const LiveMap: React.FC<LiveMapProps> = ({
     resizeObserver.observe(mapContainerRef.current);
     return () => {
       resizeObserver.disconnect();
+      baseLayerRef.current = null;
       map.remove();
       mapInstanceRef.current = null;
     };
@@ -118,11 +120,15 @@ export const LiveMap: React.FC<LiveMapProps> = ({
   useEffect(() => {
     const map = mapInstanceRef.current;
     if (!map) return;
-    map.eachLayer((layer) => { if (layer instanceof L.TileLayer) map.removeLayer(layer); });
-    const url = tileMode === 'dark'
-      ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-      : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
-    L.tileLayer(url, { maxZoom: 19, attribution: tileMode === 'dark' ? '&copy; CARTO' : '&copy; OpenStreetMap' }).addTo(map);
+    baseLayerRef.current?.remove();
+    baseLayerRef.current = maplibreGL({
+      style: OPENFREEMAP_STYLES[tileMode],
+      attributionControl: false,
+    }).addTo(map);
+    return () => {
+      baseLayerRef.current?.remove();
+      baseLayerRef.current = null;
+    };
   }, [tileMode]);
 
   const enableSmoothMarkerTransition = (marker: L.Marker) => {
