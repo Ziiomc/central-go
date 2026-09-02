@@ -243,11 +243,13 @@ export const OperatorConsole: React.FC = () => {
     .filter((driver): driver is Driver => Boolean(driver)), [activeTripDriverIds, drivers, queueItems]);
 
   const queueDrivers = useMemo(() => queueItems
-    .filter((item) => activeTripDriverIds.has(item.driverId) || (item.status === 'available' && isQueueConnected(item)))
+    .filter((item) => activeTripDriverIds.has(item.driverId) || item.serviceEnabled)
     .sort((a, b) => {
-      const aBusy = activeTripDriverIds.has(a.driverId);
-      const bBusy = activeTripDriverIds.has(b.driverId);
-      if (aBusy !== bBusy) return aBusy ? 1 : -1;
+      const disconnected = (item: DispatchQueueItem) => item.status === 'offline'
+        || (item.operationMode === 'app' && item.status === 'available' && !isQueueConnected(item));
+      const rank = (item: DispatchQueueItem) => disconnected(item) ? 2 : activeTripDriverIds.has(item.driverId) ? 1 : 0;
+      const rankDifference = rank(a) - rank(b);
+      if (rankDifference) return rankDifference;
       return a.queueOrder - b.queueOrder || a.unitNumber.localeCompare(b.unitNumber, 'es', { numeric: true });
     })
     .map((item) => drivers.find((driver) => driver.id === item.driverId))
@@ -626,7 +628,7 @@ export const OperatorConsole: React.FC = () => {
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">
                 <h2 className="text-sm font-black text-white">Móviles en fila</h2>
-                <p className="mt-0.5 truncate text-[10px] text-zinc-500">Libres primero · en carrera al final</p>
+                <p className="mt-0.5 truncate text-[10px] text-zinc-500">Pausa mantiene lugar · desconectados al final</p>
               </div>
               <div className="flex shrink-0 items-center gap-1.5">
                 <button
@@ -661,6 +663,11 @@ export const OperatorConsole: React.FC = () => {
             ) : queueDrivers.map((driver: Driver, index) => {
               const focused = focusDriverId === driver.id;
               const inTrip = activeTripDriverIds.has(driver.id);
+              const queueItem = queueItemByDriverId.get(driver.id);
+              const paused = !inTrip && queueItem?.status === 'paused';
+              const disconnected = !inTrip && Boolean(queueItem) && (queueItem?.status === 'offline'
+                || (queueItem?.operationMode === 'app' && queueItem?.status === 'available' && !isQueueConnected(queueItem)));
+              const statusLocked = inTrip || paused || disconnected;
               const waitingIndex = availableDrivers.findIndex((item) => item.id === driver.id);
               const dragging = dragDriverId === driver.id;
               const vehicle = driver.vehicleId ? vehicleById.get(driver.vehicleId) : undefined;
@@ -669,9 +676,9 @@ export const OperatorConsole: React.FC = () => {
                   key={driver.id}
                   role="button"
                   tabIndex={0}
-                  draggable={!inTrip}
+                  draggable={!statusLocked}
                   onDragStart={(event) => {
-                    if (inTrip) { event.preventDefault(); return; }
+                    if (statusLocked) { event.preventDefault(); return; }
                     event.dataTransfer.effectAllowed = 'move';
                     event.dataTransfer.setData(DRIVER_MIME, driver.id);
                     event.dataTransfer.setData('text/plain', driver.id);
@@ -680,18 +687,18 @@ export const OperatorConsole: React.FC = () => {
                   onDragEnd={() => { setDragDriverId(null); setDragOverTripId(null); }}
                   onClick={() => setFocusDriverId(focused ? null : driver.id)}
                   onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setFocusDriverId(focused ? null : driver.id); } }}
-                  className={`group relative flex w-full items-center gap-2 px-3 py-2 text-left transition ${inTrip ? 'cursor-default border-l-2 border-amber-300/60 bg-amber-500/[0.14]' : 'cursor-grab active:cursor-grabbing'} ${dragging ? 'opacity-45' : ''} ${focused ? (inTrip ? 'bg-amber-500/[0.20]' : 'bg-emerald-500/[0.10]') : (inTrip ? 'hover:bg-amber-500/[0.18]' : 'hover:bg-zinc-900/70')}`}
-                  title={inTrip ? `${driver.name} · EN CARRERA · permanece visible al final de la fila.` : `${driver.name} · ${driver.currentLocation.address || DRIVER_STATUS_LABELS[driver.status]}. Puedes arrastrar este móvil sobre una carrera pendiente.`}
+                  className={`group relative flex w-full items-center gap-2 px-3 py-2 text-left transition ${disconnected ? 'cursor-default border-l-2 border-rose-400/70 bg-rose-500/[0.16]' : paused ? 'cursor-default border-l-2 border-amber-300/70 bg-amber-500/[0.16]' : inTrip ? 'cursor-default border-l-2 border-amber-300/60 bg-amber-500/[0.14]' : 'cursor-grab active:cursor-grabbing'} ${dragging ? 'opacity-45' : ''} ${focused ? (disconnected ? 'bg-rose-500/[0.22]' : (paused || inTrip) ? 'bg-amber-500/[0.22]' : 'bg-emerald-500/[0.10]') : (disconnected ? 'hover:bg-rose-500/[0.20]' : (paused || inTrip) ? 'hover:bg-amber-500/[0.20]' : 'hover:bg-zinc-900/70')}`}
+                  title={disconnected ? `${driver.name} · DESCONECTADO · permanece visible en rojo al final de la fila.` : paused ? `${driver.name} · PAUSA · conserva su posición en la fila.` : inTrip ? `${driver.name} · EN CARRERA · permanece visible al final de la fila.` : `${driver.name} · ${driver.currentLocation.address || DRIVER_STATUS_LABELS[driver.status]}. Puedes arrastrar este móvil sobre una carrera pendiente.`}
                 >
-                  <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-md border text-[10px] font-black ${inTrip ? 'border-amber-300/45 bg-amber-400/15 text-amber-200' : 'border-emerald-400/25 bg-emerald-500/10 text-emerald-300'}`} title={inTrip ? 'En carrera · al final de la fila' : `Posición ${waitingIndex + 1} en la fila`}>{index + 1}</span>
+                  <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-md border text-[10px] font-black ${disconnected ? 'border-rose-300/55 bg-rose-400/20 text-rose-100' : (paused || inTrip) ? 'border-amber-300/45 bg-amber-400/15 text-amber-200' : 'border-emerald-400/25 bg-emerald-500/10 text-emerald-300'}`} title={disconnected ? 'Desconectado · al final de la fila' : paused ? `Pausa · conserva la posición ${index + 1}` : inTrip ? 'En carrera · al final de la fila' : `Posición ${waitingIndex + 1} en la fila`}>{index + 1}</span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-lg font-black leading-none text-white">{driver.unitNumber}</span>
                   </span>
                   <span className="flex shrink-0 items-center gap-1" onClick={(event) => event.stopPropagation()}>
-                    <button type="button" disabled={Boolean(manualBusyId) || inTrip || waitingIndex < 0 || waitingIndex === availableDrivers.length - 1} onClick={() => void moveDriverInQueue(driver, 'down')} className="grid h-8 w-8 place-items-center rounded-lg border border-zinc-700 bg-zinc-900 text-zinc-300 transition hover:border-blue-400/40 hover:text-blue-200 disabled:opacity-25" title="Bajar un lugar en la fila" aria-label={`Bajar el móvil ${driver.unitNumber} en la fila`}><ArrowDown className="h-3.5 w-3.5" /></button>
+                    <button type="button" disabled={Boolean(manualBusyId) || statusLocked || waitingIndex < 0 || waitingIndex === availableDrivers.length - 1} onClick={() => void moveDriverInQueue(driver, 'down')} className="grid h-8 w-8 place-items-center rounded-lg border border-zinc-700 bg-zinc-900 text-zinc-300 transition hover:border-blue-400/40 hover:text-blue-200 disabled:opacity-25" title="Bajar un lugar en la fila" aria-label={`Bajar el móvil ${driver.unitNumber} en la fila`}><ArrowDown className="h-3.5 w-3.5" /></button>
                     <button
                       type="button"
-                      disabled={Boolean(manualBusyId) || inTrip}
+                      disabled={Boolean(manualBusyId) || statusLocked}
                       onClick={() => void toggleQueueIncorporation(driver)}
                       className="grid h-8 w-8 place-items-center rounded-lg border border-emerald-400/35 bg-emerald-500/15 text-emerald-200 transition hover:bg-emerald-500 hover:text-emerald-950 disabled:opacity-40"
                       title="Incorporar o retirar de la fila manual"
@@ -701,7 +708,7 @@ export const OperatorConsole: React.FC = () => {
                     </button>
                     <button
                       type="button"
-                      disabled={inTrip}
+                      disabled={statusLocked}
                       aria-pressed={priorityHolds[driver.id] != null}
                       onClick={() => togglePriorityHold(driver)}
                       className={`grid h-8 w-8 place-items-center rounded-lg border transition disabled:opacity-30 ${priorityHolds[driver.id] != null ? 'border-amber-300/50 bg-amber-400 text-zinc-950' : 'border-zinc-700 bg-zinc-900 text-zinc-400 hover:border-amber-400/40 hover:text-amber-200'}`}
@@ -711,12 +718,12 @@ export const OperatorConsole: React.FC = () => {
                       <Pin className="h-3.5 w-3.5" />
                     </button>
                   </span>
-                  <GripVertical className={`h-4 w-4 shrink-0 ${inTrip ? 'text-amber-400/30' : 'text-zinc-700'}`} />
-                  <span role="tooltip" className={`pointer-events-none absolute right-[calc(100%+8px)] top-1/2 z-50 hidden w-56 -translate-y-1/2 rounded-xl border bg-zinc-950 p-3 text-left shadow-2xl shadow-black/60 group-hover:block group-focus-visible:block ${inTrip ? 'border-amber-400/30' : 'border-emerald-400/25'}`}>
-                    <span className="flex items-center justify-between gap-2"><strong className="truncate text-xs text-white">{driver.name}</strong><b className={`rounded px-1.5 py-0.5 text-[8px] ${inTrip ? 'bg-amber-500/15 text-amber-200' : 'bg-emerald-500/15 text-emerald-300'}`}>Móvil {driver.unitNumber}</b></span>
+                  <GripVertical className={`h-4 w-4 shrink-0 ${disconnected ? 'text-rose-400/35' : (paused || inTrip) ? 'text-amber-400/30' : 'text-zinc-700'}`} />
+                  <span role="tooltip" className={`pointer-events-none absolute right-[calc(100%+8px)] top-1/2 z-50 hidden w-56 -translate-y-1/2 rounded-xl border bg-zinc-950 p-3 text-left shadow-2xl shadow-black/60 group-hover:block group-focus-visible:block ${disconnected ? 'border-rose-400/35' : (paused || inTrip) ? 'border-amber-400/30' : 'border-emerald-400/25'}`}>
+                    <span className="flex items-center justify-between gap-2"><strong className="truncate text-xs text-white">{driver.name}</strong><b className={`rounded px-1.5 py-0.5 text-[8px] ${disconnected ? 'bg-rose-500/15 text-rose-200' : (paused || inTrip) ? 'bg-amber-500/15 text-amber-200' : 'bg-emerald-500/15 text-emerald-300'}`}>Móvil {driver.unitNumber}</b></span>
                     <span className="mt-1 block truncate text-[9px] text-zinc-400">{driver.phone || 'Sin teléfono registrado'}</span>
                     <span className="mt-1 block truncate text-[9px] text-zinc-500">{vehicle?.licensePlate ? `Patente ${vehicle.licensePlate} · ` : ''}{driver.currentLocation.address || 'Ubicación sin dirección'}</span>
-                    <span className={`mt-2 block border-t border-zinc-800 pt-2 text-[9px] font-black ${inTrip ? 'text-amber-300' : 'text-emerald-300'}`}>● {inTrip ? 'EN CARRERA' : DRIVER_STATUS_LABELS[driver.status]}</span>
+                    <span className={`mt-2 block border-t border-zinc-800 pt-2 text-[9px] font-black ${disconnected ? 'text-rose-300' : (paused || inTrip) ? 'text-amber-300' : 'text-emerald-300'}`}>● {disconnected ? 'DESCONECTADO' : paused ? 'PAUSA' : inTrip ? 'EN CARRERA' : DRIVER_STATUS_LABELS[driver.status]}</span>
                   </span>
                 </div>
               );
