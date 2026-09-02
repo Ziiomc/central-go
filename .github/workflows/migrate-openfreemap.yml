@@ -1,0 +1,149 @@
+name: Migrate Central GO to OpenFreeMap
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/migrate-openfreemap.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install OpenFreeMap renderer
+        run: npm install --save maplibre-gl@^6.6.0 @maplibre/maplibre-gl-leaflet@^0.1.4
+
+      - name: Patch live map and CSP
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          live = Path('src/components/map/LiveMap.tsx')
+          text = live.read_text()
+
+          old = "import L from 'leaflet';\n"
+          new = "import L from 'leaflet';\nimport { maplibreGL } from '@maplibre/maplibre-gl-leaflet';\nimport 'maplibre-gl/dist/maplibre-gl.css';\n"
+          assert old in text, 'Leaflet import not found'
+          text = text.replace(old, new, 1)
+
+          old = "const escapePopupText = (value: unknown) => String(value ?? '').replace(/[&<>\\\"']/g, (character) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '\\"':'&quot;', \"'\":'&#039;' }[character] || character));\n"
+          new = old + "\nconst OPENFREEMAP_STYLES = {\n  dark: 'https://tiles.openfreemap.org/styles/dark',\n  street: 'https://tiles.openfreemap.org/styles/liberty',\n} as const;\n"
+          assert old in text, 'escapePopupText anchor not found'
+          text = text.replace(old, new, 1)
+
+          old = "  const mapInstanceRef = useRef<L.Map | null>(null);\n"
+          new = old + "  const baseLayerRef = useRef<L.Layer | null>(null);\n"
+          assert old in text, 'mapInstanceRef anchor not found'
+          text = text.replace(old, new, 1)
+
+          old = """    const map = L.map(mapContainerRef.current, { center: defaultCenter, zoom: 14, zoomControl: false });
+    L.control.zoom({ position: 'bottomright' }).addTo(map);
+    const initialTileUrl = tileMode === 'dark'
+      ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+      : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+    L.tileLayer(initialTileUrl, {
+      attribution: tileMode === 'dark' ? '&copy; CARTO' : '&copy; OpenStreetMap',
+      maxZoom: 19,
+      subdomains: 'abcd',
+    }).addTo(map);
+    mapInstanceRef.current = map;
+"""
+          new = """    const map = L.map(mapContainerRef.current, { center: defaultCenter, zoom: 14, zoomControl: false });
+    L.control.zoom({ position: 'bottomright' }).addTo(map);
+    map.attributionControl.addAttribution('OpenFreeMap © OpenMapTiles · Datos © OpenStreetMap contributors');
+    mapInstanceRef.current = map;
+"""
+          assert old in text, 'Initial CARTO tile block not found'
+          text = text.replace(old, new, 1)
+
+          old = """    return () => {
+      resizeObserver.disconnect();
+      map.remove();
+      mapInstanceRef.current = null;
+    };
+"""
+          new = """    return () => {
+      resizeObserver.disconnect();
+      baseLayerRef.current = null;
+      map.remove();
+      mapInstanceRef.current = null;
+    };
+"""
+          assert old in text, 'Map cleanup block not found'
+          text = text.replace(old, new, 1)
+
+          old = """  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+    map.eachLayer((layer) => { if (layer instanceof L.TileLayer) map.removeLayer(layer); });
+    const url = tileMode === 'dark'
+      ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+      : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+    L.tileLayer(url, { maxZoom: 19, attribution: tileMode === 'dark' ? '&copy; CARTO' : '&copy; OpenStreetMap' }).addTo(map);
+  }, [tileMode]);
+"""
+          new = """  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+    baseLayerRef.current?.remove();
+    baseLayerRef.current = maplibreGL({
+      style: OPENFREEMAP_STYLES[tileMode],
+      attributionControl: false,
+    }).addTo(map);
+    return () => {
+      baseLayerRef.current?.remove();
+      baseLayerRef.current = null;
+    };
+  }, [tileMode]);
+"""
+          assert old in text, 'CARTO tile-mode effect not found'
+          text = text.replace(old, new, 1)
+
+          assert 'cartocdn.com' not in text, 'CARTO URL still present after patch'
+          live.write_text(text)
+
+          vercel = Path('vercel.json')
+          vtext = vercel.read_text()
+          old = "connect-src 'self' https://cuazdzsvgwrnpczbvrgx.supabase.co wss://cuazdzsvgwrnpczbvrgx.supabase.co https://router.project-osrm.org;"
+          new = "connect-src 'self' https://cuazdzsvgwrnpczbvrgx.supabase.co wss://cuazdzsvgwrnpczbvrgx.supabase.co https://router.project-osrm.org https://tiles.openfreemap.org;"
+          assert old in vtext, 'CSP connect-src anchor not found'
+          vtext = vtext.replace(old, new, 1)
+          vercel.write_text(vtext)
+          PY
+
+      - name: Verify CARTO is removed
+        run: |
+          if grep -RIn --exclude-dir=node_modules --exclude-dir=.git 'cartocdn.com\|&copy; CARTO' src vercel.json; then
+            echo 'CARTO references remain' >&2
+            exit 1
+          fi
+
+      - name: Run full test suite
+        run: npm test
+
+      - name: Commit migration
+        run: |
+          git config user.name 'central-go-automation'
+          git config user.email 'actions@users.noreply.github.com'
+          git add src/components/map/LiveMap.tsx package.json package-lock.json vercel.json
+          if git diff --cached --quiet; then
+            echo 'No migration changes to commit.'
+            exit 0
+          fi
+          git commit -m 'fix: migrate maps from CARTO to OpenFreeMap'
+          git push origin HEAD:main
