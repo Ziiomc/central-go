@@ -5,6 +5,7 @@ import { Driver, Trip, DriverStatus } from '../../types';
 import { requestDrivingRoute, RoadPoint } from '../../lib/roadRouting';
 import { isFlexibleDestinationAddress, isValidMapCoordinate } from '../../lib/flexibleDestination';
 import { ShieldAlert, Navigation, Layers, Crosshair } from 'lucide-react';
+import { sendDriverRadioMessage } from '../../lib/driverOperations';
 import { useColorTheme } from '../../lib/theme';
 
 const escapePopupText = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, (character) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#039;' }[character] || character));
@@ -32,7 +33,7 @@ export const LiveMap: React.FC<LiveMapProps> = ({
   const tripMarkersRef = useRef<L.Marker[]>([]);
   const userGpsMarkerRef = useRef<L.Marker | null>(null);
 
-  const { drivers, trips, vehicles, activeSOSDriver, setNewTripModalOpen, setVHFModalDriver } = useApp();
+  const { drivers, trips, vehicles, activeSOSDriver, setNewTripModalOpen, currentCompany, addAuditLog } = useApp();
   const { theme } = useColorTheme();
   const [tileMode, setTileMode] = useState<'dark' | 'street'>(theme === 'light' ? 'street' : 'dark');
   type MapFilterStatus = DriverStatus | 'assigned' | 'arrived' | 'all';
@@ -179,45 +180,58 @@ export const LiveMap: React.FC<LiveMapProps> = ({
       });
       const buildDriverPopup = () => {
         const popupContent = document.createElement('div');
-        const safeName = escapePopupText(driver.name);
-        const safePhone = escapePopupText(driver.phone || 'Sin teléfono');
-        const safeTripCode = activeTrip ? escapePopupText(activeTrip.code) : '';
-        const safeClient = activeTrip ? escapePopupText(activeTrip.clientName) : '';
-        const safeDestination = activeTrip ? escapePopupText(activeTrip.destination.address) : '';
-        popupContent.className = 'cg-map-popup';
+        const canDispatch = !activeTrip && mapStatus === 'available';
+        const canMessage = Boolean(driver.userId);
+        popupContent.className = 'cg-map-popup cg-map-popup--quick';
         popupContent.innerHTML = `
-            <div class="cg-map-popup__head">
-              <div class="cg-map-popup__identity">
-                <div class="cg-map-popup__unit">${escapePopupText(driver.unitNumber)}</div>
-                <div class="cg-map-popup__person"><strong>${safeName}</strong><span>Móvil conectado · ${safePhone}</span></div>
-              </div>
-              <span class="cg-map-popup__status cg-map-popup__status--${statusTone}"><span></span>${statusText}</span>
+          <div style="width:230px;max-width:68vw;padding:2px 1px;color:#e4e4e7">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px">
+              <strong style="font-size:13px;color:white">Móvil ${escapePopupText(driver.unitNumber)}</strong>
+              <span style="font-size:9px;font-weight:900;color:${statusColor}">${statusText}</span>
             </div>
-            <div class="cg-map-popup__metrics">
-              <div><small>VELOCIDAD</small><strong>${speed} km/h</strong></div>
-              <div><small>CALIFICACIÓN</small><strong>★ ${driver.rating.toFixed(1)}</strong></div>
-              <div><small>VIAJES</small><strong>${driver.totalTripsCompleted}</strong></div>
+            <div style="display:flex;gap:6px;margin-bottom:${canMessage ? '7px' : '0'}">
+              ${canDispatch ? `<button id="btn-dispatch-${driver.id}" type="button" style="height:34px;flex:1;border:0;border-radius:9px;background:#2563eb;color:white;font-size:10px;font-weight:900;cursor:pointer">Despachar</button>` : ''}
+              ${!canDispatch && activeTrip ? `<span style="font-size:9px;color:#a1a1aa">${escapePopupText(activeTrip.code)} · en carrera</span>` : ''}
             </div>
-            ${activeTrip
-              ? `<div class="cg-map-popup__trip"><small>EN OPERACIÓN · ${safeTripCode}</small><strong>${safeClient}</strong><span>Destino: ${safeDestination}</span></div>`
-              : '<div class="cg-map-popup__trip cg-map-popup__trip--available"><small>OPERACIÓN</small><strong>Sin carrera activa</strong><span>Disponible para despacho</span></div>'}
-            <div class="cg-map-popup__actions"><button id="btn-dispatch-${driver.id}" class="cg-map-popup__action cg-map-popup__action--dispatch">Despachar</button><button id="btn-vhf-${driver.id}" class="cg-map-popup__action cg-map-popup__action--radio">Radio VHF</button></div>
-        `;
+            ${canMessage ? `<form id="form-message-${driver.id}" style="display:flex;gap:5px"><input id="msg-input-${driver.id}" maxlength="180" autocomplete="off" placeholder="Escribir mensaje…" style="height:34px;min-width:0;flex:1;border:1px solid #3f3f46;border-radius:9px;background:#09090b;color:white;padding:0 9px;font-size:10px;outline:none"/><button id="btn-message-${driver.id}" type="submit" style="height:34px;border:0;border-radius:9px;background:#22d3ee;color:#083344;padding:0 10px;font-size:10px;font-weight:900;cursor:pointer">Enviar</button></form><div id="msg-status-${driver.id}" style="min-height:13px;margin-top:4px;font-size:8px;color:#a1a1aa">Enter para enviar</div>` : '<div style="font-size:9px;color:#f59e0b">Este móvil no tiene cuenta vinculada para mensajes.</div>'}
+          </div>`;
+        const dispatchButton = popupContent.querySelector<HTMLButtonElement>(`#btn-dispatch-${driver.id}`);
+        if (dispatchButton) dispatchButton.onclick = () => {
+          onSelectDriver?.(driver);
+          setNewTripModalOpen(true);
+          map.closePopup();
+        };
+        const form = popupContent.querySelector<HTMLFormElement>(`#form-message-${driver.id}`);
+        const input = popupContent.querySelector<HTMLInputElement>(`#msg-input-${driver.id}`);
+        const sendButton = popupContent.querySelector<HTMLButtonElement>(`#btn-message-${driver.id}`);
+        const messageStatus = popupContent.querySelector<HTMLDivElement>(`#msg-status-${driver.id}`);
+        if (form && input && sendButton && messageStatus) form.addEventListener('submit', (event) => {
+          event.preventDefault();
+          const message = input.value.trim();
+          if (!message || sendButton.disabled) return;
+          sendButton.disabled = true;
+          messageStatus.textContent = 'Enviando…';
+          void sendDriverRadioMessage(currentCompany.id, driver, message)
+            .then(() => {
+              addAuditLog('MENSAJE_MAPA', `Mensaje enviado desde mapa a Móvil ${driver.unitNumber}: "${message}"`);
+              input.value = '';
+              messageStatus.textContent = 'Mensaje enviado';
+              messageStatus.style.color = '#6ee7b7';
+            })
+            .catch((error) => {
+              messageStatus.textContent = error instanceof Error ? error.message : 'No fue posible enviar el mensaje.';
+              messageStatus.style.color = '#fda4af';
+            })
+            .finally(() => { sendButton.disabled = false; });
+        });
         return popupContent;
       };
       const existing = markersRef.current[driver.id];
       if (existing) {
-        existing.setIcon(customIcon); existing.setLatLng([lat, lng]); existing.bindPopup(buildDriverPopup()); enableSmoothMarkerTransition(existing);
+        existing.setIcon(customIcon); existing.setLatLng([lat, lng]); existing.bindPopup(buildDriverPopup(), { maxWidth: 250, minWidth: 220 }); enableSmoothMarkerTransition(existing);
       } else {
         const marker = L.marker([lat, lng], { icon: customIcon }).addTo(map);
-        const popupContent = buildDriverPopup();
-        marker.bindPopup(popupContent);
-        marker.on('popupopen', () => {
-          const btnDispatch = document.getElementById(`btn-dispatch-${driver.id}`);
-          if (btnDispatch) btnDispatch.onclick = () => { onSelectDriver?.(driver); setNewTripModalOpen(true); };
-          const btnVhf = document.getElementById(`btn-vhf-${driver.id}`);
-          if (btnVhf) btnVhf.onclick = () => setVHFModalDriver(driver);
-        });
+        marker.bindPopup(buildDriverPopup(), { maxWidth: 250, minWidth: 220 });
         markersRef.current[driver.id] = marker;
         enableSmoothMarkerTransition(marker);
       }

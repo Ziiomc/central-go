@@ -14,6 +14,7 @@ import {
   Layers3,
   Lock,
   RadioTower,
+  ReceiptText,
   Route,
   Settings,
   ShieldCheck,
@@ -51,6 +52,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     { id: 'network_support', group: 'Red comercial', label: 'Soporte', icon: Headphones, roles: ['super_admin', 'regional_partner', 'sales_partner'] },
     { id: 'trips', group: 'Operación', label: 'Carreras', icon: Route, roles: ['company_admin', 'operator'] },
     { id: 'reservations', group: 'Operación', label: 'Reservas', icon: CalendarClock, roles: ['company_admin', 'operator'] },
+    { id: 'tariff', group: 'Operación', label: 'Tarifario', icon: ReceiptText, roles: ['company_admin', 'operator'] },
     { id: 'drivers', group: 'Operación', label: 'Conductores', icon: Users, roles: ['company_admin', 'operator'] },
     { id: 'vehicles', group: 'Operación', label: 'Vehículos y Flota', icon: Car, roles: ['company_admin'] },
     { id: 'clients', group: 'Operación', label: 'Clientes', icon: UserCheck, roles: ['company_admin', 'operator'] },
@@ -58,12 +60,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     { id: 'users', group: 'Administración', label: 'Usuarios y Permisos', icon: Lock, roles: ['super_admin'] },
     { id: 'reports', group: 'Administración', label: 'Reportes de Operación', icon: BarChart3, roles: ['company_admin'] },
     { id: 'history', group: 'Administración', label: currentRole === 'super_admin' ? 'Auditoría Global' : 'Historial Auditoría', icon: History, roles: ['super_admin', 'company_admin'] },
-    { id: 'settings', group: currentRole === 'operator' ? 'Operación' : 'Administración', label: currentRole === 'super_admin' ? 'Configuración Global' : currentRole === 'operator' ? 'Tarifario' : 'Configuración', icon: Settings, roles: ['super_admin', 'company_admin', 'operator'] },
+    { id: 'settings', group: 'Administración', label: currentRole === 'super_admin' ? 'Configuración Global' : 'Configuración', icon: Settings, roles: ['super_admin', 'company_admin'] },
     { id: 'profile', group: 'Cuenta', label: 'Mi Perfil', icon: User, roles: ['super_admin', 'regional_partner', 'sales_partner', 'company_admin', 'operator'] },
     { id: 'help', group: 'Cuenta', label: isNetworkRole ? 'Material y Ayuda' : 'Soporte e información', icon: HelpCircle, roles: ['super_admin', 'regional_partner', 'sales_partner', 'company_admin', 'operator'] },
   ];
 
-  const operatorCore = new Set(['dashboard', 'trips', 'reservations', 'drivers', 'settings', 'help']);
+  const operatorCore = new Set(['dashboard', 'trips', 'reservations', 'tariff', 'drivers', 'help']);
   const allowedItems = navItems
     .filter((item) => item.roles.includes(currentRole))
     .filter((item) => currentRole !== 'operator' || operatorCore.has(item.id));

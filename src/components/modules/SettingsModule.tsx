@@ -6,13 +6,14 @@ import{FontSizeControl}from'../FontSizeControl';
 import type{FareDestination}from'../../types';
 
 type SettingsTab='general'|'fare_values'|'tariff';
+type SettingsModuleProps={initialTab?:SettingsTab;tariffOnly?:boolean};
 
-export const SettingsModule:React.FC=()=>{
+export const SettingsModule:React.FC<SettingsModuleProps>=({initialTab='general',tariffOnly=false})=>{
  const{fareConfig,updateFareConfig,currentCompany,currentRole}=useApp();
  const isOperator=currentRole==='operator';
  const canManageGeneral=['super_admin','company_admin'].includes(currentRole);
  const canManageTariff=['super_admin','company_admin','operator'].includes(currentRole);
- const[activeTab,setActiveTab]=useState<SettingsTab>('general');
+ const[activeTab,setActiveTab]=useState<SettingsTab>(initialTab);
  const[baseFare,setBaseFare]=useState(fareConfig.baseFare),[pricePerKm,setPricePerKm]=useState(fareConfig.pricePerKm),[pricePerMinuteWait,setPricePerMinuteWait]=useState(fareConfig.pricePerMinuteWait),[nightSurchargePercent,setNightSurchargePercent]=useState(fareConfig.nightSurchargePercent),[savedSuccess,setSavedSuccess]=useState(false);
  const[destinations,setDestinations]=useState<FareDestination[]>([]),[destName,setDestName]=useState(''),[matchText,setMatchText]=useState(''),[destFare,setDestFare]=useState(''),[fareError,setFareError]=useState(''),[savingDestination,setSavingDestination]=useState(false);
  const reload=async()=>{if(!canManageTariff||currentCompany.id==='network')return;try{setDestinations(await loadFareDestinations(currentCompany.id));setFareError('');}catch(e){setFareError(e instanceof Error?e.message:'No fue posible cargar el tarifario.');}};
@@ -28,7 +29,7 @@ export const SettingsModule:React.FC=()=>{
   <div className="mt-4 overflow-hidden rounded-xl border border-zinc-800"><div className="grid grid-cols-[1fr_auto] bg-zinc-950/80 px-3 py-2 text-[9px] font-black uppercase tracking-wider text-zinc-500"><span>Destino / sector</span><span>Valor</span></div>{destinations.map(item=><div key={item.id} className="grid grid-cols-[1fr_auto] items-center gap-3 border-t border-zinc-800 bg-zinc-950/35 px-3 py-3"><div className="min-w-0"><p className="truncate text-sm font-black text-white">{item.name}</p><p className="mt-0.5 truncate text-[9px] text-zinc-600">Detecta: {item.matchText}</p></div><div className="flex items-center gap-2"><strong className="whitespace-nowrap text-base text-emerald-300">${Math.round(item.fareAmount).toLocaleString('es-CL')}</strong><button type="button" onClick={()=>void removeDestination(item)} className="grid h-9 w-9 place-items-center rounded-lg border border-rose-500/20 bg-rose-500/10 text-rose-300" title={`Eliminar ${item.name}`}><Trash2 className="h-4 w-4"/></button></div></div>)}{!destinations.length&&!fareError&&<p className="border-t border-zinc-800 p-5 text-center text-xs text-zinc-600">Aún no hay tarifas. Usa los campos de arriba para ingresar la primera.</p>}</div>
  </section>;
 
- if(isOperator)return <div className="mx-auto max-w-4xl space-y-5"><div className="rounded-2xl border border-amber-400/20 bg-gradient-to-br from-amber-400/[0.08] to-transparent p-5"><h1 className="flex items-center gap-2 text-2xl font-extrabold text-white"><DollarSign className="h-6 w-6 text-amber-300"/>Tarifario</h1><p className="mt-1 text-xs leading-relaxed text-zinc-400">Hoja simple para consultar, agregar y mantener los valores por destino durante el despacho.</p></div>{tariffSheet}</div>;
+ if(isOperator||tariffOnly)return <div className="mx-auto max-w-4xl space-y-5"><div className="rounded-2xl border border-amber-400/20 bg-gradient-to-br from-amber-400/[0.08] to-transparent p-5"><h1 className="flex items-center gap-2 text-2xl font-extrabold text-white"><DollarSign className="h-6 w-6 text-amber-300"/>Tarifario</h1><p className="mt-1 text-xs leading-relaxed text-zinc-400">Hoja simple para consultar, agregar y mantener los valores por destino durante el despacho.</p></div>{tariffSheet}</div>;
 
  return <div className="mx-auto max-w-4xl space-y-5">
   <div className="rounded-2xl border border-blue-500/20 bg-gradient-to-br from-blue-500/[0.08] to-transparent p-5"><h1 className="flex items-center gap-2 text-2xl font-extrabold text-white"><Settings className="h-6 w-6 text-blue-400"/>Configuración</h1><p className="mt-1 text-xs leading-relaxed text-zinc-400">Ajustes operativos de {currentCompany.name}.</p></div>
