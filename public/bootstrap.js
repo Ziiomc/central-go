@@ -49,11 +49,12 @@
     if (themeColor) themeColor.setAttribute('content', theme === 'light' ? '#e7f0f9' : '#061120');
   }
 
-  // Operator manual-control safety patch: disconnected mobiles must remain
-  // manually incorporable. React intentionally locks drag/reorder controls for
-  // disconnected rows, but the same lock was also disabling the green power
-  // button. Re-enable only that control on rows explicitly marked DESCONECTADO;
-  // paused and in-trip mobiles remain protected.
+  // Disconnected mobiles are intentionally locked against drag/reorder, but the
+  // same React lock also marks the green power button as disabled. Browsers do
+  // not deliver React's onClick for a button whose component prop is disabled,
+  // even if the DOM attribute is later removed. Keep the button tappable and,
+  // for disconnected rows only, route the tap through the already-supported
+  // "Incorporar móvil" form so the real Supabase RPC is executed.
   var enableDisconnectedPowerButtons = function () {
     var buttons = document.querySelectorAll('button[aria-label^="Incorporar o retirar el móvil"]');
     buttons.forEach(function (button) {
@@ -69,8 +70,63 @@
     observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['disabled', 'title'] });
   };
 
+  var setReactInputValue = function (input, value) {
+    try {
+      var descriptor = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+      if (descriptor && descriptor.set) descriptor.set.call(input, value);
+      else input.value = value;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    } catch (_) {
+      input.value = value;
+      try { input.dispatchEvent(new Event('input', { bubbles: true })); } catch (_) {}
+    }
+  };
+
+  var submitDisconnectedMobileByUnit = function (unitNumber, attempt) {
+    var input = document.querySelector('input[aria-label="Número de móvil a incorporar"]');
+    if (!input) {
+      var manage = document.querySelector('button[aria-label="Gestionar móviles por radio"]');
+      if (manage && attempt === 0) {
+        try { manage.click(); } catch (_) {}
+      }
+      if (attempt < 5) window.setTimeout(function () { submitDisconnectedMobileByUnit(unitNumber, attempt + 1); }, 40);
+      return;
+    }
+
+    setReactInputValue(input, unitNumber);
+    window.setTimeout(function () {
+      var form = input.closest('form');
+      if (!form) return;
+      try {
+        if (typeof form.requestSubmit === 'function') form.requestSubmit();
+        else {
+          var submit = form.querySelector('button[type="submit"]');
+          if (submit) submit.click();
+        }
+      } catch (_) {}
+    }, 60);
+  };
+
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', installOperatorPowerGuard, { once: true });
   else installOperatorPowerGuard();
+
+  document.addEventListener('click', function (event) {
+    if (driverRoute) return;
+    var target = event.target;
+    var button = target && typeof target.closest === 'function' ? target.closest('button[aria-label^="Incorporar o retirar el móvil"]') : null;
+    if (!button) return;
+    var row = button.closest('[title*="DESCONECTADO"]');
+    if (!row) return;
+
+    var label = String(button.getAttribute('aria-label') || '');
+    var match = label.match(/móvil\s+(.+?)\s+de la fila manual/i);
+    if (!match || !match[1]) return;
+
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    submitDisconnectedMobileByUnit(match[1].trim(), 0);
+  }, true);
 
   // Permission recovery for the driver GPS card. Android can reject a permission
   // dialog while another app (for example an Uber floating bubble) is drawing
