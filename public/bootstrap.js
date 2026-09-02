@@ -7,6 +7,12 @@
   // available before the driver screen has mounted its own listener.
   window.addEventListener('beforeinstallprompt', function (event) {
     try { event.preventDefault(); } catch (_) {}
+    // On the driver route this bootstrap owns the prompt lifecycle. Keeping the
+    // same event out of the later React listener prevents a dismissed prompt from
+    // becoming a stale, second-click failure.
+    if (window.location.pathname === '/driver' || window.location.pathname.indexOf('/driver/') === 0) {
+      try { event.stopImmediatePropagation(); } catch (_) {}
+    }
     pendingInstallPrompt = event;
     window.__centralGoInstallPrompt = event;
     try { window.dispatchEvent(new CustomEvent('pwa-installable')); } catch (_) {}
