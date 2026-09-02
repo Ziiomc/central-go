@@ -13,9 +13,8 @@ export const DriverPriorityCounter:React.FC=()=>{
  useEffect(()=>{void load();if(currentRole!=='driver'||currentCompany.id==='network')return;const unsubscribe=subscribeDispatchQueue(currentCompany.id,()=>void load());const timer=window.setInterval(()=>void load(),30000);return()=>{unsubscribe();window.clearInterval(timer);};},[currentRole,currentCompany.id,currentUser.id]);
  const connected=useMemo(()=>queue.filter(item=>item.status!=='offline').slice().sort((a,b)=>a.queueOrder-b.queueOrder||new Date(a.connectedAt).getTime()-new Date(b.connectedAt).getTime()||a.unitNumber.localeCompare(b.unitNumber,'es',{numeric:true})),[queue]);
  const own=connected.find(item=>item.userId===currentUser.id);
- const waiting=useMemo(()=>connected.filter(item=>item.status==='available'),[connected]);
  if(currentRole!=='driver'||currentCompany.id==='network')return null;
- const position=own?waiting.findIndex(item=>item.driverId===own.driverId):-1;
+ const position=own?connected.findIndex(item=>item.driverId===own.driverId):-1;
  const inQueue=position>=0;
  const positionLabel=error?'…':inQueue?String(position+1):'—';
  const driversLabel=error?'…':String(connected.length);
@@ -27,7 +26,7 @@ export const DriverPriorityCounter:React.FC=()=>{
    <div className="grid grid-cols-2">
     <div data-driver-priority-cell="1" className="flex min-h-[62px] items-center gap-2 border-r border-slate-700/70 px-3 py-2">
      <div className={`grid h-7 w-7 shrink-0 place-items-center rounded-lg border ${inQueue&&!error?'border-blue-400/25 bg-blue-500/15 text-blue-200':'border-slate-700 bg-slate-800 text-slate-300'}`}><Hash className="h-3.5 w-3.5"/></div>
-     <div className="min-w-0"><p data-driver-priority-label="1" className="font-black uppercase tracking-[.12em] text-slate-400">Tu lugar</p><p data-driver-priority-value="1" className="mt-0.5 font-black tabular-nums leading-none text-white">{positionLabel}</p></div>
+     <div className="min-w-0"><p data-driver-priority-label="1" className="font-black uppercase tracking-[.12em] text-slate-400">Tu posición</p><p data-driver-priority-value="1" className="mt-0.5 font-black tabular-nums leading-none text-white">{positionLabel}</p></div>
     </div>
     <button data-driver-connected-toggle="1" type="button" onClick={()=>setColleaguesOpen(value=>!value)} className={`flex min-h-[62px] items-center gap-2 px-3 py-2 text-left transition ${colleaguesOpen?'bg-sky-400/[0.07]':'bg-sky-400/[0.025] hover:bg-sky-400/[0.055]'}`} aria-label={`${colleaguesOpen?'Ocultar':'Ver'} ${driversLabel} conductores conectados`} aria-expanded={colleaguesOpen}>
      <div className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-sky-400/25 bg-sky-400/10 text-sky-200"><Users className="h-3.5 w-3.5"/></div>
@@ -37,9 +36,9 @@ export const DriverPriorityCounter:React.FC=()=>{
    </div>
    {colleaguesOpen&&<div className="border-t border-slate-700/70 bg-[#10161f]">
     <div className="max-h-52 divide-y divide-slate-700/60 overflow-y-auto">
-     {connected.map((item,index)=>{const isOwn=item.userId===currentUser.id;const waitingPosition=waiting.findIndex(candidate=>candidate.driverId===item.driverId);return <div key={item.driverId} className={`flex min-h-10 items-center gap-2.5 px-3 py-1.5 ${isOwn?'bg-blue-500/[0.10]':''}`}>
+     {connected.map((item,index)=>{const isOwn=item.userId===currentUser.id;return <div key={item.driverId} className={`flex min-h-10 items-center gap-2.5 px-3 py-1.5 ${isOwn?'bg-blue-500/[0.10]':''}`}>
       <span className="grid h-6 w-6 shrink-0 place-items-center rounded-md border border-slate-600 bg-slate-800 text-[9px] font-black text-white">{index+1}</span>
-      <div className="min-w-0 flex-1"><p className="truncate text-[10px] font-black text-white">Móvil {item.unitNumber}{isOwn?' · Tú':''}</p><p className="mt-0.5 truncate text-[8px] font-semibold text-slate-300">{waitingPosition>=0?`Posición ${waitingPosition+1} para despacho`:statusLabel(item.status)}</p></div>
+      <div className="min-w-0 flex-1"><p className="truncate text-[10px] font-black text-white">Móvil {item.unitNumber}{isOwn?' · Tú':''}</p><p className="mt-0.5 truncate text-[8px] font-semibold text-slate-300">{item.status==='available'?`Posición ${index+1} para despacho`:item.status==='paused'?`Posición ${index+1} conservada en pausa`:statusLabel(item.status)}</p></div>
       <span className={`shrink-0 rounded-md border px-2 py-1 text-[8px] font-black ${statusTone(item.status)}`}>{statusLabel(item.status)}</span>
      </div>;})}
      {!connected.length&&!error?<p className="px-3 py-3 text-center text-[9px] font-semibold text-slate-300">No hay otros móviles conectados.</p>:null}

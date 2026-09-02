@@ -137,6 +137,7 @@ export const DriverMobileView: React.FC = () => {
 
   useEffect(() => {
     if (!driver || !currentCompany.id || currentCompany.id === 'network') return;
+    if (driver.status === 'offline') return;
     let cancelled = false;
     const heartbeat = async () => {
       try {
@@ -155,7 +156,7 @@ export const DriverMobileView: React.FC = () => {
       window.clearInterval(interval);
       document.removeEventListener('visibilitychange', visible);
     };
-  }, [driver?.id, currentCompany.id]);
+  }, [driver?.id, driver?.status, currentCompany.id]);
 
   useEffect(() => {
     if (driver) void refreshAnalytics();
@@ -404,7 +405,10 @@ export const DriverMobileView: React.FC = () => {
 
   const setStatus = async (status: 'available' | 'paused' | 'offline') => {
     if (!radioReady) void enableRadioAlerts();
-    await runDriverAction(`status-${status}`, () => Promise.resolve(toggleDriverAvailability(driver.id, status)));
+    const changed = await runDriverAction(`status-${status}`, () => Promise.resolve(toggleDriverAvailability(driver.id, status)));
+    if (!changed) return;
+    if (status === 'offline') stopGpsTracking();
+    if (status === 'available' && localStorage.getItem(GPS_WANTED_KEY) === '1') void startGpsTracking();
   };
 
   const arrivedAtPassenger = async () => {
@@ -523,10 +527,13 @@ export const DriverMobileView: React.FC = () => {
           {isIOSDevice() && <p className="mt-2 text-[8px] leading-relaxed text-zinc-400">iPhone: mantén Ubicación Precisa habilitada. Al volver desde Mapas, Central GO fuerza una nueva lectura automáticamente.</p>}
         </section>
 
-        <section className="grid grid-cols-3 gap-1.5 rounded-xl border border-zinc-800 bg-[#121215] p-1.5">
-          <StatusButton active={driver.status === 'available'} disabled={Boolean(pendingAction)} label="Disponible" tone="emerald" onClick={() => void setStatus('available')} />
-          <StatusButton active={driver.status === 'paused'} disabled={Boolean(pendingAction)} label="Pausa" tone="amber" icon={<Clock className="h-3.5 w-3.5" />} onClick={() => void setStatus('paused')} />
-          <StatusButton active={driver.status === 'offline'} disabled={Boolean(pendingAction)} label="Fuera" tone="zinc" icon={<XCircle className="h-3.5 w-3.5" />} onClick={() => void setStatus('offline')} />
+        <section className="rounded-xl border border-zinc-800 bg-[#121215] p-1.5">
+          <div className="grid grid-cols-3 gap-1.5">
+            <StatusButton active={driver.status === 'available'} disabled={Boolean(pendingAction)} label="Disponible" tone="emerald" onClick={() => void setStatus('available')} />
+            <StatusButton active={driver.status === 'paused'} disabled={Boolean(pendingAction)} label="Pausa" tone="amber" icon={<Clock className="h-3.5 w-3.5" />} onClick={() => void setStatus('paused')} />
+            <StatusButton active={driver.status === 'offline'} disabled={Boolean(pendingAction)} label="Desconectar" tone="zinc" icon={<XCircle className="h-3.5 w-3.5" />} onClick={() => void setStatus('offline')} />
+          </div>
+          <p className="px-1 pb-1 pt-2 text-center text-[8px] font-semibold leading-relaxed text-zinc-500">Pausa conserva tu posición hasta 15 minutos. Desconectar te envía al final de la fila.</p>
         </section>
 
         {incomingOffer && (
