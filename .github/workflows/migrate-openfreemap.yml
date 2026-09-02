@@ -27,7 +27,7 @@ jobs:
       - name: Install OpenFreeMap renderer
         run: npm install --save maplibre-gl@^6.6.0 @maplibre/maplibre-gl-leaflet@^0.1.4
 
-      - name: Patch live map and CSP
+      - name: Patch live map, demo map and CSP
         shell: bash
         run: |
           python3 - <<'PY'
@@ -37,7 +37,7 @@ jobs:
           text = live.read_text()
 
           leaflet_import = "import L from 'leaflet';\n"
-          assert leaflet_import in text, 'Leaflet import not found'
+          assert leaflet_import in text, 'Leaflet import not found in LiveMap'
           text = text.replace(leaflet_import, leaflet_import + "import { maplibreGL } from '@maplibre/maplibre-gl-leaflet';\nimport 'maplibre-gl/dist/maplibre-gl.css';\n", 1)
 
           props_anchor = "interface LiveMapProps {"
@@ -67,8 +67,22 @@ jobs:
           tile_effect = "  useEffect(() => {\n    const map = mapInstanceRef.current;\n    if (!map) return;\n    baseLayerRef.current?.remove();\n    baseLayerRef.current = maplibreGL({\n      style: OPENFREEMAP_STYLES[tileMode],\n      attributionControl: false,\n    }).addTo(map);\n    return () => {\n      baseLayerRef.current?.remove();\n      baseLayerRef.current = null;\n    };\n  }, [tileMode]);"
           text = text[:tile_start] + tile_effect + text[tile_end:]
 
-          assert 'cartocdn.com' not in text, 'CARTO URL still present after patch'
+          assert 'cartocdn.com' not in text, 'CARTO URL still present in LiveMap after patch'
           live.write_text(text)
+
+          demo = Path('src/components/demo/SalesDemoScreen.tsx')
+          dtext = demo.read_text()
+          demo_leaflet = "import L from 'leaflet';\n"
+          assert demo_leaflet in dtext, 'Leaflet import not found in SalesDemoScreen'
+          dtext = dtext.replace(demo_leaflet, demo_leaflet + "import { maplibreGL } from '@maplibre/maplibre-gl-leaflet';\nimport 'maplibre-gl/dist/maplibre-gl.css';\n", 1)
+
+          demo_start = dtext.index("    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'")
+          demo_end_marker = "    }).addTo(map);"
+          demo_end = dtext.index(demo_end_marker, demo_start) + len(demo_end_marker)
+          demo_replacement = "    maplibreGL({ style: 'https://tiles.openfreemap.org/styles/dark', attributionControl: false }).addTo(map);\n    map.attributionControl.addAttribution('OpenFreeMap © OpenMapTiles · Datos © OpenStreetMap contributors');"
+          dtext = dtext[:demo_start] + demo_replacement + dtext[demo_end:]
+          assert 'cartocdn.com' not in dtext, 'CARTO URL still present in SalesDemoScreen after patch'
+          demo.write_text(dtext)
 
           vercel = Path('vercel.json')
           vtext = vercel.read_text()
@@ -92,7 +106,7 @@ jobs:
         run: |
           git config user.name 'central-go-automation'
           git config user.email 'actions@users.noreply.github.com'
-          git add src/components/map/LiveMap.tsx package.json package-lock.json vercel.json
+          git add src/components/map/LiveMap.tsx src/components/demo/SalesDemoScreen.tsx package.json package-lock.json vercel.json
           if git diff --cached --quiet; then
             echo 'No migration changes to commit.'
             exit 0
