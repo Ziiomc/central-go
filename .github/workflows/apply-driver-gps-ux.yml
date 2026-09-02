@@ -1,0 +1,35 @@
+name: Apply driver GPS UX
+
+on:
+  push:
+    branches:
+      - feature/driver-gps-connected-list-ux
+    paths:
+      - 'scripts/_apply_driver_gps_ux.py'
+      - '.github/workflows/apply-driver-gps-ux.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/driver-gps-connected-list-ux
+      - name: Aplicar cambios
+        run: python3 scripts/_apply_driver_gps_ux.py
+      - name: Verificar TypeScript
+        run: |
+          npm ci --no-audit --no-fund
+          npm run lint
+      - name: Guardar cambios
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/components/pwa/DriverMobileView.tsx
+          git diff --cached --quiet && exit 0
+          git commit -m "Mejorar control GPS del conductor"
+          git push origin HEAD:feature/driver-gps-connected-list-ux
