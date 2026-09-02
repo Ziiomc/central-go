@@ -1,5 +1,4 @@
 import React,{useEffect,useMemo,useState}from'react';
-import{createPortal}from'react-dom';
 import{Users,Hash,ChevronDown}from'lucide-react';
 import{useApp}from'../../context/AppContext';
 import{loadDriverQueueSnapshot,subscribeDispatchQueue,type DriverQueueSnapshotItem}from'../../lib/dispatchPriorityRepository';
@@ -9,18 +8,9 @@ export const DriverPriorityCounter:React.FC=()=>{
  const{currentRole,currentCompany,currentUser}=useApp();
  const[queue,setQueue]=useState<DriverQueueSnapshotItem[]>([]);
  const[error,setError]=useState(false);
- const[host,setHost]=useState<HTMLElement|null>(null);
  const[colleaguesOpen,setColleaguesOpen]=useState(false);
  const load=async()=>{if(currentRole!=='driver'||currentCompany.id==='network')return;try{setQueue(await loadDriverQueueSnapshot(currentCompany.id));setError(false);}catch{setError(true);}};
  useEffect(()=>{void load();if(currentRole!=='driver'||currentCompany.id==='network')return;const unsubscribe=subscribeDispatchQueue(currentCompany.id,()=>void load());const timer=window.setInterval(()=>void load(),30000);return()=>{unsubscribe();window.clearInterval(timer);};},[currentRole,currentCompany.id,currentUser.id]);
- useEffect(()=>{
-  if(currentRole!=='driver')return;
-  const locate=()=>setHost(document.getElementById('driver-queue-summary-slot'));
-  locate();
-  const observer=new MutationObserver(locate);
-  observer.observe(document.body,{childList:true,subtree:true});
-  return()=>{observer.disconnect();setHost(null);};
- },[currentRole]);
  const connected=useMemo(()=>queue.filter(item=>item.status!=='offline').slice().sort((a,b)=>a.queueOrder-b.queueOrder||new Date(a.connectedAt).getTime()-new Date(b.connectedAt).getTime()||a.unitNumber.localeCompare(b.unitNumber,'es',{numeric:true})),[queue]);
  const own=connected.find(item=>item.userId===currentUser.id);
  const waiting=useMemo(()=>connected.filter(item=>item.status==='available'),[connected]);
@@ -31,7 +21,8 @@ export const DriverPriorityCounter:React.FC=()=>{
  const driversLabel=error?'…':String(connected.length);
  const statusLabel=(status:DriverQueueSnapshotItem['status'])=>status==='available'?'LIBRE':status==='paused'?'PAUSA':status==='en_route'?'EN CAMINO':status==='in_trip'?'EN VIAJE':status==='sos'?'SOS':'FUERA';
  const statusTone=(status:DriverQueueSnapshotItem['status'])=>status==='available'?'border-emerald-400/30 bg-emerald-400/10 text-emerald-200':status==='paused'?'border-amber-400/30 bg-amber-400/10 text-amber-200':status==='sos'?'border-rose-400/40 bg-rose-500/15 text-rose-100':'border-sky-400/30 bg-sky-400/10 text-sky-100';
- const inlineCard=host?createPortal(
+ return <>
+  <DriverTripCancellationControl/>
   <section className={`overflow-hidden rounded-xl border shadow-lg ${error?'border-rose-400/30 bg-[#191014]':'border-slate-600/45 bg-[#0d1117]'}`} aria-label={`Tu lugar en la fila: ${positionLabel}. Conductores conectados: ${driversLabel}`}>
    <div className="grid grid-cols-2">
     <div className="flex items-center gap-2 border-r border-slate-700/70 px-2.5 py-2.5">
@@ -55,6 +46,6 @@ export const DriverPriorityCounter:React.FC=()=>{
      {error?<p className="px-3 py-4 text-center text-[10px] font-semibold text-rose-200">No pudimos actualizar la fila. Intenta nuevamente.</p>:null}
     </div>
    </div>}
-  </section>,host):null;
- return <><DriverTripCancellationControl/>{inlineCard}</>;
+  </section>
+ </>;
 };
