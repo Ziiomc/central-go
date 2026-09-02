@@ -72,6 +72,24 @@
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', installOperatorPowerGuard, { once: true });
   else installOperatorPowerGuard();
 
+  // Permission recovery for the driver GPS card. Android can reject a permission
+  // dialog while another app (for example an Uber floating bubble) is drawing
+  // over the screen. The warning card itself now acts as a retry affordance: a
+  // real user tap is forwarded immediately to the existing React GPS control so
+  // Chrome/Android can request the permission again once the overlay is closed.
+  document.addEventListener('click', function (event) {
+    if (!driverRoute) return;
+    var target = event.target;
+    if (!target || typeof target.closest !== 'function') return;
+    var section = target.closest('section');
+    if (!section) return;
+    var text = String(section.textContent || '');
+    if (text.indexOf('REVISAR GPS') === -1 && text.indexOf('Ubicación bloqueada') === -1) return;
+    var gpsButton = document.querySelector('button[aria-label="Activar GPS"]');
+    if (!gpsButton || gpsButton.contains(target)) return;
+    try { gpsButton.click(); } catch (_) {}
+  }, true);
+
   // Driver install hot path: use the early captured native prompt directly from
   // the existing button. If no native prompt exists, React keeps handling the
   // click and shows the platform-specific manual installation instructions.
