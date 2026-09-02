@@ -1,6 +1,5 @@
 import React,{useEffect,useRef}from'react';
 import{DriverMobileView}from'./DriverMobileView';
-import{DriverThemeCycleButton}from'./DriverThemeCycleButton';
 import{DriverPushRegistration}from'./DriverPushRegistration';
 import{DriverRealtimeRadioReceiver}from'./DriverRealtimeRadioReceiver';
 import{DriverReservationsPanel}from'./DriverReservationsPanel';
@@ -65,5 +64,5 @@ export const DriverMobileShell:React.FC=()=>{
   }
  },[trips,drivers,currentUser.id,soundMuted]);
 
- return <DriverIdentityCompletionGate><><DriverMobileView/><DriverReservationsPanel/><DriverRealtimeRadioReceiver/><DriverPushRegistration/><DriverThemeCycleButton/></></DriverIdentityCompletionGate>;
+ return <DriverIdentityCompletionGate><><DriverMobileView/><DriverReservationsPanel/><DriverRealtimeRadioReceiver/><DriverPushRegistration/></></DriverIdentityCompletionGate>;
 };
