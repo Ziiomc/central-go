@@ -1,0 +1,102 @@
+from pathlib import Path
+
+p = Path('src/components/modules/OperatorConsole.tsx')
+s = p.read_text()
+
+old_queue = """  const queueDrivers = useMemo(() => queueItems
+    .filter((item) => activeTripDriverIds.has(item.driverId) || (item.status === 'available' && isQueueConnected(item)))
+    .sort((a, b) => {
+      const aBusy = activeTripDriverIds.has(a.driverId);
+      const bBusy = activeTripDriverIds.has(b.driverId);
+      if (aBusy !== bBusy) return aBusy ? 1 : -1;
+      return a.queueOrder - b.queueOrder || a.unitNumber.localeCompare(b.unitNumber, 'es', { numeric: true });
+    })
+    .map((item) => drivers.find((driver) => driver.id === item.driverId))
+    .filter((driver): driver is Driver => Boolean(driver)), [activeTripDriverIds, drivers, queueItems]);"""
+new_queue = """  const queueDrivers = useMemo(() => queueItems
+    .filter((item) => activeTripDriverIds.has(item.driverId) || item.serviceEnabled)
+    .sort((a, b) => {
+      const disconnected = (item: DispatchQueueItem) => item.status === 'offline'
+        || (item.operationMode === 'app' && item.status === 'available' && !isQueueConnected(item));
+      const rank = (item: DispatchQueueItem) => disconnected(item) ? 2 : activeTripDriverIds.has(item.driverId) ? 1 : 0;
+      const rankDifference = rank(a) - rank(b);
+      if (rankDifference) return rankDifference;
+      return a.queueOrder - b.queueOrder || a.unitNumber.localeCompare(b.unitNumber, 'es', { numeric: true });
+    })
+    .map((item) => drivers.find((driver) => driver.id === item.driverId))
+    .filter((driver): driver is Driver => Boolean(driver)), [activeTripDriverIds, drivers, queueItems]);"""
+if old_queue not in s:
+    raise SystemExit('queueDrivers block not found')
+s = s.replace(old_queue, new_queue)
+
+s = s.replace(
+    '<p className="mt-0.5 truncate text-[10px] text-zinc-500">Libres primero · en carrera al final</p>',
+    '<p className="mt-0.5 truncate text-[10px] text-zinc-500">Pausa mantiene lugar · desconectados al final</p>'
+)
+
+old_vars = """              const focused = focusDriverId === driver.id;
+              const inTrip = activeTripDriverIds.has(driver.id);
+              const waitingIndex = availableDrivers.findIndex((item) => item.id === driver.id);
+              const dragging = dragDriverId === driver.id;
+              const vehicle = driver.vehicleId ? vehicleById.get(driver.vehicleId) : undefined;"""
+new_vars = """              const focused = focusDriverId === driver.id;
+              const inTrip = activeTripDriverIds.has(driver.id);
+              const queueItem = queueItemByDriverId.get(driver.id);
+              const paused = !inTrip && queueItem?.status === 'paused';
+              const disconnected = !inTrip && Boolean(queueItem) && (queueItem?.status === 'offline'
+                || (queueItem?.operationMode === 'app' && queueItem?.status === 'available' && !isQueueConnected(queueItem)));
+              const statusLocked = inTrip || paused || disconnected;
+              const waitingIndex = availableDrivers.findIndex((item) => item.id === driver.id);
+              const dragging = dragDriverId === driver.id;
+              const vehicle = driver.vehicleId ? vehicleById.get(driver.vehicleId) : undefined;"""
+if old_vars not in s:
+    raise SystemExit('row vars block not found')
+s = s.replace(old_vars, new_vars)
+
+s = s.replace('draggable={!inTrip}', 'draggable={!statusLocked}')
+s = s.replace('if (inTrip) { event.preventDefault(); return; }', 'if (statusLocked) { event.preventDefault(); return; }')
+
+old_class = """                  className={`group relative flex w-full items-center gap-2 px-3 py-2 text-left transition ${inTrip ? 'cursor-default border-l-2 border-amber-300/60 bg-amber-500/[0.14]' : 'cursor-grab active:cursor-grabbing'} ${dragging ? 'opacity-45' : ''} ${focused ? (inTrip ? 'bg-amber-500/[0.20]' : 'bg-emerald-500/[0.10]') : (inTrip ? 'hover:bg-amber-500/[0.18]' : 'hover:bg-zinc-900/70')}`}
+                  title={inTrip ? `${driver.name} · EN CARRERA · permanece visible al final de la fila.` : `${driver.name} · ${driver.currentLocation.address || DRIVER_STATUS_LABELS[driver.status]}. Puedes arrastrar este móvil sobre una carrera pendiente.`}"""
+new_class = """                  className={`group relative flex w-full items-center gap-2 px-3 py-2 text-left transition ${disconnected ? 'cursor-default border-l-2 border-rose-400/70 bg-rose-500/[0.16]' : paused ? 'cursor-default border-l-2 border-amber-300/70 bg-amber-500/[0.16]' : inTrip ? 'cursor-default border-l-2 border-amber-300/60 bg-amber-500/[0.14]' : 'cursor-grab active:cursor-grabbing'} ${dragging ? 'opacity-45' : ''} ${focused ? (disconnected ? 'bg-rose-500/[0.22]' : (paused || inTrip) ? 'bg-amber-500/[0.22]' : 'bg-emerald-500/[0.10]') : (disconnected ? 'hover:bg-rose-500/[0.20]' : (paused || inTrip) ? 'hover:bg-amber-500/[0.20]' : 'hover:bg-zinc-900/70')}`}
+                  title={disconnected ? `${driver.name} · DESCONECTADO · permanece visible en rojo al final de la fila.` : paused ? `${driver.name} · PAUSA · conserva su posición en la fila.` : inTrip ? `${driver.name} · EN CARRERA · permanece visible al final de la fila.` : `${driver.name} · ${driver.currentLocation.address || DRIVER_STATUS_LABELS[driver.status]}. Puedes arrastrar este móvil sobre una carrera pendiente.`}"""
+if old_class not in s:
+    raise SystemExit('row class block not found')
+s = s.replace(old_class, new_class)
+
+old_badge = """                  <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-md border text-[10px] font-black ${inTrip ? 'border-amber-300/45 bg-amber-400/15 text-amber-200' : 'border-emerald-400/25 bg-emerald-500/10 text-emerald-300'}`} title={inTrip ? 'En carrera · al final de la fila' : `Posición ${waitingIndex + 1} en la fila`}>{index + 1}</span>"""
+new_badge = """                  <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-md border text-[10px] font-black ${disconnected ? 'border-rose-300/55 bg-rose-400/20 text-rose-100' : (paused || inTrip) ? 'border-amber-300/45 bg-amber-400/15 text-amber-200' : 'border-emerald-400/25 bg-emerald-500/10 text-emerald-300'}`} title={disconnected ? 'Desconectado · al final de la fila' : paused ? `Pausa · conserva la posición ${index + 1}` : inTrip ? 'En carrera · al final de la fila' : `Posición ${waitingIndex + 1} en la fila`}>{index + 1}</span>"""
+if old_badge not in s:
+    raise SystemExit('badge block not found')
+s = s.replace(old_badge, new_badge)
+
+s = s.replace(
+    'disabled={Boolean(manualBusyId) || inTrip || waitingIndex < 0 || waitingIndex === availableDrivers.length - 1}',
+    'disabled={Boolean(manualBusyId) || statusLocked || waitingIndex < 0 || waitingIndex === availableDrivers.length - 1}'
+)
+s = s.replace('disabled={Boolean(manualBusyId) || inTrip}', 'disabled={Boolean(manualBusyId) || statusLocked}')
+s = s.replace('disabled={inTrip}', 'disabled={statusLocked}')
+
+old_grip = """                  <GripVertical className={`h-4 w-4 shrink-0 ${inTrip ? 'text-amber-400/30' : 'text-zinc-700'}`} />"""
+new_grip = """                  <GripVertical className={`h-4 w-4 shrink-0 ${disconnected ? 'text-rose-400/35' : (paused || inTrip) ? 'text-amber-400/30' : 'text-zinc-700'}`} />"""
+if old_grip not in s:
+    raise SystemExit('grip block not found')
+s = s.replace(old_grip, new_grip)
+
+old_tooltip = """                  <span role="tooltip" className={`pointer-events-none absolute right-[calc(100%+8px)] top-1/2 z-50 hidden w-56 -translate-y-1/2 rounded-xl border bg-zinc-950 p-3 text-left shadow-2xl shadow-black/60 group-hover:block group-focus-visible:block ${inTrip ? 'border-amber-400/30' : 'border-emerald-400/25'}`}>
+                    <span className="flex items-center justify-between gap-2"><strong className="truncate text-xs text-white">{driver.name}</strong><b className={`rounded px-1.5 py-0.5 text-[8px] ${inTrip ? 'bg-amber-500/15 text-amber-200' : 'bg-emerald-500/15 text-emerald-300'}`}>Móvil {driver.unitNumber}</b></span>
+                    <span className="mt-1 block truncate text-[9px] text-zinc-400">{driver.phone || 'Sin teléfono registrado'}</span>
+                    <span className="mt-1 block truncate text-[9px] text-zinc-500">{vehicle?.licensePlate ? `Patente ${vehicle.licensePlate} · ` : ''}{driver.currentLocation.address || 'Ubicación sin dirección'}</span>
+                    <span className={`mt-2 block border-t border-zinc-800 pt-2 text-[9px] font-black ${inTrip ? 'text-amber-300' : 'text-emerald-300'}`}>● {inTrip ? 'EN CARRERA' : DRIVER_STATUS_LABELS[driver.status]}</span>
+                  </span>"""
+new_tooltip = """                  <span role="tooltip" className={`pointer-events-none absolute right-[calc(100%+8px)] top-1/2 z-50 hidden w-56 -translate-y-1/2 rounded-xl border bg-zinc-950 p-3 text-left shadow-2xl shadow-black/60 group-hover:block group-focus-visible:block ${disconnected ? 'border-rose-400/35' : (paused || inTrip) ? 'border-amber-400/30' : 'border-emerald-400/25'}`}>
+                    <span className="flex items-center justify-between gap-2"><strong className="truncate text-xs text-white">{driver.name}</strong><b className={`rounded px-1.5 py-0.5 text-[8px] ${disconnected ? 'bg-rose-500/15 text-rose-200' : (paused || inTrip) ? 'bg-amber-500/15 text-amber-200' : 'bg-emerald-500/15 text-emerald-300'}`}>Móvil {driver.unitNumber}</b></span>
+                    <span className="mt-1 block truncate text-[9px] text-zinc-400">{driver.phone || 'Sin teléfono registrado'}</span>
+                    <span className="mt-1 block truncate text-[9px] text-zinc-500">{vehicle?.licensePlate ? `Patente ${vehicle.licensePlate} · ` : ''}{driver.currentLocation.address || 'Ubicación sin dirección'}</span>
+                    <span className={`mt-2 block border-t border-zinc-800 pt-2 text-[9px] font-black ${disconnected ? 'text-rose-300' : (paused || inTrip) ? 'text-amber-300' : 'text-emerald-300'}`}>● {disconnected ? 'DESCONECTADO' : paused ? 'PAUSA' : inTrip ? 'EN CARRERA' : DRIVER_STATUS_LABELS[driver.status]}</span>
+                  </span>"""
+if old_tooltip not in s:
+    raise SystemExit('tooltip block not found')
+s = s.replace(old_tooltip, new_tooltip)
+
+p.write_text(s)
