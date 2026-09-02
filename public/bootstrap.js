@@ -49,12 +49,10 @@
     if (themeColor) themeColor.setAttribute('content', theme === 'light' ? '#e7f0f9' : '#061120');
   }
 
-  // Disconnected mobiles are intentionally locked against drag/reorder, but the
-  // same React lock also marks the green power button as disabled. Browsers do
-  // not deliver React's onClick for a button whose component prop is disabled,
-  // even if the DOM attribute is later removed. Keep the button tappable and,
-  // for disconnected rows only, route the tap through the already-supported
-  // "Incorporar móvil" form so the real Supabase RPC is executed.
+  // Disconnected rows are intentionally locked against drag/reorder. React also
+  // marks their green power control as disabled, which suppresses its delegated
+  // onClick. Keep only that power control tappable and invoke its existing React
+  // handler directly: red -> connected, without opening the separate Add panel.
   var enableDisconnectedPowerButtons = function () {
     var buttons = document.querySelectorAll('button[aria-label^="Incorporar o retirar el móvil"]');
     buttons.forEach(function (button) {
@@ -70,42 +68,34 @@
     observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['disabled', 'title'] });
   };
 
-  var setReactInputValue = function (input, value) {
-    try {
-      var descriptor = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
-      if (descriptor && descriptor.set) descriptor.set.call(input, value);
-      else input.value = value;
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-      input.dispatchEvent(new Event('change', { bubbles: true }));
-    } catch (_) {
-      input.value = value;
-      try { input.dispatchEvent(new Event('input', { bubbles: true })); } catch (_) {}
-    }
-  };
+  var invokeReactPowerHandler = function (button) {
+    var keys = [];
+    try { keys = Object.keys(button); } catch (_) {}
 
-  var submitDisconnectedMobileByUnit = function (unitNumber, attempt) {
-    var input = document.querySelector('input[aria-label="Número de móvil a incorporar"]');
-    if (!input) {
-      var manage = document.querySelector('button[aria-label="Gestionar móviles por radio"]');
-      if (manage && attempt === 0) {
-        try { manage.click(); } catch (_) {}
-      }
-      if (attempt < 5) window.setTimeout(function () { submitDisconnectedMobileByUnit(unitNumber, attempt + 1); }, 40);
-      return;
-    }
-
-    setReactInputValue(input, unitNumber);
-    window.setTimeout(function () {
-      var form = input.closest('form');
-      if (!form) return;
-      try {
-        if (typeof form.requestSubmit === 'function') form.requestSubmit();
-        else {
-          var submit = form.querySelector('button[type="submit"]');
-          if (submit) submit.click();
+    for (var i = 0; i < keys.length; i += 1) {
+      if (keys[i].indexOf('__reactProps$') !== 0) continue;
+      var props = button[keys[i]];
+      if (props && typeof props.onClick === 'function') {
+        try { props.onClick(); return true; } catch (error) {
+          console.warn('Central GO manual power action failed:', error);
+          return false;
         }
-      } catch (_) {}
-    }, 60);
+      }
+    }
+
+    // Fallback for React builds that expose the Fiber handle but not host props.
+    for (var j = 0; j < keys.length; j += 1) {
+      if (keys[j].indexOf('__reactFiber$') !== 0) continue;
+      var fiber = button[keys[j]];
+      var fiberProps = fiber && fiber.memoizedProps;
+      if (fiberProps && typeof fiberProps.onClick === 'function') {
+        try { fiberProps.onClick(); return true; } catch (error) {
+          console.warn('Central GO manual power action failed:', error);
+          return false;
+        }
+      }
+    }
+    return false;
   };
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', installOperatorPowerGuard, { once: true });
@@ -119,13 +109,11 @@
     var row = button.closest('[title*="DESCONECTADO"]');
     if (!row) return;
 
-    var label = String(button.getAttribute('aria-label') || '');
-    var match = label.match(/móvil\s+(.+?)\s+de la fila manual/i);
-    if (!match || !match[1]) return;
-
     event.preventDefault();
     event.stopImmediatePropagation();
-    submitDisconnectedMobileByUnit(match[1].trim(), 0);
+    if (!invokeReactPowerHandler(button)) {
+      console.warn('Central GO could not resolve the disconnected mobile power handler.');
+    }
   }, true);
 
   // Permission recovery for the driver GPS card. Android can reject a permission
