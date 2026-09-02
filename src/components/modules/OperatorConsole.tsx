@@ -243,7 +243,7 @@ export const OperatorConsole: React.FC = () => {
     .filter((driver): driver is Driver => Boolean(driver)), [activeTripDriverIds, drivers, queueItems]);
 
   const queueDrivers = useMemo(() => queueItems
-    .filter((item) => activeTripDriverIds.has(item.driverId) || item.serviceEnabled)
+    .filter((item) => activeTripDriverIds.has(item.driverId) || item.serviceEnabled || item.status === 'offline')
     .sort((a, b) => {
       const disconnected = (item: DispatchQueueItem) => item.status === 'offline'
         || (item.operationMode === 'app' && item.status === 'available' && !isQueueConnected(item));
@@ -342,11 +342,13 @@ export const OperatorConsole: React.FC = () => {
 
   const toggleQueueIncorporation = async (driver: Driver) => {
     const queueItem = queueItemByDriverId.get(driver.id);
-    if (manualBusyId) return;
+    if (!queueItem || manualBusyId) return;
     setManualBusyId(driver.id);
     setManualError('');
     try {
-      const isManualInQueue = queueItem?.operationMode === 'traditional' && queueItem.serviceEnabled;
+      const isManualInQueue = queueItem.operationMode === 'traditional'
+        && queueItem.serviceEnabled
+        && queueItem.status === 'available';
       await setTraditionalDriverAvailability(driver.id, !isManualInQueue);
       if (!isManualInQueue && priorityHolds[driver.id] != null) await restorePriorityHold(driver.id, priorityHolds[driver.id]);
       await refreshQueueAfterControl();
@@ -667,7 +669,8 @@ export const OperatorConsole: React.FC = () => {
               const paused = !inTrip && queueItem?.status === 'paused';
               const disconnected = !inTrip && Boolean(queueItem) && (queueItem?.status === 'offline'
                 || (queueItem?.operationMode === 'app' && queueItem?.status === 'available' && !isQueueConnected(queueItem)));
-              const statusLocked = inTrip || paused || disconnected;
+              const rowLocked = inTrip || paused || disconnected;
+              const powerLocked = inTrip || paused;
               const waitingIndex = availableDrivers.findIndex((item) => item.id === driver.id);
               const dragging = dragDriverId === driver.id;
               const vehicle = driver.vehicleId ? vehicleById.get(driver.vehicleId) : undefined;
@@ -676,9 +679,9 @@ export const OperatorConsole: React.FC = () => {
                   key={driver.id}
                   role="button"
                   tabIndex={0}
-                  draggable={!statusLocked}
+                  draggable={!rowLocked}
                   onDragStart={(event) => {
-                    if (statusLocked) { event.preventDefault(); return; }
+                    if (rowLocked) { event.preventDefault(); return; }
                     event.dataTransfer.effectAllowed = 'move';
                     event.dataTransfer.setData(DRIVER_MIME, driver.id);
                     event.dataTransfer.setData('text/plain', driver.id);
@@ -695,20 +698,20 @@ export const OperatorConsole: React.FC = () => {
                     <span className="block truncate text-lg font-black leading-none text-white">{driver.unitNumber}</span>
                   </span>
                   <span className="flex shrink-0 items-center gap-1" onClick={(event) => event.stopPropagation()}>
-                    <button type="button" disabled={Boolean(manualBusyId) || statusLocked || waitingIndex < 0 || waitingIndex === availableDrivers.length - 1} onClick={() => void moveDriverInQueue(driver, 'down')} className="grid h-8 w-8 place-items-center rounded-lg border border-zinc-700 bg-zinc-900 text-zinc-300 transition hover:border-blue-400/40 hover:text-blue-200 disabled:opacity-25" title="Bajar un lugar en la fila" aria-label={`Bajar el móvil ${driver.unitNumber} en la fila`}><ArrowDown className="h-3.5 w-3.5" /></button>
+                    <button type="button" disabled={Boolean(manualBusyId) || rowLocked || waitingIndex < 0 || waitingIndex === availableDrivers.length - 1} onClick={() => void moveDriverInQueue(driver, 'down')} className="grid h-8 w-8 place-items-center rounded-lg border border-zinc-700 bg-zinc-900 text-zinc-300 transition hover:border-blue-400/40 hover:text-blue-200 disabled:opacity-25" title="Bajar un lugar en la fila" aria-label={`Bajar el móvil ${driver.unitNumber} en la fila`}><ArrowDown className="h-3.5 w-3.5" /></button>
                     <button
                       type="button"
-                      disabled={Boolean(manualBusyId) || statusLocked}
+                      disabled={Boolean(manualBusyId) || powerLocked}
                       onClick={() => void toggleQueueIncorporation(driver)}
                       className="grid h-8 w-8 place-items-center rounded-lg border border-emerald-400/35 bg-emerald-500/15 text-emerald-200 transition hover:bg-emerald-500 hover:text-emerald-950 disabled:opacity-40"
-                      title="Incorporar o retirar de la fila manual"
-                      aria-label={`Incorporar o retirar el móvil ${driver.unitNumber} de la fila manual`}
+                      title={disconnected ? 'Conectar este móvil manualmente' : 'Desconectar este móvil manualmente'}
+                      aria-label={`${disconnected ? 'Conectar' : 'Desconectar'} el móvil ${driver.unitNumber} manualmente`}
                     >
                       {manualBusyId === driver.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Power className="h-3.5 w-3.5" />}
                     </button>
                     <button
                       type="button"
-                      disabled={statusLocked}
+                      disabled={rowLocked}
                       aria-pressed={priorityHolds[driver.id] != null}
                       onClick={() => togglePriorityHold(driver)}
                       className={`grid h-8 w-8 place-items-center rounded-lg border transition disabled:opacity-30 ${priorityHolds[driver.id] != null ? 'border-amber-300/50 bg-amber-400 text-zinc-950' : 'border-zinc-700 bg-zinc-900 text-zinc-400 hover:border-amber-400/40 hover:text-amber-200'}`}
