@@ -163,6 +163,7 @@ create temporary table queue_test_state(queue_before bigint) on commit drop;
 insert into queue_test_state(queue_before)
 select dispatch_queue_order
 from public.drivers where id='d3000000-0000-4000-8000-000000000001';
+grant select on queue_test_state to authenticated;
 
 update public.driver_presence_sessions
 set started_at=now()-interval '11 minutes',
