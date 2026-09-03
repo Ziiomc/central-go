@@ -20,34 +20,28 @@ export interface DriverQueueSnapshotItem {
   presenceLastSeenAt:string|null;
 }
 
-const APP_PRESENCE_MAX_AGE_MS=4.5*60*1000;
 const FALLBACK_RECONCILE_MS=8000;
-const isFresh=(timestamp:string|null,maxAgeMs:number)=>{if(!timestamp)return false;const ageMs=Date.now()-new Date(timestamp).getTime();return Number.isFinite(ageMs)&&ageMs>=-60*1000&&ageMs<=maxAgeMs;};
-const queueTimestamp=(item:DispatchQueueItem)=>{const value=item.operationMode==='app'?item.presenceStartedAt:item.queueUpdatedAt;const parsed=value?new Date(value).getTime():Number.NaN;if(Number.isFinite(parsed))return parsed;const fallback=new Date(item.queueUpdatedAt).getTime();return Number.isFinite(fallback)?fallback:Number.MAX_SAFE_INTEGER;};
+const queueTimestamp=(item:DispatchQueueItem)=>{const value=item.presenceStartedAt??item.queueUpdatedAt;const parsed=value?new Date(value).getTime():Number.NaN;if(Number.isFinite(parsed))return parsed;const fallback=new Date(item.queueUpdatedAt).getTime();return Number.isFinite(fallback)?fallback:Number.MAX_SAFE_INTEGER;};
 
 /**
- * Presentación FIFO real: el primer conductor conectado queda arriba y cada
- * conductor que abre una sesión después queda debajo. El orden interno de
- * despacho puede cambiar por carreras o ajustes del operador, pero no debe
- * reordenar visualmente la lista de conexión.
+ * La posición persistida en Postgres es la fuente de verdad de la fila. Abrir
+ * otra app puede hacer que Android suspenda el heartbeat del navegador e incluso
+ * que, al volver mucho después, se abra una nueva sesión de presencia. Ninguna
+ * de esas situaciones debe cambiar el lugar que el conductor ya tenía.
  */
-export const sortDispatchQueueByConnection=(a:DispatchQueueItem,b:DispatchQueueItem)=>queueTimestamp(a)-queueTimestamp(b)||a.queueOrder-b.queueOrder||a.unitNumber.localeCompare(b.unitNumber,'es',{numeric:true});
+export const sortDispatchQueueByConnection=(a:DispatchQueueItem,b:DispatchQueueItem)=>a.queueOrder-b.queueOrder||queueTimestamp(a)-queueTimestamp(b)||a.unitNumber.localeCompare(b.unitNumber,'es',{numeric:true});
 
 /**
- * La fila y el mapa son dos señales distintas:
- * - la presencia mantiene al conductor dentro de la fila;
- * - el GPS, cuando existe, permite además ubicarlo en el mapa.
- * Así un móvil recién integrado no desaparece sólo porque todavía está tomando
- * la primera posición GPS o porque Android suspendió temporalmente el sensor.
- *
- * La ventana de presencia sigue el heartbeat real (1 min) y el corte de sesión
- * del backend (4 min). Evita móviles fantasma durante 20 minutos si la app se
- * cierra sin poder enviar el evento de desconexión.
+ * La pertenencia a la fila depende del estado explícito del conductor, no de la
+ * antigüedad del último heartbeat. Android puede congelar JavaScript mientras
+ * WhatsApp, Maps u otra aplicación está al frente. El botón Desconectar cambia
+ * el estado a offline y Pausa lo cambia a paused; ésas son las señales válidas
+ * para sacarlo temporal o definitivamente de la fila activa.
  */
 export const isQueueConnected=(item:DispatchQueueItem)=>{
   if(['offline','paused','sos'].includes(item.status)||!item.serviceEnabled)return false;
   if(item.operationMode==='traditional')return item.status==='available';
-  return isFresh(item.presenceLastSeenAt,APP_PRESENCE_MAX_AGE_MS);
+  return true;
 };
 
 /**
@@ -57,8 +51,7 @@ export const isQueueConnected=(item:DispatchQueueItem)=>{
  * snapshot del cliente; el dispatch_queue_order persistido en Postgres no cambia.
  */
 const disconnectedDisplayOrder=(item:DispatchQueueItem)=>{
-  const disconnected=item.status==='offline'
-    ||(item.operationMode==='app'&&item.status==='available'&&!isQueueConnected(item));
+  const disconnected=item.status==='offline';
   if(!disconnected)return item.queueOrder;
   const match=item.unitNumber.match(/\d+/);
   const numeric=match?Number(match[0]):Number.NaN;
