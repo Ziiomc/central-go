@@ -28,6 +28,24 @@ export interface DriverInviteIdentity {
   address: string;
 }
 
+const backendErrorMessage = (value: unknown, fallback: string) => {
+  let message = '';
+  let code = '';
+  if (value instanceof Error) message = value.message.trim();
+  else if (value && typeof value === 'object') {
+    if ('message' in value && typeof (value as { message?: unknown }).message === 'string') {
+      message = String((value as { message: string }).message).trim();
+    }
+    if ('code' in value && typeof (value as { code?: unknown }).code === 'string') {
+      code = String((value as { code: string }).code).trim();
+    }
+  }
+  if (/RUT o documento ya está registrado en la central/i.test(message) || /ya está registrado en la central/i.test(message) || code === '23505') {
+    return 'Este RUT o documento ya tiene un conductor registrado en esta central. Ingresa con la cuenta Google que ya estaba asociada o pide al administrador que reasigne ese móvil a tu nueva cuenta.';
+  }
+  return message || fallback;
+};
+
 const normalizeInviteToken = (value: string | null | undefined) => {
   const token = (value ?? '').trim();
   if (token.length < 48 || token.length > 160 || !/^[A-Za-z0-9_-]+$/.test(token)) return null;
@@ -66,7 +84,7 @@ export const getDriverRecruitmentLink = async (companyId: string, rotate = false
     p_company_id: companyId,
     p_rotate: rotate,
   });
-  if (error) throw error;
+  if (error) throw new Error(backendErrorMessage(error, 'No fue posible generar el enlace privado de conductores.'));
   const token = normalizeInviteToken(data?.token);
   if (!token) throw new Error('No fue posible generar el enlace privado de conductores.');
   return {
@@ -88,7 +106,7 @@ export const resolveDriverInvite = async (value: string): Promise<DriverInviteTa
   const token = normalizeInviteToken(value);
   if (!token) return null;
   const { data, error } = await requireSupabase().rpc('centralgo_resolve_driver_recruitment_link', { p_token: token });
-  if (error) throw error;
+  if (error) throw new Error(backendErrorMessage(error, 'No fue posible validar la invitación.'));
   if (!data?.valid) return null;
   return {
     companyId: data.companyId,
@@ -112,7 +130,7 @@ export const acceptDriverInvite = async (value: string, identity: DriverInviteId
     p_national_id_number: identity.nationalIdNumber.trim(),
     p_address: identity.address.trim(),
   });
-  if (error) throw error;
+  if (error) throw new Error(backendErrorMessage(error, 'No fue posible activar la invitación de la central.'));
   return data as {
     status: 'active';
     alreadyActive: boolean;
