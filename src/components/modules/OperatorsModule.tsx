@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Check, Headphones, KeyRound, Loader2, LogOut, MailPlus, MonitorCheck, MonitorOff, PlayCircle, RefreshCw, Send, UserCheck, UserPlus, X } from 'lucide-react';
+import { Check, Headphones, KeyRound, Loader2, MailPlus, MonitorCheck, MonitorOff, Pencil, PlayCircle, RefreshCw, Send, UserCheck, UserPlus, X } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
-import { loadCompanyUsers, inviteCompanyUser, type CompanyUserDirectoryItem } from '../../lib/userRepository';
+import { loadCompanyUsers, inviteCompanyUser, updateCompanyOperatorAccess, type CompanyUserDirectoryItem } from '../../lib/userRepository';
 import { loadCompanyOperatorApplications, reviewOperatorApplication, type CompanyOperatorApplication } from '../../lib/operatorRepository';
 import {
   authorizeThisOperatorTerminal,
@@ -27,6 +27,10 @@ export const OperatorsModule: React.FC = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [editOperator, setEditOperator] = useState<CompanyUserDirectoryItem | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editPassword, setEditPassword] = useState('');
+  const [editConfirmPassword, setEditConfirmPassword] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [terminal, setTerminal] = useState<OperatorTerminalConfig | null>(() => readOperatorTerminal());
   const [terminalLabel, setTerminalLabel] = useState('Computador principal');
@@ -136,6 +140,48 @@ export const OperatorsModule: React.FC = () => {
     }
   };
 
+  const openEditOperator = (operator: CompanyUserDirectoryItem) => {
+    setError(''); setNotice('');
+    setEditOperator(operator);
+    setEditName(operator.name);
+    setEditPassword('');
+    setEditConfirmPassword('');
+  };
+
+  const closeEditOperator = () => {
+    if (busy?.startsWith('edit:')) return;
+    setEditOperator(null);
+    setEditName('');
+    setEditPassword('');
+    setEditConfirmPassword('');
+  };
+
+  const saveOperatorAccess = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!editOperator) return;
+    const editBusyKey = `edit:${editOperator.userId}`;
+    setBusy(editBusyKey); setError(''); setNotice('');
+    try {
+      if (editName.trim().length < 2) throw new Error('Ingresa un nombre válido.');
+      if (editPassword && editPassword.length < 8) throw new Error('La nueva contraseña debe tener al menos 8 caracteres.');
+      if (editPassword !== editConfirmPassword) throw new Error('Las contraseñas nuevas no coinciden.');
+      const result = await updateCompanyOperatorAccess({
+        companyId: currentCompany.id,
+        userId: editOperator.userId,
+        name: editName,
+        password: editPassword || undefined,
+      });
+      setEditOperator(null);
+      setEditName(''); setEditPassword(''); setEditConfirmPassword('');
+      setNotice(`${result.message} El usuario de acceso se mantiene igual.`);
+      await reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No fue posible actualizar el acceso del operador.');
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const today = new Date().toISOString().slice(0, 10);
   const stats = useMemo(() => new Map(operators.map((operator) => {
     const own = trips.filter((trip) => trip.operatorId === operator.userId && trip.createdAt.slice(0, 10) === today);
@@ -149,6 +195,7 @@ export const OperatorsModule: React.FC = () => {
     const internal = operator.email.match(/^([^@]+)@[0-9a-f-]+\.operators\.centralgo\.app$/i);
     return internal ? `Usuario: ${internal[1]}` : operator.email;
   };
+  const isManualOperator = (operator: CompanyUserDirectoryItem) => /\.operators\.centralgo\.app$/i.test(operator.email);
 
   return <div className="space-y-6">
     <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
@@ -170,13 +217,14 @@ export const OperatorsModule: React.FC = () => {
     {error && <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-xs font-bold text-rose-200">{error}</div>}
     {applications.length > 0 && <section className="rounded-2xl border border-amber-500/25 bg-amber-500/[.06] p-5"><div className="flex items-center gap-2"><UserPlus className="h-5 w-5 text-amber-300" /><div><h2 className="text-sm font-black text-white">Solicitudes para unirse</h2><p className="text-[10px] text-zinc-500">Cuentas Google que eligieron esta central.</p></div></div><div className="mt-4 grid gap-3 md:grid-cols-2">{applications.map((application)=><article key={application.id} className="rounded-xl border border-zinc-800 bg-zinc-950/70 p-4"><p className="font-black text-white">{application.name}</p><p className="mt-1 text-[10px] text-zinc-500">{application.email}</p><div className="mt-3 flex gap-2"><button disabled={busy===application.id} onClick={()=>void review(application,true)} className="flex flex-1 items-center justify-center gap-1 rounded-lg bg-emerald-600 py-2 text-[10px] font-black text-white"><Check className="h-3.5 w-3.5" />Aprobar</button><button disabled={busy===application.id} onClick={()=>void review(application,false)} className="flex flex-1 items-center justify-center gap-1 rounded-lg border border-rose-500/25 bg-rose-500/10 py-2 text-[10px] font-black text-rose-300"><X className="h-3.5 w-3.5" />Rechazar</button></div></article>)}</div></section>}
     {loading && <div className="flex items-center gap-2 rounded-xl border border-blue-500/20 bg-blue-500/5 px-4 py-3 text-xs font-bold text-blue-300"><Loader2 className="h-4 w-4 animate-spin" />Sincronizando operadores…</div>}
-    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">{operators.map((operator) => { const stat=stats.get(operator.userId); return <article key={operator.userId} className="rounded-2xl border border-zinc-800 bg-[#0d0d0f] p-5 shadow-xl"><div className="flex items-center justify-between gap-3"><div className="flex min-w-0 items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-xl border border-blue-500/20 bg-blue-500/10 text-blue-400"><Headphones className="h-5 w-5" /></div><div className="min-w-0"><p className="truncate text-sm font-black text-white">{operator.name}</p><p className="truncate text-[10px] text-zinc-500">{operatorAccessLabel(operator)}</p></div></div><span className={`rounded-full border px-2.5 py-1 text-[9px] font-black uppercase ${operator.active?'border-emerald-500/25 bg-emerald-500/10 text-emerald-300':'border-zinc-800 bg-zinc-900 text-zinc-500'}`}>{operator.active?'Activa':'Inactiva'}</span></div><div className="mt-4 grid grid-cols-2 gap-3"><Metric label="Despachos hoy" value={String(stat?.dispatches ?? 0)} /><Metric label="Promedio asignación" value={stat?.avg == null ? '—' : `${stat.avg} s`} /></div>{currentTerminalActive&&operator.active&&<button type="button" disabled={busy==='switch'} onClick={()=>void goToOperatorLogin()} className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-[10px] font-black text-emerald-200"><PlayCircle className="h-3.5 w-3.5" />Iniciar turno</button>}<p className="mt-3 flex items-center gap-2 text-[9px] text-zinc-600"><UserCheck className="h-3.5 w-3.5" />Alta {operator.createdAt ? new Date(operator.createdAt).toLocaleDateString('es-CL') : 'sin fecha'}</p></article>; })}</div>
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">{operators.map((operator) => { const stat=stats.get(operator.userId); return <article key={operator.userId} className="rounded-2xl border border-zinc-800 bg-[#0d0d0f] p-5 shadow-xl"><div className="flex items-center justify-between gap-3"><div className="flex min-w-0 items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-xl border border-blue-500/20 bg-blue-500/10 text-blue-400"><Headphones className="h-5 w-5" /></div><div className="min-w-0"><p className="truncate text-sm font-black text-white">{operator.name}</p><p className="truncate text-[10px] text-zinc-500">{operatorAccessLabel(operator)}</p></div></div><span className={`rounded-full border px-2.5 py-1 text-[9px] font-black uppercase ${operator.active?'border-emerald-500/25 bg-emerald-500/10 text-emerald-300':'border-zinc-800 bg-zinc-900 text-zinc-500'}`}>{operator.active?'Activa':'Inactiva'}</span></div><div className="mt-4 grid grid-cols-2 gap-3"><Metric label="Despachos hoy" value={String(stat?.dispatches ?? 0)} /><Metric label="Promedio asignación" value={stat?.avg == null ? '—' : `${stat.avg} s`} /></div><div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2"><button type="button" onClick={()=>openEditOperator(operator)} className="flex items-center justify-center gap-2 rounded-xl border border-blue-500/25 bg-blue-500/10 px-3 py-2 text-[10px] font-black text-blue-200"><Pencil className="h-3.5 w-3.5" />Editar acceso</button>{currentTerminalActive&&operator.active&&<button type="button" disabled={busy==='switch'} onClick={()=>void goToOperatorLogin()} className="flex items-center justify-center gap-2 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-[10px] font-black text-emerald-200"><PlayCircle className="h-3.5 w-3.5" />Iniciar turno</button>}</div><p className="mt-3 flex items-center gap-2 text-[9px] text-zinc-600"><UserCheck className="h-3.5 w-3.5" />Alta {operator.createdAt ? new Date(operator.createdAt).toLocaleDateString('es-CL') : 'sin fecha'}</p></article>; })}</div>
     {!loading && operators.length === 0 && <div className="rounded-2xl border border-zinc-800 bg-[#0d0d0f] p-10 text-center text-xs text-zinc-500">Aún no hay operadores activos. Crea un usuario propio o invita una cuenta Google.</div>}
 
     {createOpen && <div className="fixed inset-0 z-[120] flex items-center justify-center overflow-y-auto bg-black/80 p-2 backdrop-blur-md sm:p-4"><form onSubmit={createOperator} className="my-auto max-h-[calc(100dvh-1rem)] w-full max-w-md overflow-y-auto rounded-2xl border border-zinc-800 bg-[#0d0d0f] p-4 sm:max-h-[calc(100dvh-2rem)] sm:rounded-3xl sm:p-6"><div className="flex items-center justify-between"><div><p className="text-[9px] font-black uppercase tracking-widest text-blue-300">Acceso personal de operador</p><h2 className="text-lg font-black text-white">Agregar operador/a</h2></div><button type="button" onClick={()=>setCreateOpen(false)} className="p-2 text-zinc-500" aria-label="Cerrar formulario de operador"><X className="h-4 w-4" /></button></div><div className="mt-4 grid grid-cols-1 gap-2 rounded-xl border border-zinc-800 bg-zinc-950 p-1"><button type="button" onClick={()=>setCreateMode('manual')} className={`rounded-lg px-3 py-2 text-[10px] font-black ${createMode==='manual'?'bg-blue-600 text-white':'text-zinc-500'}`}>Usuario y clave</button></div><p className="mt-3 text-xs leading-relaxed text-zinc-500">{createMode==='manual'?'La central define un usuario y una contraseña exclusivos para esta persona y este computador autorizado.':'Usa el correo personal o Google del operador. No reemplaza el correo institucional ni la cuenta del dueño.'}</p><label className="mt-5 block"><span className="text-[9px] font-black uppercase text-zinc-500">Nombre</span><input required value={inviteName} onChange={event=>setInviteName(event.target.value)} className={inputClass} placeholder="Nombre del operador o la operadora" /></label>{createMode==='manual'?<><label className="mt-3 block"><span className="text-[9px] font-black uppercase text-zinc-500">Usuario personal</span><input required minLength={3} maxLength={32} autoCapitalize="none" value={username} onChange={event=>setUsername(event.target.value)} className={inputClass} placeholder="operador01" /></label><label className="mt-3 block"><span className="text-[9px] font-black uppercase text-zinc-500">Contraseña</span><input required minLength={8} type="password" autoComplete="new-password" value={password} onChange={event=>setPassword(event.target.value)} className={inputClass} placeholder="Mínimo 8 caracteres" /></label><label className="mt-3 block"><span className="text-[9px] font-black uppercase text-zinc-500">Repetir contraseña</span><input required minLength={8} type="password" autoComplete="new-password" value={confirmPassword} onChange={event=>setConfirmPassword(event.target.value)} className={inputClass} placeholder="Repite la contraseña" /></label></>:<><label className="mt-3 block"><span className="text-[9px] font-black uppercase text-zinc-500">Correo personal del operador</span><input required type="email" autoComplete="email" value={inviteEmail} onChange={event=>setInviteEmail(event.target.value)} className={inputClass} placeholder="nombre@gmail.com" /></label><div className="mt-3 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.06] p-3 text-[10px] leading-relaxed text-emerald-100"><strong className="block text-emerald-300">Correos separados</strong>Este correo identifica solo al operador. El correo de la empresa o del propietario continúa siendo el acceso administrativo.</div></>}<button disabled={busy==='create'} className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-3 text-xs font-black text-white disabled:opacity-50">{busy==='create'?<Loader2 className="h-4 w-4 animate-spin"/>:createMode==='manual'?<KeyRound className="h-4 w-4"/>:<Send className="h-4 w-4" />}{busy==='create'?'Creando…':createMode==='manual'?'Crear usuario y contraseña':'Invitar correo personal'}</button>{createMode==='google'&&<p className="mt-3 flex items-center justify-center gap-1 text-[9px] text-zinc-600"><MailPlus className="h-3 w-3" />La invitación vincula la cuenta personal con esta central.</p>}</form></div>}
+
+    {editOperator && <div className="fixed inset-0 z-[130] flex items-center justify-center overflow-y-auto bg-black/80 p-2 backdrop-blur-md sm:p-4"><form onSubmit={saveOperatorAccess} className="my-auto max-h-[calc(100dvh-1rem)] w-full max-w-md overflow-y-auto rounded-2xl border border-zinc-800 bg-[#0d0d0f] p-4 sm:max-h-[calc(100dvh-2rem)] sm:rounded-3xl sm:p-6"><div className="flex items-center justify-between"><div><p className="text-[9px] font-black uppercase tracking-widest text-blue-300">Administrar credencial</p><h2 className="text-lg font-black text-white">Editar acceso</h2></div><button type="button" onClick={closeEditOperator} className="p-2 text-zinc-500" aria-label="Cerrar edición"><X className="h-4 w-4" /></button></div><div className="mt-4 rounded-xl border border-zinc-800 bg-zinc-950 p-3"><p className="text-[9px] font-black uppercase text-zinc-600">Acceso actual</p><p className="mt-1 text-xs font-black text-white">{operatorAccessLabel(editOperator)}</p><p className="mt-1 text-[10px] text-zinc-500">El usuario no cambia al editar el nombre o la clave.</p></div><label className="mt-5 block"><span className="text-[9px] font-black uppercase text-zinc-500">Nombre del operador</span><input required value={editName} onChange={event=>setEditName(event.target.value)} className={inputClass} placeholder="Nombre del operador" /></label>{isManualOperator(editOperator)?<><div className="mt-4 rounded-xl border border-blue-500/20 bg-blue-500/[0.06] p-3 text-[10px] leading-relaxed text-blue-100"><strong className="block text-blue-300">Restablecer contraseña</strong>Déjala en blanco si solo quieres cambiar el nombre. Si defines una nueva clave, reemplazará inmediatamente la anterior.</div><label className="mt-3 block"><span className="text-[9px] font-black uppercase text-zinc-500">Nueva contraseña</span><input minLength={8} type="password" autoComplete="new-password" value={editPassword} onChange={event=>setEditPassword(event.target.value)} className={inputClass} placeholder="Mínimo 8 caracteres · opcional" /></label><label className="mt-3 block"><span className="text-[9px] font-black uppercase text-zinc-500">Repetir nueva contraseña</span><input minLength={editPassword ? 8 : undefined} type="password" autoComplete="new-password" value={editConfirmPassword} onChange={event=>setEditConfirmPassword(event.target.value)} className={inputClass} placeholder="Repite la nueva contraseña" /></label></>:<div className="mt-4 rounded-xl border border-zinc-800 bg-zinc-950 p-3 text-[10px] leading-relaxed text-zinc-400">Este operador usa correo/Google. Aquí puedes corregir su nombre; su contraseña se administra desde su proveedor de acceso.</div>}<button disabled={busy===`edit:${editOperator.userId}`} className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-3 text-xs font-black text-white disabled:opacity-50">{busy===`edit:${editOperator.userId}`?<Loader2 className="h-4 w-4 animate-spin"/>:<Pencil className="h-4 w-4" />}{busy===`edit:${editOperator.userId}`?'Guardando…':'Guardar cambios'}</button></form></div>}
   </div>;
 };
 
 const inputClass='mt-1 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2.5 text-sm text-white outline-none focus:border-blue-500';
 const Metric: React.FC<{ label:string; value:string }> = ({label,value}) => <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-3"><p className="text-[9px] uppercase tracking-wider text-zinc-600">{label}</p><p className="mt-1 text-lg font-black text-white">{value}</p></div>;
-
