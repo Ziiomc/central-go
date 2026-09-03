@@ -67,6 +67,68 @@
 .cg-driver-app [data-driver-connected-toggle="1"] svg{
   opacity:.92!important;
 }
+
+/* The driver queue needs its own light palette because the compact component
+   intentionally uses dark utility classes in dark mode. */
+[data-theme='light'] .cg-driver-app [data-driver-priority-card="1"]{
+  background:#f8fbfe!important;
+  background-image:linear-gradient(145deg,#fff 0%,#f2f8fc 58%,#e5f0f8 100%)!important;
+  border-color:rgba(31,78,113,.30)!important;
+  color:#071d31!important;
+  box-shadow:0 12px 30px rgba(20,59,88,.13),0 3px 9px rgba(20,59,88,.07),inset 0 1px 0 #fff!important;
+}
+[data-theme='light'] .cg-driver-app [data-driver-priority-cell="1"]{
+  border-color:rgba(48,91,122,.22)!important;
+}
+[data-theme='light'] .cg-driver-app [data-driver-priority-label="1"]{
+  color:#4a6579!important;
+}
+[data-theme='light'] .cg-driver-app [data-driver-priority-value="1"]{
+  color:#092943!important;
+}
+[data-theme='light'] .cg-driver-app [data-driver-connected-toggle="1"]{
+  background:linear-gradient(180deg,#edf7fd 0%,#e0eef8 100%)!important;
+  box-shadow:inset 1px 0 0 rgba(31,78,113,.14)!important;
+  color:#0b4167!important;
+}
+[data-theme='light'] .cg-driver-app [data-driver-connected-toggle="1"][aria-expanded="true"]{
+  background:linear-gradient(180deg,#e1f2fc 0%,#d3e8f6 100%)!important;
+}
+[data-theme='light'] .cg-driver-app [data-driver-priority-icon]{
+  border-color:rgba(24,89,132,.24)!important;
+  background:#dfeef8!important;
+  color:#075383!important;
+}
+[data-theme='light'] .cg-driver-app [data-driver-priority-list="1"]{
+  background:#f9fcff!important;
+  border-color:rgba(48,91,122,.22)!important;
+}
+[data-theme='light'] .cg-driver-app [data-driver-priority-list="1"]>div{
+  border-color:rgba(62,104,133,.18)!important;
+}
+[data-theme='light'] .cg-driver-app [data-driver-priority-row="1"]{
+  background:#f9fcff!important;
+  border-color:rgba(62,104,133,.18)!important;
+}
+[data-theme='light'] .cg-driver-app [data-driver-priority-row="1"][data-driver-priority-own="1"]{
+  background:#e7f3fb!important;
+}
+[data-theme='light'] .cg-driver-app [data-driver-priority-index="1"]{
+  border-color:rgba(45,88,119,.28)!important;
+  background:#ddeaf3!important;
+  color:#0b2c45!important;
+}
+[data-theme='light'] .cg-driver-app [data-driver-priority-title="1"]{
+  color:#071d31!important;
+}
+[data-theme='light'] .cg-driver-app [data-driver-priority-subtitle="1"],
+[data-theme='light'] .cg-driver-app [data-driver-priority-empty="1"]{
+  color:#49677d!important;
+}
+[data-theme='light'] .cg-driver-app [data-driver-priority-status="1"]{
+  text-shadow:none!important;
+}
+
 @media(max-width:360px){
   .cg-driver-app [data-driver-priority-cell="1"],
   .cg-driver-app [data-driver-connected-toggle="1"]{padding-inline:9px!important;}
