@@ -117,6 +117,14 @@ begin
         updated_at=now_at
     where id=target_driver;
 
+    -- Anchor the new join in the same transaction. This removes the short gap
+    -- between tapping Disponible/Pausa and the next heartbeat, so Realtime can
+    -- never expose a stale session together with the new queue slot.
+    insert into public.driver_presence_sessions(
+      company_id,driver_id,user_id,started_at,last_seen_at
+    )
+    values(target_company,target_driver,auth.uid(),now_at,now_at);
+
     return new_status;
   end if;
 
