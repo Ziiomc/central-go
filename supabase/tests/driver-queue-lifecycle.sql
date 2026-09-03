@@ -201,15 +201,18 @@ where driver_id='d3000000-0000-4000-8000-000000000001' and ended_at is null;
 set local role authenticated;
 select public.centralgo_driver_presence_ping('d2000000-0000-4000-8000-000000000001');
 
-do $long_gap_and_position$
+do $long_background_gap$
 declare
   own_order bigint;
+  expected_order bigint;
   own_position bigint;
 begin
   select dispatch_queue_order into own_order
   from public.drivers where id='d3000000-0000-4000-8000-000000000001';
-  if own_order<=6 then
-    raise exception 'QUEUE FAIL: una desconexión superior a 15 minutos no pasó al final';
+  select queue_before into expected_order from queue_test_state;
+
+  if own_order<>expected_order then
+    raise exception 'QUEUE FAIL: volver de segundo plano alteró el lugar (% <> %)',own_order,expected_order;
   end if;
 
   select ranked.position into own_position
@@ -220,11 +223,11 @@ begin
   ) ranked
   where ranked.driver_id='d3000000-0000-4000-8000-000000000001';
 
-  if own_position<>4 then
-    raise exception 'QUEUE FAIL: la app no recibió la posición final correcta (posición %)',own_position;
+  if own_position<>3 then
+    raise exception 'QUEUE FAIL: la app no conservó la posición tras volver de segundo plano (posición %)',own_position;
   end if;
 end;
-$long_gap_and_position$;
+$long_background_gap$;
 
 reset role;
 rollback;
