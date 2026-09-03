@@ -17,7 +17,7 @@ const isNetworkFetchError=(error:unknown)=>{
  return error.name==='AbortError'||message.includes('failed to fetch')||message.includes('networkerror')||message.includes('network request failed')||message.includes('load failed')||message.includes('timeout')||message.includes('tiempo de espera')||message.includes('aborted');
 };
 
-const callDriverRpc=async<T>(accessToken:string,rpcName:DriverRpcName,body:Record<string,unknown>={})=>{
+const callDriverRpc=async<T,>(accessToken:string,rpcName:DriverRpcName,body:Record<string,unknown>={})=>{
  const controller=new AbortController();
  const timeoutId=window.setTimeout(()=>controller.abort(),RPC_TIMEOUT_MS);
  // En producción usamos el proxy del mismo origen para evitar conexiones móviles
