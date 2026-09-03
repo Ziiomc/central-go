@@ -36,9 +36,13 @@ export const deriveCompatibleAuthPassword = async (email: string, password: stri
 
 export const passwordCandidatesForLogin = async (email: string, password: string) => {
   const compatible = await deriveCompatibleAuthPassword(email, password);
-  return isServerCompatibleAuthPassword(password)
-    ? [password, compatible]
-    : [compatible];
+
+  // Accounts created by the current flow store the derived password. Older
+  // Central GO accounts (including the first manual operator terminals) may
+  // still store exactly the password the administrator originally assigned.
+  // Always try both so a frontend authentication upgrade can never invalidate
+  // an already-issued operator credential.
+  return compatible === password ? [compatible] : [compatible, password];
 };
 
 export const friendlyAuthError = (error: unknown, fallback: string) => {
