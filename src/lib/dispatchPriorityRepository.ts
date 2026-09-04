@@ -44,21 +44,6 @@ export const isQueueConnected=(item:DispatchQueueItem)=>{
   return true;
 };
 
-/**
- * Pausa conserva el dispatch_queue_order real en Postgres durante su ventana de
- * recuperación, pero visualmente debe salir de entre los móviles libres. Por eso
- * recibe sólo en el snapshot de la consola un orden muy alto; al volver a
- * Disponible, una nueva carga vuelve a exponer su orden persistido original.
- * Los desconectados siguen siendo un bloque visual separado y ordenado por móvil.
- */
-const displayQueueOrder=(item:DispatchQueueItem)=>{
-  const match=item.unitNumber.match(/\d+/);
-  const numeric=match?Number(match[0]):Number.NaN;
-  if(item.status==='paused')return Number.MAX_SAFE_INTEGER-100000+(Number.isFinite(numeric)?numeric:0);
-  if(item.status==='offline')return Number.isFinite(numeric)?numeric:item.queueOrder;
-  return item.queueOrder;
-};
-
 export async function loadDispatchQueue(companyId:string,tripId?:string):Promise<DispatchQueueItem[]>{
  const db=requireSupabase();
  const[driversResult,locationsResult,presenceResult,routeResult]=await Promise.all([
@@ -70,7 +55,7 @@ export async function loadDispatchQueue(companyId:string,tripId?:string):Promise
  if(driversResult.error)throw driversResult.error;if(locationsResult.error)throw locationsResult.error;if(presenceResult.error)throw presenceResult.error;if(routeResult.error)throw routeResult.error;
  const locations=new Map((locationsResult.data??[]).map((row:any)=>[row.driver_id,row]));const presence=new Map<string,any>();for(const row of presenceResult.data??[])if(!presence.has(row.driver_id))presence.set(row.driver_id,row);const routes=new Map((routeResult.data??[]).map((row:any)=>[row.driver_id,row]));
  const items=(driversResult.data??[]).map((row:any)=>{const location=locations.get(row.id)as any,driverPresence=presence.get(row.id)as any,route=routes.get(row.id)as any;return{driverId:row.id,companyId:row.company_id,userId:row.user_id??'',unitNumber:row.unit_number,name:row.display_name,status:row.status,serviceEnabled:row.service_enabled??false,operationMode:row.operation_mode==='traditional'?'traditional':'app',queueOrder:Number(row.dispatch_queue_order??0),queueUpdatedAt:row.dispatch_queue_updated_at??new Date().toISOString(),presenceStartedAt:driverPresence?.started_at??null,lat:location?.lat==null?null:Number(location.lat),lng:location?.lng==null?null:Number(location.lng),locationUpdatedAt:location?.recorded_at??null,locationAddress:location?.address??'Sin ubicación GPS reportada',presenceLastSeenAt:driverPresence?.last_seen_at??null,routeDistanceKm:route?.distance_km==null?null:Number(route.distance_km),routeDurationSeconds:route?.duration_seconds==null?null:Number(route.duration_seconds),routeProvider:route?.provider??null,routeComputedAt:route?.computed_at??null} satisfies DispatchQueueItem;});
- return items.map((item)=>({...item,queueOrder:displayQueueOrder(item)}));
+ return items;
 }
 
 /**

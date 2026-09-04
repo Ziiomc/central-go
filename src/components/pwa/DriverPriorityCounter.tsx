@@ -23,7 +23,7 @@ export const DriverPriorityCounter:React.FC=()=>{
  useEffect(()=>{void load();if(currentRole!=='driver'||currentCompany.id==='network')return;const unsubscribe=subscribeDispatchQueue(currentCompany.id,()=>void load());const timer=window.setInterval(()=>void load(),30000);return()=>{unsubscribe();window.clearInterval(timer);};},[currentRole,currentCompany.id,currentUser.id]);
  // The RPC returns the authoritative Postgres order. Never recalculate it from
  // browser timestamps, visibility state, GPS, or a local heartbeat.
- const connected=useMemo(()=>queue.filter(item=>item.status!=='offline'),[queue]);
+ const connected=useMemo(()=>[...queue].filter(item=>item.status!=='offline').sort((a,b)=>a.queueOrder-b.queueOrder||a.unitNumber.localeCompare(b.unitNumber,'es',{numeric:true})),[queue]);
  const own=connected.find(item=>item.userId===currentUser.id);
  if(currentRole!=='driver'||currentCompany.id==='network')return null;
  const position=own?connected.findIndex(item=>item.driverId===own.driverId):-1;

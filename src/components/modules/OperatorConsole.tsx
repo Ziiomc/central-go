@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowDown, ArrowLeft, CalendarClock, Car, Check, ChevronUp, Eye, GripVertical, LayoutPanelTop, Loader2, MapPin, Navigation, Pencil, PhoneCall, Pin, Plus, Power, RotateCcw, Search, ShoppingCart, Trash2, UserPlus, UserRound, Wand2, XCircle, Zap } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { DRIVER_STATUS_LABELS, TRIP_STATUS_LABELS } from '../../lib/labels';
-import { isQueueConnected, loadDispatchQueue, moveDispatchPriority, setTraditionalDriverAvailability, subscribeDispatchQueue, type DispatchQueueItem } from '../../lib/dispatchPriorityRepository';
+import { isQueueConnected, loadDispatchQueue, moveDispatchPriority, setTraditionalDriverAvailability, sortDispatchQueueByConnection, subscribeDispatchQueue, type DispatchQueueItem } from '../../lib/dispatchPriorityRepository';
 import { requireSupabase } from '../../lib/supabase';
 import { readOperatorDispatchMode, saveOperatorDispatchMode } from '../../lib/operatorDispatchPreference';
 import { RESERVATION_DISPATCH_WINDOW_MS, synchronizedNow, synchronizeServerClock, tripDelayMinutes, tripMinutesUntil, tripReferenceTimeMs, tripUrgency } from '../../lib/tripTiming';
@@ -302,13 +302,22 @@ export const OperatorConsole: React.FC = () => {
     .sort((a, b) => {
       const disconnected = (item: DispatchQueueItem) => item.status === 'offline'
         || (item.operationMode === 'app' && item.status === 'available' && !isQueueConnected(item));
-      const rank = (item: DispatchQueueItem) => disconnected(item) ? 2 : activeTripDriverIds.has(item.driverId) ? 1 : 0;
-      const rankDifference = rank(a) - rank(b);
-      if (rankDifference) return rankDifference;
-      return a.queueOrder - b.queueOrder || a.unitNumber.localeCompare(b.unitNumber, 'es', { numeric: true });
+      const aDisconnected = disconnected(a);
+      const bDisconnected = disconnected(b);
+      if (aDisconnected !== bDisconnected) return aDisconnected ? 1 : -1;
+      if (aDisconnected && bDisconnected) return a.unitNumber.localeCompare(b.unitNumber, 'es', { numeric: true });
+      return sortDispatchQueueByConnection(a, b);
     })
     .map((item) => drivers.find((driver) => driver.id === item.driverId))
     .filter((driver): driver is Driver => Boolean(driver)), [activeTripDriverIds, drivers, queueItems]);
+
+  const queuePositionByDriverId = useMemo(() => {
+    const positionHolders = queueItems
+      .filter((item) => item.serviceEnabled && item.status !== 'offline' && item.status !== 'sos')
+      .filter((item) => item.operationMode === 'app' || item.status === 'available')
+      .sort(sortDispatchQueueByConnection);
+    return new Map(positionHolders.map((item, index) => [item.driverId, index + 1]));
+  }, [queueItems]);
 
   const manualDriversManageable = useMemo(() => queueItems
     .filter((item) => !activeTripDriverIds.has(item.driverId))
@@ -729,7 +738,7 @@ export const OperatorConsole: React.FC = () => {
                 >
                   <UserPlus className="h-3.5 w-3.5" />
                 </button>
-                <span className="rounded-lg bg-emerald-500/10 px-2 py-1 text-xs font-black text-emerald-300">{queueDrivers.length}</span>
+                <span className="rounded-lg bg-emerald-500/10 px-2 py-1 text-xs font-black text-emerald-300" title="Móviles con posición activa en la fila">{queuePositionByDriverId.size}</span>
               </div>
             </div>
 
@@ -761,6 +770,7 @@ export const OperatorConsole: React.FC = () => {
               const dragging = dragDriverId === driver.id;
               const vehicle = driver.vehicleId ? vehicleById.get(driver.vehicleId) : undefined;
               const atSupermarket = supermarketDriverIds.has(driver.id);
+              const queuePosition = queuePositionByDriverId.get(driver.id) ?? null;
               return (
                 <div
                   key={driver.id}
@@ -778,9 +788,9 @@ export const OperatorConsole: React.FC = () => {
                   onClick={() => setFocusDriverId(focused ? null : driver.id)}
                   onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setFocusDriverId(focused ? null : driver.id); } }}
                   className={`group relative flex w-full items-center gap-2 px-3 py-2 text-left transition ${disconnected ? 'cursor-default border-l-2 border-rose-400/70 bg-rose-500/[0.16]' : paused ? 'cursor-default border-l-2 border-amber-300/70 bg-amber-500/[0.16]' : inTrip ? 'cursor-default border-l-2 border-amber-300/60 bg-amber-500/[0.14]' : 'cursor-grab active:cursor-grabbing'} ${dragging ? 'opacity-45' : ''} ${focused ? (disconnected ? 'bg-rose-500/[0.22]' : (paused || inTrip) ? 'bg-amber-500/[0.22]' : 'bg-emerald-500/[0.10]') : (disconnected ? 'hover:bg-rose-500/[0.20]' : (paused || inTrip) ? 'hover:bg-amber-500/[0.20]' : 'hover:bg-zinc-900/70')}`}
-                  title={disconnected ? `${driver.name} · DESCONECTADO · permanece visible en rojo al final de la fila.` : paused ? `${driver.name} · PAUSA · conserva su posición en la fila.` : inTrip ? `${driver.name} · EN CARRERA · permanece visible al final de la fila.` : `${driver.name} · ${driver.currentLocation.address || DRIVER_STATUS_LABELS[driver.status]}. Puedes arrastrar este móvil sobre una carrera pendiente.`}
+                  title={disconnected ? `${driver.name} · DESCONECTADO · permanece visible en rojo al final de la fila.` : paused ? `${driver.name} · PAUSA · conserva su posición en la fila.` : inTrip ? `${driver.name} · EN CARRERA · conserva su posición en la fila.` : `${driver.name} · ${driver.currentLocation.address || DRIVER_STATUS_LABELS[driver.status]}. Puedes arrastrar este móvil sobre una carrera pendiente.`}
                 >
-                  <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-md border text-[10px] font-black ${disconnected ? 'border-rose-300/55 bg-rose-400/20 text-rose-100' : (paused || inTrip) ? 'border-amber-300/45 bg-amber-400/15 text-amber-200' : 'border-emerald-400/25 bg-emerald-500/10 text-emerald-300'}`} title={disconnected ? 'Desconectado · al final de la fila' : paused ? `Pausa · conserva la posición ${index + 1}` : inTrip ? 'En carrera · al final de la fila' : `Posición ${waitingIndex + 1} en la fila`}>{index + 1}</span>
+                  <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-md border text-[10px] font-black ${disconnected ? 'border-rose-300/55 bg-rose-400/20 text-rose-100' : (paused || inTrip) ? 'border-amber-300/45 bg-amber-400/15 text-amber-200' : 'border-emerald-400/25 bg-emerald-500/10 text-emerald-300'}`} title={disconnected ? 'Desconectado · fuera de la fila activa' : paused ? `Pausa · conserva la posición ${queuePosition ?? '—'}` : inTrip ? `En carrera · conserva la posición ${queuePosition ?? '—'}` : `Posición ${queuePosition ?? '—'} en la fila`}>{queuePosition ?? '—'}</span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-lg font-black leading-none text-white">{driver.unitNumber}</span>
                   </span>
