@@ -1,0 +1,57 @@
+name: Repair migration replay safety
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/replay-safe-fleet-hardening.yml
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Make fleet hardening migration replay-safe
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('supabase/migrations/20260904234947_harden_operator_vehicle_supermarket_rpc_grants.sql')
+          path.write_text("""-- These operator-only SECURITY DEFINER RPCs must never be callable by anon.
+-- Some local CI histories do not contain the live fleet RPC migrations yet, so
+-- make the hardening replay-safe while preserving the production grants whenever
+-- each function exists.
+
+do $$
+begin
+  if to_regprocedure('public.centralgo_operator_assign_driver_vehicle(uuid,uuid)') is not null then
+    execute 'revoke all on function public.centralgo_operator_assign_driver_vehicle(uuid,uuid) from public,anon';
+    execute 'grant execute on function public.centralgo_operator_assign_driver_vehicle(uuid,uuid) to authenticated,service_role';
+  end if;
+
+  if to_regprocedure('public.centralgo_operator_release_driver_vehicle(uuid)') is not null then
+    execute 'revoke all on function public.centralgo_operator_release_driver_vehicle(uuid) from public,anon';
+    execute 'grant execute on function public.centralgo_operator_release_driver_vehicle(uuid) to authenticated,service_role';
+  end if;
+
+  if to_regprocedure('public.centralgo_operator_set_driver_supermarket(uuid,boolean)') is not null then
+    execute 'revoke all on function public.centralgo_operator_set_driver_supermarket(uuid,boolean) from public,anon';
+    execute 'grant execute on function public.centralgo_operator_set_driver_supermarket(uuid,boolean) to authenticated,service_role';
+  end if;
+end;
+$$;
+""", encoding='utf-8')
+          PY
+      - name: Commit repair
+        run: |
+          git rm .github/workflows/replay-safe-fleet-hardening.yml
+          git config user.name "central-go-automation"
+          git config user.email "central-go-automation@users.noreply.github.com"
+          git add supabase/migrations/20260904234947_harden_operator_vehicle_supermarket_rpc_grants.sql
+          git commit -m "Make fleet RPC hardening replay-safe"
+          git push
