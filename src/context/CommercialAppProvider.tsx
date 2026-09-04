@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AppContext, type AppContextType } from './AppContext';
 import { useAuth } from './AuthContext';
 import type {
@@ -71,6 +71,23 @@ const upsertById = <T extends { id: string }>(items: T[], item: T) => {
   return next;
 };
 
+const upsertTrip = (items: Trip[], trip: Trip) => {
+  const index = items.findIndex((existing) => existing.id === trip.id
+    || Boolean(trip.operatorRequestId && existing.operatorRequestId === trip.operatorRequestId));
+  if (index < 0) return [trip, ...items];
+  const next = [...items];
+  next[index] = trip;
+  return next;
+};
+
+type OptimisticTripRequest = {
+  tempId: string;
+  state: 'pending' | 'resolved' | 'rejected';
+  promise: Promise<string>;
+  resolve: (tripId: string) => void;
+  reject: (error: Error) => void;
+};
+
 const snapshotKey=(companyId:string)=>`centralgo:operational-snapshot:v1:${companyId}`;
 const SNAPSHOT_TTL_MS=12*60*60*1000;
 type CachedSnapshot={savedAt:number;companyId:string;vehicles:Vehicle[];drivers:Driver[];clients:Client[];trips:Trip[];notifications:AppNotification[];auditLogs:AuditLog[];fareConfig:FareConfig};
@@ -96,8 +113,39 @@ export const CommercialAppProvider: React.FC<React.PropsWithChildren> = ({ child
   const [isMobileDevice, setIsMobileDevice] = useState(false);
   const [loadingData, setLoadingData] = useState(false);
   const [operationError, setOperationError] = useState<string | null>(null);
+  const optimisticTripRequestsRef = useRef<Map<string, OptimisticTripRequest>>(new Map());
 
   const currentRole = effectiveRole ?? 'operator';
+
+  const resolveOptimisticTripRequest = (requestId: string | undefined, tripId: string) => {
+    if (!requestId) return;
+    const entry = optimisticTripRequestsRef.current.get(requestId);
+    if (!entry || entry.state !== 'pending') return;
+    entry.state = 'resolved';
+    entry.resolve(tripId);
+    window.setTimeout(() => {
+      if (optimisticTripRequestsRef.current.get(requestId) === entry) optimisticTripRequestsRef.current.delete(requestId);
+    }, 30000);
+  };
+
+  const rejectOptimisticTripRequest = (requestId: string | undefined, error: unknown) => {
+    if (!requestId) return;
+    const entry = optimisticTripRequestsRef.current.get(requestId);
+    if (!entry || entry.state !== 'pending') return;
+    entry.state = 'rejected';
+    entry.reject(error instanceof Error ? error : new Error('No fue posible confirmar la carrera.'));
+    window.setTimeout(() => {
+      if (optimisticTripRequestsRef.current.get(requestId) === entry) optimisticTripRequestsRef.current.delete(requestId);
+    }, 30000);
+  };
+
+  const resolveOperationalTripId = async (tripId: string) => {
+    if (!tripId.startsWith('optimistic-')) return tripId;
+    const requestId = tripId.slice('optimistic-'.length);
+    const entry = optimisticTripRequestsRef.current.get(requestId);
+    if (!entry) throw new Error('La carrera todavía se está sincronizando. Intenta nuevamente en un instante.');
+    return entry.promise;
+  };
 
   useEffect(() => {
     if (!authorizedCompanies.length) {
@@ -158,7 +206,12 @@ export const CommercialAppProvider: React.FC<React.PropsWithChildren> = ({ child
       setVehicles(snapshot.vehicles);
       setDrivers(snapshot.drivers);
       setClients(snapshot.clients);
-      setTrips(snapshot.trips);
+      setTrips((current) => {
+        const persistedRequestIds = new Set(snapshot.trips.map((trip) => trip.operatorRequestId).filter(Boolean));
+        const optimistic = current.filter((trip) => trip.id.startsWith('optimistic-')
+          && (!trip.operatorRequestId || !persistedRequestIds.has(trip.operatorRequestId)));
+        return [...optimistic, ...snapshot.trips];
+      });
       setNotifications(snapshot.notifications);
       setAuditLogs(snapshot.auditLogs);
       setFareConfig(snapshot.fareConfig ?? DEFAULT_FARE_CONFIG);
@@ -182,7 +235,7 @@ export const CommercialAppProvider: React.FC<React.PropsWithChildren> = ({ child
   useEffect(()=>{
     if(currentCompany.id==='network'||!authUser)return;
     const timer=window.setTimeout(()=>{
-      try{localStorage.setItem(snapshotKey(currentCompany.id),JSON.stringify({savedAt:Date.now(),companyId:currentCompany.id,vehicles,drivers,clients,trips:trips.slice(0,750),notifications:notifications.slice(0,300),auditLogs:auditLogs.slice(0,300),fareConfig} satisfies CachedSnapshot));}catch{}
+      try{localStorage.setItem(snapshotKey(currentCompany.id),JSON.stringify({savedAt:Date.now(),companyId:currentCompany.id,vehicles,drivers,clients,trips:trips.filter((trip)=>!trip.id.startsWith('optimistic-')).slice(0,750),notifications:notifications.slice(0,300),auditLogs:auditLogs.slice(0,300),fareConfig} satisfies CachedSnapshot));}catch{}
     },350);
     return()=>window.clearTimeout(timer);
   },[authUser?.id,currentCompany.id,vehicles,drivers,clients,trips,notifications,auditLogs,fareConfig]);
@@ -198,6 +251,35 @@ export const CommercialAppProvider: React.FC<React.PropsWithChildren> = ({ child
     return()=>{window.removeEventListener('centralgo:driver-resync',resync);window.removeEventListener('online',resync);};
   },[authUser?.id,currentCompany.id,currentRole]);
 
+  useEffect(() => {
+    const stage = (event: Event) => {
+      const trip = (event as CustomEvent<Trip>).detail;
+      const requestId = trip?.operatorRequestId;
+      if (!trip || !requestId || trip.companyId !== currentCompany.id || !trip.id.startsWith('optimistic-')) return;
+      if (!optimisticTripRequestsRef.current.has(requestId)) {
+        let resolve!: (tripId: string) => void;
+        let reject!: (error: Error) => void;
+        const promise = new Promise<string>((res, rej) => { resolve = res; reject = rej; });
+        void promise.catch(() => undefined);
+        optimisticTripRequestsRef.current.set(requestId, { tempId: trip.id, state: 'pending', promise, resolve, reject });
+      }
+      setTrips((items) => upsertTrip(items, trip));
+    };
+    const settle = (event: Event) => {
+      const detail = (event as CustomEvent<{ companyId?: string; requestId?: string }>).detail;
+      if (!detail?.requestId || detail.companyId !== currentCompany.id) return;
+      const entry = optimisticTripRequestsRef.current.get(detail.requestId);
+      if (entry?.state === 'pending') rejectOptimisticTripRequest(detail.requestId, new Error('No fue posible confirmar la carrera.'));
+      setTrips((items) => items.filter((trip) => !(trip.id.startsWith('optimistic-') && trip.operatorRequestId === detail.requestId)));
+    };
+    window.addEventListener('centralgo:trip-optimistic', stage);
+    window.addEventListener('centralgo:trip-optimistic-settled', settle);
+    return () => {
+      window.removeEventListener('centralgo:trip-optimistic', stage);
+      window.removeEventListener('centralgo:trip-optimistic-settled', settle);
+    };
+  }, [currentCompany.id]);
+
   useEffect(()=>{
     if(!authUser||currentRole!=='driver'||currentCompany.id==='network')return;
     let active=true;
@@ -212,7 +294,10 @@ export const CommercialAppProvider: React.FC<React.PropsWithChildren> = ({ child
   useEffect(() => {
     if (!authUser || currentCompany.id === 'network') return;
     const unsubscribe = subscribeCompanyRealtime(currentCompany.id, {
-      onTrip: (trip) => setTrips((items) => upsertById(items, trip)),
+      onTrip: (trip) => {
+        resolveOptimisticTripRequest(trip.operatorRequestId, trip.id);
+        setTrips((items) => upsertTrip(items, trip));
+      },
       onDriver: (row) => setDrivers((items) => {
         const existing = items.find((driver) => driver.id === row.id);
         return upsertById(items, mapDriverRow(row, existing ? {
@@ -238,7 +323,7 @@ export const CommercialAppProvider: React.FC<React.PropsWithChildren> = ({ child
       } : driver)),
       onNotification: (notification) => {
         setNotifications((items) => upsertById(items, notification));
-        if(currentRole==='driver'&&notification.relatedId)void loadTripById(notification.relatedId).then(trip=>{if(trip)setTrips(items=>upsertById(items,trip));}).catch(()=>{});
+        if(currentRole==='driver'&&notification.relatedId)void loadTripById(notification.relatedId).then(trip=>{if(trip)setTrips(items=>upsertTrip(items,trip));}).catch(()=>{});
         if (notification.type === 'sos' && !soundMuted) playSOSSiren();
         if(['operator','company_admin'].includes(currentRole)&&notification.type==='warning'&&notification.title.toUpperCase().includes('RESERVA')&&!soundMuted){
           void soundManager.prime().then(ready=>{if(ready)soundManager.playReservationAlarmOnce(`due:${notification.relatedId??notification.id}`);});
@@ -278,28 +363,37 @@ export const CommercialAppProvider: React.FC<React.PropsWithChildren> = ({ child
   };
 
   const createTrip = async (data: Partial<Trip>) => {
-    const trip = await insertTrip(currentCompany, currentUser, data);
-    setTrips((items) => upsertById(items, trip));
-    if (trip.driverId) setDrivers((items) => items.map((driver) => driver.id === trip.driverId ? { ...driver, status: 'en_route' } : driver));
-    const scheduleLabel = trip.scheduledFor ? ` agendada para ${new Date(trip.scheduledFor).toLocaleString('es-CL')}` : '';
-    addAuditLog('CREAR_VIAJE', `Creó despacho ${trip.code}${scheduleLabel} para ${trip.clientName}`);
-    if (!soundMuted && !trip.scheduledFor) {
-      speakVHFDispatch(trip.driverUnitNumber ? `Atención ${trip.driverUnitNumber}, nuevo despacho en ${trip.origin.address}` : `Atención central y unidades, nuevo despacho en ${trip.origin.address}`);
+    try {
+      const trip = await insertTrip(currentCompany, currentUser, data);
+      resolveOptimisticTripRequest(trip.operatorRequestId ?? data.operatorRequestId, trip.id);
+      setTrips((items) => upsertTrip(items, trip));
+      if (trip.driverId) setDrivers((items) => items.map((driver) => driver.id === trip.driverId ? { ...driver, status: 'en_route' } : driver));
+      const scheduleLabel = trip.scheduledFor ? ` agendada para ${new Date(trip.scheduledFor).toLocaleString('es-CL')}` : '';
+      addAuditLog('CREAR_VIAJE', `Creó despacho ${trip.code}${scheduleLabel} para ${trip.clientName}`);
+      if (!soundMuted && !trip.scheduledFor) {
+        speakVHFDispatch(trip.driverUnitNumber ? `Atención ${trip.driverUnitNumber}, nuevo despacho en ${trip.origin.address}` : `Atención central y unidades, nuevo despacho en ${trip.origin.address}`);
+      }
+      return trip;
+    } catch (error) {
+      rejectOptimisticTripRequest(data.operatorRequestId, error);
+      setTrips((items) => items.filter((trip) => !(trip.id.startsWith('optimistic-') && trip.operatorRequestId === data.operatorRequestId)));
+      throw error;
     }
-    return trip;
   };
 
   const assignTrip = async (tripId: string, driverId: string) => {
-    const trip = await assignTripAtomic(tripId, driverId);
-    setTrips((items) => upsertById(items, trip));
+    const persistedTripId = await resolveOperationalTripId(tripId);
+    const trip = await assignTripAtomic(persistedTripId, driverId);
+    setTrips((items) => upsertTrip(items, trip));
     setDrivers((items) => items.map((driver) => driver.id === driverId ? { ...driver, status: 'en_route' } : driver));
     addAuditLog('ASIGNAR_VIAJE', `Asignó ${trip.driverUnitNumber ?? driverId} a ${trip.code}`);
   };
 
   const reassignTrip = async (tripId: string, newDriverId: string) => {
-    const before = trips.find((trip) => trip.id === tripId);
-    const trip = await assignTripAtomic(tripId, newDriverId);
-    setTrips((items) => upsertById(items, trip));
+    const persistedTripId = await resolveOperationalTripId(tripId);
+    const before = trips.find((trip) => trip.id === persistedTripId) ?? trips.find((trip) => trip.id === tripId);
+    const trip = await assignTripAtomic(persistedTripId, newDriverId);
+    setTrips((items) => upsertTrip(items, trip));
     setDrivers((items) => items.map((driver) => {
       if (driver.id === newDriverId) return { ...driver, status: 'en_route' };
       if (before?.driverId === driver.id) return { ...driver, status: 'available' };
@@ -309,8 +403,9 @@ export const CommercialAppProvider: React.FC<React.PropsWithChildren> = ({ child
   };
 
   const updateTripStatus = async (tripId: string, status: TripStatus, notes?: string) => {
-    const trip = await setTripStatusAtomic(tripId, status, currentRole === 'driver');
-    setTrips((items) => upsertById(items, notes ? { ...trip, notes: [trip.notes, notes].filter(Boolean).join(' | ') } : trip));
+    const persistedTripId = await resolveOperationalTripId(tripId);
+    const trip = await setTripStatusAtomic(persistedTripId, status, currentRole === 'driver');
+    setTrips((items) => upsertTrip(items, notes ? { ...trip, notes: [trip.notes, notes].filter(Boolean).join(' | ') } : trip));
     if (trip.driverId) {
       setDrivers((items) => items.map((driver) => driver.id === trip.driverId ? {
         ...driver,
@@ -321,9 +416,10 @@ export const CommercialAppProvider: React.FC<React.PropsWithChildren> = ({ child
   };
 
   const completeTrip = async (tripId: string, finalFare: number, paymentMethod: PaymentMethod) => {
-    const before = trips.find((item) => item.id === tripId);
-    const trip = await completeTripAtomic(tripId, finalFare, paymentMethod);
-    setTrips((items) => upsertById(items, trip));
+    const persistedTripId = await resolveOperationalTripId(tripId);
+    const before = trips.find((item) => item.id === persistedTripId) ?? trips.find((item) => item.id === tripId);
+    const trip = await completeTripAtomic(persistedTripId, finalFare, paymentMethod);
+    setTrips((items) => upsertTrip(items, trip));
     if (trip.driverId && before?.status !== 'completed') {
       setDrivers((items) => items.map((driver) => driver.id === trip.driverId ? {
         ...driver,
@@ -335,25 +431,28 @@ export const CommercialAppProvider: React.FC<React.PropsWithChildren> = ({ child
   };
 
   const cancelTrip = async (tripId: string, reason: string) => {
-    const before = trips.find((trip) => trip.id === tripId);
-    const trip = await cancelTripAtomic(tripId, reason);
-    setTrips((items) => upsertById(items, trip));
+    const persistedTripId = await resolveOperationalTripId(tripId);
+    const before = trips.find((trip) => trip.id === persistedTripId) ?? trips.find((trip) => trip.id === tripId);
+    const trip = await cancelTripAtomic(persistedTripId, reason);
+    setTrips((items) => upsertTrip(items, trip));
     if (before?.driverId) setDrivers((items) => items.map((driver) => driver.id === before.driverId ? { ...driver, status: 'available' } : driver));
     addAuditLog('CANCELAR_VIAJE', `Canceló ${trip.code}. Motivo: ${reason}`);
   };
 
   const unassignTrip = async (tripId: string, reason?: string) => {
-    const before = trips.find((trip) => trip.id === tripId);
-    const trip = await unassignTripAtomic(tripId, reason);
-    setTrips((items) => upsertById(items, trip));
+    const persistedTripId = await resolveOperationalTripId(tripId);
+    const before = trips.find((trip) => trip.id === persistedTripId) ?? trips.find((trip) => trip.id === tripId);
+    const trip = await unassignTripAtomic(persistedTripId, reason);
+    setTrips((items) => upsertTrip(items, trip));
     if (before?.driverId) setDrivers((items) => items.map((driver) => driver.id === before.driverId ? { ...driver, status: 'available' } : driver));
   };
 
   const rejectTripOffer = async (tripId: string, reason: string) => {
-    if (currentRole !== 'driver') return unassignTrip(tripId, reason);
-    const before = trips.find((trip) => trip.id === tripId);
-    const trip = await rejectDriverTripAtomic(tripId, reason);
-    setTrips((items) => upsertById(items, trip));
+    const persistedTripId = await resolveOperationalTripId(tripId);
+    if (currentRole !== 'driver') return unassignTrip(persistedTripId, reason);
+    const before = trips.find((trip) => trip.id === persistedTripId) ?? trips.find((trip) => trip.id === tripId);
+    const trip = await rejectDriverTripAtomic(persistedTripId, reason);
+    setTrips((items) => upsertTrip(items, trip));
     if (before?.driverId) setDrivers((items) => items.map((driver) => driver.id === before.driverId ? { ...driver, status: 'available' } : driver));
   };
 
@@ -393,8 +492,9 @@ export const CommercialAppProvider: React.FC<React.PropsWithChildren> = ({ child
   };
 
   const autoAssignClosestDriver = async (tripId: string): Promise<Driver | null> => {
-    const trip = await autoDispatchTripAtomic(tripId);
-    setTrips((items) => upsertById(items, trip));
+    const persistedTripId = await resolveOperationalTripId(tripId);
+    const trip = await autoDispatchTripAtomic(persistedTripId);
+    setTrips((items) => upsertTrip(items, trip));
     const candidateId = trip.driverId ?? trip.reservedDriverId;
     if (!candidateId) return null;
     const candidate = drivers.find((driver) => driver.id === candidateId) ?? null;
@@ -534,4 +634,3 @@ export const CommercialAppProvider: React.FC<React.PropsWithChildren> = ({ child
     </AppContext.Provider>
   );
 };
-
