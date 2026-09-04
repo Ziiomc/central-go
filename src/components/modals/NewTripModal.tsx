@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { CalendarClock, Clock3, Eraser, Loader2, MessageSquareText, Phone, Plus, UserRound, WalletCards, X, Zap } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import type { Client, DispatchMode, PaymentMethod } from '../../types';
+import type { Client, DispatchMode, PaymentMethod, Trip } from '../../types';
 import { runtimeConfig } from '../../config/runtime';
 import { geocodeCommercialAddress } from '../../lib/geocoding';
 import { estimateDrivingDistanceKm } from '../../lib/tripDistance';
@@ -46,6 +46,7 @@ export const NewTripModal: React.FC = () => {
     addClient,
     fareConfig,
     currentCompany,
+    currentUser,
   } = useApp();
 
   const originRef = useRef<HTMLInputElement>(null);
@@ -275,17 +276,72 @@ export const NewTripModal: React.FC = () => {
     setSubmitting(true);
     setError('');
 
-    try {
-      const originPoint = runtimeConfig.isCommercial
-        ? await geocodeCommercialAddress(currentCompany.id, cleanOrigin)
-        : { lat: -35.8454, lng: -71.5979 };
+    const optimisticName = cleanName || activeClient?.name || 'Cliente Particular';
+    const optimisticPhone = cleanPhone || activeClient?.phone || 'Sin teléfono';
+    const optimisticTrip: Trip = {
+      id: `optimistic-${requestId}`,
+      companyId: currentCompany.id,
+      code: 'SINCRONIZANDO',
+      operatorRequestId: requestId,
+      clientId: activeClient?.id,
+      clientName: optimisticName,
+      clientPhone: optimisticPhone,
+      origin: { address: cleanOrigin, lat: 0, lng: 0 },
+      destination: { address: cleanDestination, lat: 0, lng: 0 },
+      status: 'pending',
+      operatorId: currentUser.id,
+      operatorName: currentUser.name,
+      estimatedDistanceKm: 0,
+      estimatedDurationMins: 0,
+      estimatedFare: fixedFareEnabled ? parsedFixedFare : 0,
+      isFixedFare: fixedFareEnabled,
+      fixedFareAmount: fixedFareEnabled ? parsedFixedFare : undefined,
+      paymentMethod: payment,
+      notes: notes.trim() || undefined,
+      dispatchMode,
+      scheduledFor,
+      createdAt: new Date().toISOString(),
+    };
 
+    try {
+      const immediateDraft: TripDraft = {
+        origin,
+        destination,
+        clientName,
+        clientPhone,
+        payment,
+        notes,
+        scheduleEnabled,
+        scheduledLocal,
+        dispatchMode,
+        fixedFareEnabled,
+        fixedFareAmount,
+        savedAt: Date.now(),
+      };
+      window.localStorage.setItem(draftKey(currentCompany.id), JSON.stringify(immediateDraft));
+    } catch {
+      // La creación sigue aunque no podamos conservar el borrador local.
+    }
+
+    window.dispatchEvent(new CustomEvent<Trip>('centralgo:trip-optimistic', { detail: optimisticTrip }));
+    setNewTripModalOpen(false);
+
+    try {
       const flexibleDestination = /^a convenir/i.test(cleanDestination);
-      const destinationPoint = runtimeConfig.isCommercial
-        ? flexibleDestination
-          ? originPoint
-          : await geocodeCommercialAddress(currentCompany.id, cleanDestination)
-        : { lat: -35.849, lng: -71.603 };
+      let originPoint: { lat: number; lng: number };
+      let destinationPoint: { lat: number; lng: number };
+
+      if (runtimeConfig.isCommercial) {
+        const [resolvedOrigin, resolvedDestination] = await Promise.all([
+          geocodeCommercialAddress(currentCompany.id, cleanOrigin),
+          flexibleDestination ? Promise.resolve(null) : geocodeCommercialAddress(currentCompany.id, cleanDestination),
+        ]);
+        originPoint = resolvedOrigin;
+        destinationPoint = resolvedDestination ?? resolvedOrigin;
+      } else {
+        originPoint = { lat: -35.8454, lng: -71.5979 };
+        destinationPoint = flexibleDestination ? originPoint : { lat: -35.849, lng: -71.603 };
+      }
 
       const distanceKm = flexibleDestination ? 0 : estimateDrivingDistanceKm(originPoint, destinationPoint);
       const calculatedFare = Math.round(fareConfig.baseFare + Math.max(0.5, distanceKm) * fareConfig.pricePerKm);
@@ -348,6 +404,10 @@ export const NewTripModal: React.FC = () => {
         fixedFareAmount: fixedFareEnabled ? parsedFixedFare : undefined,
       }));
 
+      window.dispatchEvent(new CustomEvent('centralgo:trip-optimistic-settled', {
+        detail: { companyId: currentCompany.id, requestId },
+      }));
+
       rememberAddressHistory(currentCompany.id, [cleanOrigin, cleanDestination], {
         contact: { name: resolvedName, phone: resolvedPhone },
       });
@@ -358,10 +418,14 @@ export const NewTripModal: React.FC = () => {
         // noop
       }
       setBlankForm();
-      setNewTripModalOpen(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'No fue posible crear la carrera.');
+      window.dispatchEvent(new CustomEvent('centralgo:trip-optimistic-settled', {
+        detail: { companyId: currentCompany.id, requestId },
+      }));
+      const message = err instanceof Error ? err.message : 'No fue posible crear la carrera.';
       setSubmitting(false);
+      setNewTripModalOpen(true);
+      window.setTimeout(() => setError(message), 80);
     }
   };
 
