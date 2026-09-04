@@ -1,0 +1,47 @@
+name: Apply audited queue position stabilization
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/centralgo-queue-position-audit.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: centralgo-queue-position-audit
+  cancel-in-progress: false
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Apply queue audit patch
+        run: node scripts/apply-queue-position-audit.mjs
+      - name: Install dependencies
+        run: npm ci
+      - name: Typecheck
+        run: npm run lint
+      - name: Commercial and security checks
+        run: npm run check:commercial
+      - name: Production build
+        run: npm run build
+      - name: Commit audited application change
+        run: |
+          git checkout -- public/docs/manual-central-go-centrales.pdf 2>/dev/null || true
+          rm -f .github/workflows/centralgo-queue-position-audit.yml scripts/apply-queue-position-audit.mjs
+          git config user.name "central-go-automation"
+          git config user.email "central-go-automation@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet && exit 0
+          git commit -m "Fix authoritative driver queue numbering"
+          git push
