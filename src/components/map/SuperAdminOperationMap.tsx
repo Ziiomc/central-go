@@ -81,7 +81,6 @@ export const SuperAdminOperationMap:React.FC<SuperAdminOperationMapProps>=({comp
     const age=now-new Date(location.recorded_at).getTime();
     if(!Number.isFinite(age)||age>GPS_FRESH_MS)return[];
     const presenceFresh=freshPresence.has(driver.id);
-    if(driver.status==='offline'&&!presenceFresh)return[];
     const vehicle=driver.vehicle_id?vehiclesById.get(driver.vehicle_id)??null:null;
     return[{driver,vehicle,location:{...location,lat:Number(location.lat),lng:Number(location.lng)},companyName:companiesById.get(driver.company_id)||companyName||'Central',presenceFresh}];
    }).sort((a,b)=>a.driver.unit_number?.localeCompare(b.driver.unit_number||'',undefined,{numeric:true})??0);
@@ -165,7 +164,7 @@ export const SuperAdminOperationMap:React.FC<SuperAdminOperationMapProps>=({comp
   <div className={`relative w-full ${height}`}>
    <div ref={mapContainerRef} className="absolute inset-0"/>
    {loading&&<div className="absolute inset-0 z-[500] flex items-center justify-center gap-2 bg-zinc-950/75 text-xs font-bold text-zinc-300 backdrop-blur-sm"><Loader2 className="h-5 w-5 animate-spin text-blue-300"/>Cargando vehículos GPS…</div>}
-   {!loading&&!mapVehicles.length&&!error&&<div className="pointer-events-none absolute inset-x-4 top-4 z-[500] rounded-xl border border-zinc-700 bg-zinc-950/90 px-4 py-3 text-xs text-zinc-300 shadow-xl">No hay vehículos con GPS reciente y estado operativo en esta vista.</div>}
+   {!loading&&!mapVehicles.length&&!error&&<div className="pointer-events-none absolute inset-x-4 top-4 z-[500] rounded-xl border border-zinc-700 bg-zinc-950/90 px-4 py-3 text-xs text-zinc-300 shadow-xl">No hay vehículos con GPS reciente en esta vista.</div>}
    <div className="pointer-events-none absolute bottom-3 left-3 z-[500] flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-950/85 px-2.5 py-1.5 text-[9px] font-bold text-zinc-400 shadow-lg"><Clock3 className="h-3.5 w-3.5 text-blue-300"/>{lastUpdated?`Actualizado ${lastUpdated.toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit',second:'2-digit'})}`:'Sincronizando…'}</div>
   </div>
  </section>;
