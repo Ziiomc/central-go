@@ -86,7 +86,9 @@ begin
 
   -- 5. Manual take-out/re-entry is reversible. The fleet row stays enabled so
   -- the console can keep the mobile visible in red, but OFFLINE removes it from
-  -- the active queue. Re-entry must move the mobile to the true tail.
+  -- the active queue. Force the mobile away from the tail first, then require
+  -- re-entry to place it at the true tail.
+  perform public.centralgo_operator_move_driver_priority('e4000000-0000-4000-8000-000000000001','up');
   select dispatch_queue_order into v_before
   from public.drivers where id='e4000000-0000-4000-8000-000000000001';
   perform public.centralgo_operator_set_driver_daily_service('e4000000-0000-4000-8000-000000000001',false,'traditional');
