@@ -84,10 +84,14 @@ begin
     raise exception 'CHAOS FAIL: cancelled trip was reassigned';
   exception when sqlstate '55000' then null; end;
 
-  -- 5. Manual take-out/re-entry is reversible and does not delete the fleet row.
+  -- 5. Manual take-out/re-entry is reversible. The fleet row stays enabled so
+  -- the console can keep the mobile visible in red, but OFFLINE removes it from
+  -- the active queue. Re-entry must move the mobile to the true tail.
+  select dispatch_queue_order into v_before
+  from public.drivers where id='e4000000-0000-4000-8000-000000000001';
   perform public.centralgo_operator_set_driver_daily_service('e4000000-0000-4000-8000-000000000001',false,'traditional');
-  if exists(select 1 from public.drivers where id='e4000000-0000-4000-8000-000000000001' and (service_enabled or status<>'offline')) then
-    raise exception 'CHAOS FAIL: manual remove did not set offline';
+  if not exists(select 1 from public.drivers where id='e4000000-0000-4000-8000-000000000001' and service_enabled and status='offline') then
+    raise exception 'CHAOS FAIL: manual remove did not leave the roster row offline';
   end if;
   if not exists(select 1 from public.vehicles where id='e3000000-0000-4000-8000-000000000001' and archived_at is null) then
     raise exception 'CHAOS FAIL: removing from queue deleted/archived vehicle';
@@ -95,6 +99,17 @@ begin
   perform public.centralgo_operator_set_driver_daily_service('e4000000-0000-4000-8000-000000000001',true,'traditional');
   if not exists(select 1 from public.drivers where id='e4000000-0000-4000-8000-000000000001' and service_enabled and status='available') then
     raise exception 'CHAOS FAIL: manual re-entry did not restore mobile';
+  end if;
+  select dispatch_queue_order into v_after
+  from public.drivers where id='e4000000-0000-4000-8000-000000000001';
+  if v_after<=v_before or exists(
+    select 1 from public.drivers d
+    where d.company_id='e2000000-0000-4000-8000-000000000001'
+      and d.id<>'e4000000-0000-4000-8000-000000000001'
+      and d.archived_at is null
+      and d.dispatch_queue_order>=v_after
+  ) then
+    raise exception 'CHAOS FAIL: manual re-entry did not move mobile to queue tail';
   end if;
 
   -- 6. Wrong central, impossible state and blank cancellation reason are rejected.
