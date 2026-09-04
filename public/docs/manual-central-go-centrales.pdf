@@ -1,0 +1,536 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Count 10 /Kids [ 6 0 R 8 0 R 10 0 R 12 0 R 14 0 R 16 0 R 18 0 R 20 0 R 22 0 R 24 0 R ] >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>
+endobj
+5 0 obj
+<< /Length 1438 >>
+stream
+0.02 0.09 0.15 rg 0 0 595.28 841.89 re f
+0.04 0.15 0.28 rg 360.28 531.89 235 235 re f
+BT /F2 10 Tf 0.39 0.85 1 rg 1 0 0 1 48 691.89 Tm (MANUAL DE USO) Tj ET
+BT /F2 28 Tf 1 1 1 rg 1 0 0 1 48 651.89 Tm (Central GO) Tj ET
+BT /F2 28 Tf 1 1 1 rg 1 0 0 1 48 616.89 Tm (para Centrales de Taxi) Tj ET
+BT /F1 11 Tf 0.72 0.9 1 rg 1 0 0 1 48 576.89 Tm (Guia visual y profesional para configurar la central,) Tj ET
+BT /F1 11 Tf 0.72 0.9 1 rg 1 0 0 1 48 559.89 Tm (administrar la flota, despachar carreras, supervisar) Tj ET
+BT /F1 11 Tf 0.72 0.9 1 rg 1 0 0 1 48 542.89 Tm (conductores y revisar la operacion diaria.) Tj ET
+0.03 0.1 0.2 rg 405.28 576.89 120 120 re f
+0.08 0.59 1 RG 0.8 w 405.28 576.89 120 120 re S
+0.08 0.59 1 rg 425.28 601.89 80 32 re f
+0.39 0.85 1 rg 440.28 627.89 50 22 re f
+0.08 0.23 0.4 rg 48 476.89 360 54 re f
+0.18 0.42 0.65 RG 0.7 w 48 476.89 360 54 re S
+BT /F1 9.2 Tf 1 1 1 rg 1 0 0 1 62 503.89 Tm (Tu objetivo: operar la central con mas orden, control, trazabilidad y) Tj ET
+BT /F1 9.2 Tf 1 1 1 rg 1 0 0 1 62 490.89 Tm (rapidez, sin perder el rol de la operadora.) Tj ET
+BT /F1 8.4 Tf 1 1 1 rg 1 0 0 1 48 170 Tm (Central GO conecta la central, sus operadoras, conductores, vehiculos y clientes dentro de) Tj ET
+BT /F1 8.4 Tf 1 1 1 rg 1 0 0 1 48 157 Tm (una plataforma SaaS multiempresa con despacho digital, GPS, historial y analitica.) Tj ET
+BT /F1 7.5 Tf 0.4 0.47 0.54 rg 1 0 0 1 48 55 Tm (Edicion profesional 2026) Tj ET
+
+endstream
+endobj
+6 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents 5 0 R >>
+endobj
+7 0 obj
+<< /Length 2900 >>
+stream
+0.02 0.09 0.15 rg 0 801.89 595.28 40 re f
+BT /F2 9 Tf 1 1 1 rg 1 0 0 1 24 816.89 Tm (CENTRAL GO) Tj ET
+BT /F1 7.5 Tf 1 1 1 rg 1 0 0 1 425.28 816.89 Tm (Manual para centrales) Tj ET
+0.84 0.89 0.94 RG 0.5 w 48 35 m 547.28 35 l S
+BT /F1 7 Tf 0.4 0.47 0.54 rg 1 0 0 1 48 20 Tm (Operacion - despacho - flota - reportes) Tj ET
+BT /F1 7 Tf 0.4 0.47 0.54 rg 1 0 0 1 540.28 20 Tm (2) Tj ET
+BT /F2 18 Tf 0.04 0.15 0.28 rg 1 0 0 1 48 765.89 Tm (1. Que es Central GO) Tj ET
+0.84 0.89 0.94 RG 1 w 48 755.89 m 547.28 755.89 l S
+BT /F1 9.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 48 729.89 Tm (Central GO es una plataforma de gestion y despacho para centrales de taxi. Moderniza la) Tj ET
+BT /F1 9.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 48 715.89 Tm (coordinacion entre la central, sus operadoras y los conductores, manteniendo cada empresa) Tj ET
+BT /F1 9.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 48 701.89 Tm (separada y protegida por roles.) Tj ET
+0.92 0.97 1 rg 48 601.89 238 76 re f
+0.84 0.89 0.94 RG 0.6 w 48 601.89 238 76 re S
+BT /F2 10 Tf 0.04 0.15 0.28 rg 1 0 0 1 58 659.89 Tm (Despacho inteligente) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 58 643.89 Tm (Crea carreras, asigna moviles manualmente y) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 58 631.89 Tm (utiliza automatismos disponibles para agilizar) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 58 619.89 Tm (la operacion.) Tj ET
+0.92 0.97 1 rg 309 613.89 238 64 re f
+0.84 0.89 0.94 RG 0.6 w 309 613.89 238 64 re S
+BT /F2 10 Tf 0.04 0.15 0.28 rg 1 0 0 1 319 659.89 Tm (GPS y mapa en tiempo real) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 319 643.89 Tm (Visualiza la ubicacion reportada por los moviles) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 319 631.89 Tm (y toma mejores decisiones de asignacion.) Tj ET
+0.92 0.97 1 rg 48 511.89 238 76 re f
+0.84 0.89 0.94 RG 0.6 w 48 511.89 238 76 re S
+BT /F2 10 Tf 0.04 0.15 0.28 rg 1 0 0 1 58 569.89 Tm (PWA del conductor) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 58 553.89 Tm (El conductor recibe carreras, cambia estados,) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 58 541.89 Tm (comparte ubicacion y usa herramientas como SOS) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 58 529.89 Tm (desde su telefono.) Tj ET
+0.92 0.97 1 rg 309 511.89 238 76 re f
+0.84 0.89 0.94 RG 0.6 w 309 511.89 238 76 re S
+BT /F2 10 Tf 0.04 0.15 0.28 rg 1 0 0 1 319 569.89 Tm (Historial y analitica) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 319 553.89 Tm (Cada operacion queda registrada y puede) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 319 541.89 Tm (revisarse con metricas, graficos y) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 319 529.89 Tm (exportaciones.) Tj ET
+0.04 0.15 0.28 rg 48 438.89 499.28 55 re f
+BT /F1 9.2 Tf 1 1 1 rg 1 0 0 1 62 471.89 Tm (Central GO no reemplaza a la operadora: la fortalece con visibilidad, trazabilidad y) Tj ET
+BT /F1 9.2 Tf 1 1 1 rg 1 0 0 1 62 457.89 Tm (herramientas modernas.) Tj ET
+
+endstream
+endobj
+8 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents 7 0 R >>
+endobj
+9 0 obj
+<< /Length 3491 >>
+stream
+0.02 0.09 0.15 rg 0 801.89 595.28 40 re f
+BT /F2 9 Tf 1 1 1 rg 1 0 0 1 24 816.89 Tm (CENTRAL GO) Tj ET
+BT /F1 7.5 Tf 1 1 1 rg 1 0 0 1 425.28 816.89 Tm (Manual para centrales) Tj ET
+0.84 0.89 0.94 RG 0.5 w 48 35 m 547.28 35 l S
+BT /F1 7 Tf 0.4 0.47 0.54 rg 1 0 0 1 48 20 Tm (Operacion - despacho - flota - reportes) Tj ET
+BT /F1 7 Tf 0.4 0.47 0.54 rg 1 0 0 1 540.28 20 Tm (3) Tj ET
+BT /F2 18 Tf 0.04 0.15 0.28 rg 1 0 0 1 48 765.89 Tm (2. Puesta en marcha de la central) Tj ET
+0.84 0.89 0.94 RG 1 w 48 755.89 m 547.28 755.89 l S
+BT /F1 9.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 48 729.89 Tm (Antes de iniciar el turno revisa esta secuencia. Reduce errores y asegura que toda la) Tj ET
+BT /F1 9.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 48 715.89 Tm (cadena operativa funcione correctamente.) Tj ET
+0.08 0.59 1 rg 48 647.89 34 46 re f
+BT /F2 10 Tf 1 1 1 rg 1 0 0 1 58 671.89 Tm (01) Tj ET
+0.96 0.98 0.99 rg 82 647.89 465.28 46 re f
+0.84 0.89 0.94 RG 0.6 w 82 647.89 465.28 46 re S
+BT /F2 9.5 Tf 0.04 0.15 0.28 rg 1 0 0 1 94 675.89 Tm (Configura la central) Tj ET
+BT /F1 8.5 Tf 0.07 0.16 0.23 rg 1 0 0 1 94 659.89 Tm (Revisa datos generales, usuarios, permisos y ajustes esenciales.) Tj ET
+0.08 0.59 1 rg 48 593.89 34 46 re f
+BT /F2 10 Tf 1 1 1 rg 1 0 0 1 58 617.89 Tm (02) Tj ET
+0.96 0.98 0.99 rg 82 593.89 465.28 46 re f
+0.84 0.89 0.94 RG 0.6 w 82 593.89 465.28 46 re S
+BT /F2 9.5 Tf 0.04 0.15 0.28 rg 1 0 0 1 94 621.89 Tm (Revisa conductores) Tj ET
+BT /F1 8.5 Tf 0.07 0.16 0.23 rg 1 0 0 1 94 605.89 Tm (Comprueba que los choferes del turno esten incorporados y aprobados.) Tj ET
+0.08 0.59 1 rg 48 539.89 34 46 re f
+BT /F2 10 Tf 1 1 1 rg 1 0 0 1 58 563.89 Tm (03) Tj ET
+0.96 0.98 0.99 rg 82 539.89 465.28 46 re f
+0.84 0.89 0.94 RG 0.6 w 82 539.89 465.28 46 re S
+BT /F2 9.5 Tf 0.04 0.15 0.28 rg 1 0 0 1 94 567.89 Tm (Registra vehiculos) Tj ET
+BT /F1 8.5 Tf 0.07 0.16 0.23 rg 1 0 0 1 94 551.89 Tm (Verifica que cada movil este correctamente asociado a la flota.) Tj ET
+0.08 0.59 1 rg 48 485.89 34 46 re f
+BT /F2 10 Tf 1 1 1 rg 1 0 0 1 58 509.89 Tm (04) Tj ET
+0.96 0.98 0.99 rg 82 485.89 465.28 46 re f
+0.84 0.89 0.94 RG 0.6 w 82 485.89 465.28 46 re S
+BT /F2 9.5 Tf 0.04 0.15 0.28 rg 1 0 0 1 94 513.89 Tm (Valida la PWA) Tj ET
+BT /F1 8.5 Tf 0.07 0.16 0.23 rg 1 0 0 1 94 497.89 Tm (Cada conductor debe poder iniciar sesion y quedar disponible.) Tj ET
+0.08 0.59 1 rg 48 431.89 34 46 re f
+BT /F2 10 Tf 1 1 1 rg 1 0 0 1 58 455.89 Tm (05) Tj ET
+0.96 0.98 0.99 rg 82 431.89 465.28 46 re f
+0.84 0.89 0.94 RG 0.6 w 82 431.89 465.28 46 re S
+BT /F2 9.5 Tf 0.04 0.15 0.28 rg 1 0 0 1 94 459.89 Tm (Comprueba el GPS) Tj ET
+BT /F1 8.5 Tf 0.07 0.16 0.23 rg 1 0 0 1 94 443.89 Tm (Asegurate de que los moviles aparezcan con ubicacion reciente.) Tj ET
+0.08 0.59 1 rg 48 377.89 34 46 re f
+BT /F2 10 Tf 1 1 1 rg 1 0 0 1 58 401.89 Tm (06) Tj ET
+0.96 0.98 0.99 rg 82 377.89 465.28 46 re f
+0.84 0.89 0.94 RG 0.6 w 82 377.89 465.28 46 re S
+BT /F2 9.5 Tf 0.04 0.15 0.28 rg 1 0 0 1 94 405.89 Tm (Crea una carrera de prueba) Tj ET
+BT /F1 8.5 Tf 0.07 0.16 0.23 rg 1 0 0 1 94 389.89 Tm (Registra cliente, origen y destino para validar el flujo.) Tj ET
+0.08 0.59 1 rg 48 323.89 34 46 re f
+BT /F2 10 Tf 1 1 1 rg 1 0 0 1 58 347.89 Tm (07) Tj ET
+0.96 0.98 0.99 rg 82 323.89 465.28 46 re f
+0.84 0.89 0.94 RG 0.6 w 82 323.89 465.28 46 re S
+BT /F2 9.5 Tf 0.04 0.15 0.28 rg 1 0 0 1 94 351.89 Tm (Despacha y completa) Tj ET
+BT /F1 8.5 Tf 0.07 0.16 0.23 rg 1 0 0 1 94 335.89 Tm (Asigna el movil, cambia estados y finaliza correctamente la carrera.) Tj ET
+
+endstream
+endobj
+10 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents 9 0 R >>
+endobj
+11 0 obj
+<< /Length 3188 >>
+stream
+0.02 0.09 0.15 rg 0 801.89 595.28 40 re f
+BT /F2 9 Tf 1 1 1 rg 1 0 0 1 24 816.89 Tm (CENTRAL GO) Tj ET
+BT /F1 7.5 Tf 1 1 1 rg 1 0 0 1 425.28 816.89 Tm (Manual para centrales) Tj ET
+0.84 0.89 0.94 RG 0.5 w 48 35 m 547.28 35 l S
+BT /F1 7 Tf 0.4 0.47 0.54 rg 1 0 0 1 48 20 Tm (Operacion - despacho - flota - reportes) Tj ET
+BT /F1 7 Tf 0.4 0.47 0.54 rg 1 0 0 1 540.28 20 Tm (4) Tj ET
+BT /F2 18 Tf 0.04 0.15 0.28 rg 1 0 0 1 48 765.89 Tm (3. Consola de despacho de la operadora) Tj ET
+0.84 0.89 0.94 RG 1 w 48 755.89 m 547.28 755.89 l S
+BT /F1 9.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 48 729.89 Tm (La consola concentra el trabajo diario. Desde aqui se crean carreras, se revisa la cola de) Tj ET
+BT /F1 9.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 48 715.89 Tm (despacho, se supervisan moviles y se consulta el mapa.) Tj ET
+0.92 0.97 1 rg 48 627.89 238 64 re f
+0.84 0.89 0.94 RG 0.6 w 48 627.89 238 64 re S
+BT /F2 10 Tf 0.04 0.15 0.28 rg 1 0 0 1 58 673.89 Tm (Nueva carrera) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 58 657.89 Tm (Abre el formulario para registrar una solicitud) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 58 645.89 Tm (nueva.) Tj ET
+0.92 0.97 1 rg 309 627.89 238 64 re f
+0.84 0.89 0.94 RG 0.6 w 309 627.89 238 64 re S
+BT /F2 10 Tf 0.04 0.15 0.28 rg 1 0 0 1 319 673.89 Tm (Buscador global) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 319 657.89 Tm (Encuentra carrera, cliente, telefono, calle o) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 319 645.89 Tm (numero de movil.) Tj ET
+0.92 0.97 1 rg 48 551.89 238 64 re f
+0.84 0.89 0.94 RG 0.6 w 48 551.89 238 64 re S
+BT /F2 10 Tf 0.04 0.15 0.28 rg 1 0 0 1 58 597.89 Tm (Cola de despacho) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 58 581.89 Tm (Muestra carreras pendientes, asignadas, en) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 58 569.89 Tm (camino, en llegada o en curso.) Tj ET
+0.92 0.97 1 rg 309 563.89 238 52 re f
+0.84 0.89 0.94 RG 0.6 w 309 563.89 238 52 re S
+BT /F2 10 Tf 0.04 0.15 0.28 rg 1 0 0 1 319 597.89 Tm (Moviles libres y en servicio) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 319 581.89 Tm (Resume la disponibilidad actual de la flota.) Tj ET
+0.92 0.97 1 rg 48 487.89 238 52 re f
+0.84 0.89 0.94 RG 0.6 w 48 487.89 238 52 re S
+BT /F2 10 Tf 0.04 0.15 0.28 rg 1 0 0 1 58 521.89 Tm (Ubicar) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 58 505.89 Tm (Centra el mapa en el conductor seleccionado.) Tj ET
+0.92 0.97 1 rg 309 475.89 238 64 re f
+0.84 0.89 0.94 RG 0.6 w 309 475.89 238 64 re S
+BT /F2 10 Tf 0.04 0.15 0.28 rg 1 0 0 1 319 521.89 Tm (Actualizar) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 319 505.89 Tm (Refresca la vista operativa y ayuda a) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 319 493.89 Tm (sincronizar la supervision visual.) Tj ET
+BT /F2 11 Tf 0.08 0.59 1 rg 1 0 0 1 48 455.89 Tm (Buenas practicas) Tj ET
+BT /F1 8.8 Tf 0.07 0.16 0.23 rg 1 0 0 1 58 437.89 Tm (- Usa el buscador para actuar rapido sobre una carrera o movil.) Tj ET
+BT /F1 8.8 Tf 0.07 0.16 0.23 rg 1 0 0 1 58 419.89 Tm (- Manten la cola ordenada y evita dejar carreras antiguas pendientes.) Tj ET
+BT /F1 8.8 Tf 0.07 0.16 0.23 rg 1 0 0 1 58 401.89 Tm (- Verifica los estados antes de cancelar, desasignar o reasignar.) Tj ET
+
+endstream
+endobj
+12 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents 11 0 R >>
+endobj
+13 0 obj
+<< /Length 3249 >>
+stream
+0.02 0.09 0.15 rg 0 801.89 595.28 40 re f
+BT /F2 9 Tf 1 1 1 rg 1 0 0 1 24 816.89 Tm (CENTRAL GO) Tj ET
+BT /F1 7.5 Tf 1 1 1 rg 1 0 0 1 425.28 816.89 Tm (Manual para centrales) Tj ET
+0.84 0.89 0.94 RG 0.5 w 48 35 m 547.28 35 l S
+BT /F1 7 Tf 0.4 0.47 0.54 rg 1 0 0 1 48 20 Tm (Operacion - despacho - flota - reportes) Tj ET
+BT /F1 7 Tf 0.4 0.47 0.54 rg 1 0 0 1 540.28 20 Tm (5) Tj ET
+BT /F2 18 Tf 0.04 0.15 0.28 rg 1 0 0 1 48 765.89 Tm (4. Flujo correcto de una carrera) Tj ET
+0.84 0.89 0.94 RG 1 w 48 755.89 m 547.28 755.89 l S
+BT /F1 9.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 48 729.89 Tm (Cada carrera debe avanzar por estados. Esto mantiene a la central informada y alimenta) Tj ET
+BT /F1 9.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 48 715.89 Tm (correctamente los reportes.) Tj ET
+0.04 0.15 0.28 rg 48 647.89 34 46 re f
+BT /F2 10 Tf 1 1 1 rg 1 0 0 1 58 671.89 Tm (01) Tj ET
+0.96 0.98 0.99 rg 82 647.89 465.28 46 re f
+0.84 0.89 0.94 RG 0.6 w 82 647.89 465.28 46 re S
+BT /F2 9.5 Tf 0.04 0.15 0.28 rg 1 0 0 1 94 675.89 Tm (Registrar) Tj ET
+BT /F1 8.5 Tf 0.07 0.16 0.23 rg 1 0 0 1 94 659.89 Tm (Ingresa cliente, telefono, origen, destino y observaciones.) Tj ET
+0.08 0.59 1 rg 48 593.89 34 46 re f
+BT /F2 10 Tf 1 1 1 rg 1 0 0 1 58 617.89 Tm (02) Tj ET
+0.96 0.98 0.99 rg 82 593.89 465.28 46 re f
+0.84 0.89 0.94 RG 0.6 w 82 593.89 465.28 46 re S
+BT /F2 9.5 Tf 0.04 0.15 0.28 rg 1 0 0 1 94 621.89 Tm (Asignar) Tj ET
+BT /F1 8.5 Tf 0.07 0.16 0.23 rg 1 0 0 1 94 605.89 Tm (Selecciona un movil o utiliza la asignacion disponible.) Tj ET
+0.95 0.7 0.2 rg 48 539.89 34 46 re f
+BT /F2 10 Tf 1 1 1 rg 1 0 0 1 58 563.89 Tm (03) Tj ET
+0.96 0.98 0.99 rg 82 539.89 465.28 46 re f
+0.84 0.89 0.94 RG 0.6 w 82 539.89 465.28 46 re S
+BT /F2 9.5 Tf 0.04 0.15 0.28 rg 1 0 0 1 94 567.89 Tm (En camino) Tj ET
+BT /F1 8.5 Tf 0.07 0.16 0.23 rg 1 0 0 1 94 551.89 Tm (El conductor acepta y se dirige al pasajero.) Tj ET
+0.95 0.7 0.2 rg 48 485.89 34 46 re f
+BT /F2 10 Tf 1 1 1 rg 1 0 0 1 58 509.89 Tm (04) Tj ET
+0.96 0.98 0.99 rg 82 485.89 465.28 46 re f
+0.84 0.89 0.94 RG 0.6 w 82 485.89 465.28 46 re S
+BT /F2 9.5 Tf 0.04 0.15 0.28 rg 1 0 0 1 94 513.89 Tm (Llegada) Tj ET
+BT /F1 8.5 Tf 0.07 0.16 0.23 rg 1 0 0 1 94 497.89 Tm (El movil ya esta en el punto de recogida.) Tj ET
+0.91 0.33 0.41 rg 48 431.89 34 46 re f
+BT /F2 10 Tf 1 1 1 rg 1 0 0 1 58 455.89 Tm (05) Tj ET
+0.96 0.98 0.99 rg 82 431.89 465.28 46 re f
+0.84 0.89 0.94 RG 0.6 w 82 431.89 465.28 46 re S
+BT /F2 9.5 Tf 0.04 0.15 0.28 rg 1 0 0 1 94 459.89 Tm (En viaje) Tj ET
+BT /F1 8.5 Tf 0.07 0.16 0.23 rg 1 0 0 1 94 443.89 Tm (El pasajero esta a bordo y la carrera comenzo.) Tj ET
+0.09 0.72 0.47 rg 48 377.89 34 46 re f
+BT /F2 10 Tf 1 1 1 rg 1 0 0 1 58 401.89 Tm (06) Tj ET
+0.96 0.98 0.99 rg 82 377.89 465.28 46 re f
+0.84 0.89 0.94 RG 0.6 w 82 377.89 465.28 46 re S
+BT /F2 9.5 Tf 0.04 0.15 0.28 rg 1 0 0 1 94 405.89 Tm (Finalizar) Tj ET
+BT /F1 8.5 Tf 0.07 0.16 0.23 rg 1 0 0 1 94 389.89 Tm (Cierra la carrera para que quede contabilizada.) Tj ET
+0.08 0.23 0.4 rg 48 315.89 499.28 54 re f
+BT /F1 8.8 Tf 1 1 1 rg 1 0 0 1 62 349.89 Tm (Si algo falla: desasigna para quitar el movil y volver a ofrecer la carrera; cancela) Tj ET
+BT /F1 8.8 Tf 1 1 1 rg 1 0 0 1 62 336.89 Tm (cuando el servicio ya no continuara. Siempre deja una razon clara.) Tj ET
+
+endstream
+endobj
+14 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents 13 0 R >>
+endobj
+15 0 obj
+<< /Length 2574 >>
+stream
+0.02 0.09 0.15 rg 0 801.89 595.28 40 re f
+BT /F2 9 Tf 1 1 1 rg 1 0 0 1 24 816.89 Tm (CENTRAL GO) Tj ET
+BT /F1 7.5 Tf 1 1 1 rg 1 0 0 1 425.28 816.89 Tm (Manual para centrales) Tj ET
+0.84 0.89 0.94 RG 0.5 w 48 35 m 547.28 35 l S
+BT /F1 7 Tf 0.4 0.47 0.54 rg 1 0 0 1 48 20 Tm (Operacion - despacho - flota - reportes) Tj ET
+BT /F1 7 Tf 0.4 0.47 0.54 rg 1 0 0 1 540.28 20 Tm (6) Tj ET
+BT /F2 18 Tf 0.04 0.15 0.28 rg 1 0 0 1 48 765.89 Tm (5. Conductores, vehiculos y acceso) Tj ET
+0.84 0.89 0.94 RG 1 w 48 755.89 m 547.28 755.89 l S
+BT /F1 9.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 48 729.89 Tm (Central GO separa la administracion de personas y moviles para mantener control) Tj ET
+BT /F1 9.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 48 715.89 Tm (documental, operativo y de seguridad.) Tj ET
+0.92 0.97 1 rg 48 615.89 238 76 re f
+0.84 0.89 0.94 RG 0.6 w 48 615.89 238 76 re S
+BT /F2 10 Tf 0.04 0.15 0.28 rg 1 0 0 1 58 673.89 Tm (Conductores) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 58 657.89 Tm (Incorpora choferes y controla estados:) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 58 645.89 Tm (disponible, en camino, en carrera, pausado,) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 58 633.89 Tm (fuera de linea o SOS.) Tj ET
+0.92 0.97 1 rg 309 627.89 238 64 re f
+0.84 0.89 0.94 RG 0.6 w 309 627.89 238 64 re S
+BT /F2 10 Tf 0.04 0.15 0.28 rg 1 0 0 1 319 673.89 Tm (Vehiculos) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 319 657.89 Tm (Manten la flota registrada y correctamente) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 319 645.89 Tm (asociada a cada unidad operativa.) Tj ET
+0.92 0.97 1 rg 48 537.89 238 64 re f
+0.84 0.89 0.94 RG 0.6 w 48 537.89 238 64 re S
+BT /F2 10 Tf 0.04 0.15 0.28 rg 1 0 0 1 58 583.89 Tm (Solicitudes de incorporacion) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 58 567.89 Tm (La central puede revisar solicitudes antes de) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 58 555.89 Tm (aprobar nuevos conductores.) Tj ET
+0.92 0.97 1 rg 309 537.89 238 64 re f
+0.84 0.89 0.94 RG 0.6 w 309 537.89 238 64 re S
+BT /F2 10 Tf 0.04 0.15 0.28 rg 1 0 0 1 319 583.89 Tm (Acceso del conductor) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 319 567.89 Tm (La PWA permite recibir carreras, compartir GPS y) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 319 555.89 Tm (operar desde el telefono.) Tj ET
+0.04 0.15 0.28 rg 48 463.89 499.28 60 re f
+BT /F1 9 Tf 1 1 1 rg 1 0 0 1 62 501.89 Tm (Regla de seguridad: ningun conductor deberia operar sin validacion previa de identidad,) Tj ET
+BT /F1 9 Tf 1 1 1 rg 1 0 0 1 62 487.89 Tm (documentacion y vinculo con el vehiculo.) Tj ET
+
+endstream
+endobj
+16 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents 15 0 R >>
+endobj
+17 0 obj
+<< /Length 2802 >>
+stream
+0.02 0.09 0.15 rg 0 801.89 595.28 40 re f
+BT /F2 9 Tf 1 1 1 rg 1 0 0 1 24 816.89 Tm (CENTRAL GO) Tj ET
+BT /F1 7.5 Tf 1 1 1 rg 1 0 0 1 425.28 816.89 Tm (Manual para centrales) Tj ET
+0.84 0.89 0.94 RG 0.5 w 48 35 m 547.28 35 l S
+BT /F1 7 Tf 0.4 0.47 0.54 rg 1 0 0 1 48 20 Tm (Operacion - despacho - flota - reportes) Tj ET
+BT /F1 7 Tf 0.4 0.47 0.54 rg 1 0 0 1 540.28 20 Tm (7) Tj ET
+BT /F2 18 Tf 0.04 0.15 0.28 rg 1 0 0 1 48 765.89 Tm (6. Mapa, GPS, radio y seguridad) Tj ET
+0.84 0.89 0.94 RG 1 w 48 755.89 m 547.28 755.89 l S
+BT /F1 9.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 48 729.89 Tm (Estas herramientas entregan visibilidad sobre la flota y ayudan a resolver la operacion) Tj ET
+BT /F1 9.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 48 715.89 Tm (con mayor rapidez.) Tj ET
+0.92 0.97 1 rg 48 615.89 238 76 re f
+0.84 0.89 0.94 RG 0.6 w 48 615.89 238 76 re S
+BT /F2 10 Tf 0.04 0.15 0.28 rg 1 0 0 1 58 673.89 Tm (GPS en tiempo real) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 58 657.89 Tm (Muestra la ubicacion reciente del movil. Una) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 58 645.89 Tm (actualizacion atrasada puede indicar senal debil) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 58 633.89 Tm (o falta de conexion.) Tj ET
+0.92 0.97 1 rg 309 627.89 238 64 re f
+0.84 0.89 0.94 RG 0.6 w 309 627.89 238 64 re S
+BT /F2 10 Tf 0.04 0.15 0.28 rg 1 0 0 1 319 673.89 Tm (Ubicar movil) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 319 657.89 Tm (Selecciona un conductor para enfocarlo en el) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 319 645.89 Tm (mapa y facilitar decisiones de despacho.) Tj ET
+0.92 0.97 1 rg 48 537.89 238 64 re f
+0.84 0.89 0.94 RG 0.6 w 48 537.89 238 64 re S
+BT /F2 10 Tf 0.04 0.15 0.28 rg 1 0 0 1 58 583.89 Tm (Radio digital) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 58 567.89 Tm (Complementa la comunicacion de la central sin) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 58 555.89 Tm (eliminar el control de la operadora.) Tj ET
+0.92 0.97 1 rg 309 537.89 238 64 re f
+0.84 0.89 0.94 RG 0.6 w 309 537.89 238 64 re S
+BT /F2 10 Tf 0.04 0.15 0.28 rg 1 0 0 1 319 583.89 Tm (SOS) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 319 567.89 Tm (Un conductor en estado SOS debe tratarse como) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 319 555.89 Tm (prioridad maxima y activar el protocolo interno.) Tj ET
+BT /F2 11 Tf 0.08 0.59 1 rg 1 0 0 1 48 519.89 Tm (Si un movil aparece sin senal) Tj ET
+BT /F1 8.8 Tf 0.07 0.16 0.23 rg 1 0 0 1 58 497.89 Tm (- Comprueba conexion de datos.) Tj ET
+BT /F1 8.8 Tf 0.07 0.16 0.23 rg 1 0 0 1 58 479.89 Tm (- Revisa permisos de ubicacion.) Tj ET
+BT /F1 8.8 Tf 0.07 0.16 0.23 rg 1 0 0 1 58 461.89 Tm (- Confirma que la PWA tenga sesion activa.) Tj ET
+BT /F1 8.8 Tf 0.07 0.16 0.23 rg 1 0 0 1 58 443.89 Tm (- Revisa restricciones de bateria y segundo plano.) Tj ET
+
+endstream
+endobj
+18 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents 17 0 R >>
+endobj
+19 0 obj
+<< /Length 2702 >>
+stream
+0.02 0.09 0.15 rg 0 801.89 595.28 40 re f
+BT /F2 9 Tf 1 1 1 rg 1 0 0 1 24 816.89 Tm (CENTRAL GO) Tj ET
+BT /F1 7.5 Tf 1 1 1 rg 1 0 0 1 425.28 816.89 Tm (Manual para centrales) Tj ET
+0.84 0.89 0.94 RG 0.5 w 48 35 m 547.28 35 l S
+BT /F1 7 Tf 0.4 0.47 0.54 rg 1 0 0 1 48 20 Tm (Operacion - despacho - flota - reportes) Tj ET
+BT /F1 7 Tf 0.4 0.47 0.54 rg 1 0 0 1 540.28 20 Tm (8) Tj ET
+BT /F2 18 Tf 0.04 0.15 0.28 rg 1 0 0 1 48 765.89 Tm (7. Clientes, tarifas, usuarios y configuracion) Tj ET
+0.84 0.89 0.94 RG 1 w 48 755.89 m 547.28 755.89 l S
+BT /F1 9.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 48 729.89 Tm (Una administracion limpia evita errores en el despacho y mejora la continuidad operativa.) Tj ET
+0.92 0.97 1 rg 48 641.89 238 64 re f
+0.84 0.89 0.94 RG 0.6 w 48 641.89 238 64 re S
+BT /F2 10 Tf 0.04 0.15 0.28 rg 1 0 0 1 58 687.89 Tm (Clientes) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 58 671.89 Tm (Conserva la informacion necesaria para) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 58 659.89 Tm (identificar solicitudes habituales.) Tj ET
+0.92 0.97 1 rg 309 641.89 238 64 re f
+0.84 0.89 0.94 RG 0.6 w 309 641.89 238 64 re S
+BT /F2 10 Tf 0.04 0.15 0.28 rg 1 0 0 1 319 687.89 Tm (Tarifas) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 319 671.89 Tm (Asegura que los valores usados por la central) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 319 659.89 Tm (esten actualizados.) Tj ET
+0.92 0.97 1 rg 48 565.89 238 64 re f
+0.84 0.89 0.94 RG 0.6 w 48 565.89 238 64 re S
+BT /F2 10 Tf 0.04 0.15 0.28 rg 1 0 0 1 58 611.89 Tm (Usuarios y roles) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 58 595.89 Tm (Entrega a cada persona solo los permisos que) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 58 583.89 Tm (necesita. Evita compartir cuentas.) Tj ET
+0.92 0.97 1 rg 309 577.89 238 52 re f
+0.84 0.89 0.94 RG 0.6 w 309 577.89 238 52 re S
+BT /F2 10 Tf 0.04 0.15 0.28 rg 1 0 0 1 319 611.89 Tm (Operadores) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 319 595.89 Tm (Gestiona al personal de despacho y sus accesos.) Tj ET
+0.92 0.97 1 rg 48 489.89 238 64 re f
+0.84 0.89 0.94 RG 0.6 w 48 489.89 238 64 re S
+BT /F2 10 Tf 0.04 0.15 0.28 rg 1 0 0 1 58 535.89 Tm (Configuracion general) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 58 519.89 Tm (Revisa los datos base de la central y) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 58 507.89 Tm (preferencias disponibles.) Tj ET
+0.92 0.97 1 rg 309 489.89 238 64 re f
+0.84 0.89 0.94 RG 0.6 w 309 489.89 238 64 re S
+BT /F2 10 Tf 0.04 0.15 0.28 rg 1 0 0 1 319 535.89 Tm (Historial) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 319 519.89 Tm (Consulta carreras previas para resolver dudas o) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 319 507.89 Tm (reclamos.) Tj ET
+
+endstream
+endobj
+20 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents 19 0 R >>
+endobj
+21 0 obj
+<< /Length 3334 >>
+stream
+0.02 0.09 0.15 rg 0 801.89 595.28 40 re f
+BT /F2 9 Tf 1 1 1 rg 1 0 0 1 24 816.89 Tm (CENTRAL GO) Tj ET
+BT /F1 7.5 Tf 1 1 1 rg 1 0 0 1 425.28 816.89 Tm (Manual para centrales) Tj ET
+0.84 0.89 0.94 RG 0.5 w 48 35 m 547.28 35 l S
+BT /F1 7 Tf 0.4 0.47 0.54 rg 1 0 0 1 48 20 Tm (Operacion - despacho - flota - reportes) Tj ET
+BT /F1 7 Tf 0.4 0.47 0.54 rg 1 0 0 1 540.28 20 Tm (9) Tj ET
+BT /F2 18 Tf 0.04 0.15 0.28 rg 1 0 0 1 48 765.89 Tm (8. Analitica, exportaciones y revision del turno) Tj ET
+0.84 0.89 0.94 RG 1 w 48 755.89 m 547.28 755.89 l S
+BT /F1 9.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 48 729.89 Tm (Selecciona un rango horario exacto y revisa el comportamiento de la operacion con metricas) Tj ET
+BT /F1 9.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 48 715.89 Tm (y graficos.) Tj ET
+0.92 0.97 1 rg 48 639.89 238 52 re f
+0.84 0.89 0.94 RG 0.6 w 48 639.89 238 52 re S
+BT /F2 10 Tf 0.04 0.15 0.28 rg 1 0 0 1 58 673.89 Tm (Carreras) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 58 657.89 Tm (Total de operaciones dentro del periodo.) Tj ET
+0.92 0.97 1 rg 309 639.89 238 52 re f
+0.84 0.89 0.94 RG 0.6 w 309 639.89 238 52 re S
+BT /F2 10 Tf 0.04 0.15 0.28 rg 1 0 0 1 319 673.89 Tm (Completadas) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 319 657.89 Tm (Viajes cerrados correctamente.) Tj ET
+0.92 0.97 1 rg 48 565.89 238 64 re f
+0.84 0.89 0.94 RG 0.6 w 48 565.89 238 64 re S
+BT /F2 10 Tf 0.04 0.15 0.28 rg 1 0 0 1 58 611.89 Tm (Efectividad) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 58 595.89 Tm (Relacion entre operaciones completadas y) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 58 583.89 Tm (oportunidades disponibles.) Tj ET
+0.92 0.97 1 rg 309 577.89 238 52 re f
+0.84 0.89 0.94 RG 0.6 w 309 577.89 238 52 re S
+BT /F2 10 Tf 0.04 0.15 0.28 rg 1 0 0 1 319 611.89 Tm (Facturacion) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 319 595.89 Tm (Suma de montos de carreras completadas.) Tj ET
+0.92 0.97 1 rg 48 503.89 238 52 re f
+0.84 0.89 0.94 RG 0.6 w 48 503.89 238 52 re S
+BT /F2 10 Tf 0.04 0.15 0.28 rg 1 0 0 1 58 537.89 Tm (Conduccion) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 58 521.89 Tm (Tiempo acumulado efectivamente en viaje.) Tj ET
+0.92 0.97 1 rg 309 503.89 238 52 re f
+0.84 0.89 0.94 RG 0.6 w 309 503.89 238 52 re S
+BT /F2 10 Tf 0.04 0.15 0.28 rg 1 0 0 1 319 537.89 Tm (Conexion) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 319 521.89 Tm (Tiempo en linea reportado por conductores.) Tj ET
+0.92 0.97 1 rg 48 441.89 238 52 re f
+0.84 0.89 0.94 RG 0.6 w 48 441.89 238 52 re S
+BT /F2 10 Tf 0.04 0.15 0.28 rg 1 0 0 1 58 475.89 Tm (Llamadas) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 58 459.89 Tm (Pedidos, consultas, cancelaciones o reclamos.) Tj ET
+0.92 0.97 1 rg 309 429.89 238 64 re f
+0.84 0.89 0.94 RG 0.6 w 309 429.89 238 64 re S
+BT /F2 10 Tf 0.04 0.15 0.28 rg 1 0 0 1 319 475.89 Tm (Rendimiento) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 319 459.89 Tm (Carreras, rechazos, km, tiempo y montos por) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 319 447.89 Tm (movil.) Tj ET
+BT /F2 11 Tf 0.08 0.59 1 rg 1 0 0 1 48 416.89 Tm (Exportaciones) Tj ET
+BT /F1 8.8 Tf 0.07 0.16 0.23 rg 1 0 0 1 48 394.89 Tm (Central GO permite exportar a Excel y generar un PDF con graficas. Define correctamente) Tj ET
+BT /F1 8.8 Tf 0.07 0.16 0.23 rg 1 0 0 1 48 381.89 Tm (Desde y Hasta para que el documento refleje solo la franja deseada.) Tj ET
+
+endstream
+endobj
+22 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents 21 0 R >>
+endobj
+23 0 obj
+<< /Length 3493 >>
+stream
+0.02 0.09 0.15 rg 0 801.89 595.28 40 re f
+BT /F2 9 Tf 1 1 1 rg 1 0 0 1 24 816.89 Tm (CENTRAL GO) Tj ET
+BT /F1 7.5 Tf 1 1 1 rg 1 0 0 1 425.28 816.89 Tm (Manual para centrales) Tj ET
+0.84 0.89 0.94 RG 0.5 w 48 35 m 547.28 35 l S
+BT /F1 7 Tf 0.4 0.47 0.54 rg 1 0 0 1 48 20 Tm (Operacion - despacho - flota - reportes) Tj ET
+BT /F1 7 Tf 0.4 0.47 0.54 rg 1 0 0 1 540.28 20 Tm (10) Tj ET
+BT /F2 18 Tf 0.04 0.15 0.28 rg 1 0 0 1 48 765.89 Tm (9. Solucion rapida y checklist diario) Tj ET
+0.84 0.89 0.94 RG 1 w 48 755.89 m 547.28 755.89 l S
+1 0.97 0.91 rg 48 665.89 238 64 re f
+0.84 0.89 0.94 RG 0.6 w 48 665.89 238 64 re S
+BT /F2 10 Tf 0.04 0.15 0.28 rg 1 0 0 1 58 711.89 Tm (El conductor no recibe la carrera) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 58 695.89 Tm (Verifica conexion, disponibilidad, sesion y) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 58 683.89 Tm (notificaciones.) Tj ET
+1 0.97 0.91 rg 309 677.89 238 52 re f
+0.84 0.89 0.94 RG 0.6 w 309 677.89 238 52 re S
+BT /F2 10 Tf 0.04 0.15 0.28 rg 1 0 0 1 319 711.89 Tm (No aparece en el mapa) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 319 695.89 Tm (Revisa GPS, permisos, datos y segundo plano.) Tj ET
+1 0.97 0.91 rg 48 591.89 238 64 re f
+0.84 0.89 0.94 RG 0.6 w 48 591.89 238 64 re S
+BT /F2 10 Tf 0.04 0.15 0.28 rg 1 0 0 1 58 637.89 Tm (Una carrera quedo trabada) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 58 621.89 Tm (Revisa el estado antes de desasignar, cancelar o) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 58 609.89 Tm (duplicar.) Tj ET
+1 0.97 0.91 rg 309 603.89 238 52 re f
+0.84 0.89 0.94 RG 0.6 w 309 603.89 238 52 re S
+BT /F2 10 Tf 0.04 0.15 0.28 rg 1 0 0 1 319 637.89 Tm (No llegan notificaciones) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 319 621.89 Tm (Comprueba permisos, conexion, bateria y sonido.) Tj ET
+1 0.97 0.91 rg 48 517.89 238 64 re f
+0.84 0.89 0.94 RG 0.6 w 48 517.89 238 64 re S
+BT /F2 10 Tf 0.04 0.15 0.28 rg 1 0 0 1 58 563.89 Tm (Las metricas no cuadran) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 58 547.89 Tm (Revisa el horario y confirma que las carreras) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 58 535.89 Tm (esten cerradas.) Tj ET
+1 0.97 0.91 rg 309 517.89 238 64 re f
+0.84 0.89 0.94 RG 0.6 w 309 517.89 238 64 re S
+BT /F2 10 Tf 0.04 0.15 0.28 rg 1 0 0 1 319 563.89 Tm (Error persistente) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 319 547.89 Tm (Registra evidencia y escala con todos los) Tj ET
+BT /F1 8.4 Tf 0.07 0.16 0.23 rg 1 0 0 1 319 535.89 Tm (antecedentes.) Tj ET
+BT /F2 11 Tf 0.08 0.59 1 rg 1 0 0 1 48 503.89 Tm (Checklist diario) Tj ET
+BT /F1 8.6 Tf 0.07 0.16 0.23 rg 1 0 0 1 58 481.89 Tm (01  Operadoras con acceso correcto.) Tj ET
+BT /F1 8.6 Tf 0.07 0.16 0.23 rg 1 0 0 1 58 464.89 Tm (02  Conductores registrados y aprobados.) Tj ET
+BT /F1 8.6 Tf 0.07 0.16 0.23 rg 1 0 0 1 58 447.89 Tm (03  Vehiculos correctamente asociados.) Tj ET
+BT /F1 8.6 Tf 0.07 0.16 0.23 rg 1 0 0 1 58 430.89 Tm (04  GPS actualizado en moviles activos.) Tj ET
+BT /F1 8.6 Tf 0.07 0.16 0.23 rg 1 0 0 1 58 413.89 Tm (05  Notificaciones y sonido habilitados.) Tj ET
+BT /F1 8.6 Tf 0.07 0.16 0.23 rg 1 0 0 1 58 396.89 Tm (06  Se puede crear una carrera de prueba.) Tj ET
+BT /F1 8.6 Tf 0.07 0.16 0.23 rg 1 0 0 1 58 379.89 Tm (07  Asignacion y cambios de estado responden.) Tj ET
+BT /F1 8.6 Tf 0.07 0.16 0.23 rg 1 0 0 1 58 362.89 Tm (08  No hay carreras antiguas abiertas.) Tj ET
+BT /F1 8.6 Tf 0.07 0.16 0.23 rg 1 0 0 1 58 345.89 Tm (09  Al cierre, revisar analitica y exportar el turno.) Tj ET
+
+endstream
+endobj
+24 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents 23 0 R >>
+endobj
+xref
+0 25
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000186 00000 n 
+0000000283 00000 n 
+0000000385 00000 n 
+0000001875 00000 n 
+0000002017 00000 n 
+0000004969 00000 n 
+0000005111 00000 n 
+0000008654 00000 n 
+0000008797 00000 n 
+0000012038 00000 n 
+0000012182 00000 n 
+0000015484 00000 n 
+0000015628 00000 n 
+0000018255 00000 n 
+0000018399 00000 n 
+0000021254 00000 n 
+0000021398 00000 n 
+0000024153 00000 n 
+0000024297 00000 n 
+0000027684 00000 n 
+0000027828 00000 n 
+0000031374 00000 n 
+trailer
+<< /Size 25 /Root 1 0 R >>
+startxref
+31518
+%%EOF

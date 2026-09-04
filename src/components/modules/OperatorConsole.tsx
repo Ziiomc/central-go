@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowDown, ArrowLeft, CalendarClock, Car, Check, ChevronUp, Eye, GripVertical, LayoutPanelTop, Loader2, MapPin, Navigation, Pencil, PhoneCall, Pin, Plus, Power, RotateCcw, Search, Trash2, UserPlus, UserRound, Wand2, XCircle, Zap } from 'lucide-react';
+import { ArrowDown, ArrowLeft, CalendarClock, Car, Check, ChevronUp, Eye, GripVertical, LayoutPanelTop, Loader2, MapPin, Navigation, Pencil, PhoneCall, Pin, Plus, Power, RotateCcw, Search, ShoppingCart, Trash2, UserPlus, UserRound, Wand2, XCircle, Zap } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { DRIVER_STATUS_LABELS, TRIP_STATUS_LABELS } from '../../lib/labels';
 import { isQueueConnected, loadDispatchQueue, moveDispatchPriority, setTraditionalDriverAvailability, subscribeDispatchQueue, type DispatchQueueItem } from '../../lib/dispatchPriorityRepository';
+import { requireSupabase } from '../../lib/supabase';
 import { readOperatorDispatchMode, saveOperatorDispatchMode } from '../../lib/operatorDispatchPreference';
 import { RESERVATION_DISPATCH_WINDOW_MS, synchronizedNow, synchronizeServerClock, tripDelayMinutes, tripMinutesUntil, tripReferenceTimeMs, tripUrgency } from '../../lib/tripTiming';
 import type { DispatchMode, Driver, Trip, TripStatus } from '../../types';
@@ -136,6 +137,9 @@ export const OperatorConsole: React.FC = () => {
   const [dispatchModeBusy, setDispatchModeBusy] = useState(false);
   const [dispatchModeMessage, setDispatchModeMessage] = useState('');
   const [now, setNow] = useState(synchronizedNow());
+  const [supermarketDriverIds, setSupermarketDriverIds] = useState<Set<string>>(() => new Set());
+  const [supermarketBusyId, setSupermarketBusyId] = useState<string | null>(null);
+  const [supermarketError, setSupermarketError] = useState('');
 
   useEffect(() => {
     let active = true;
@@ -208,6 +212,57 @@ export const OperatorConsole: React.FC = () => {
     return () => {
       active = false;
       unsubscribe();
+    };
+  }, [currentCompany.id]);
+
+  useEffect(() => {
+    if (currentCompany.id === 'network') {
+      setSupermarketDriverIds(new Set());
+      return;
+    }
+
+    const db = requireSupabase();
+    let active = true;
+    setSupermarketError('');
+
+    const refreshSupermarket = async () => {
+      const { data, error } = await db
+        .from('drivers')
+        .select('id,at_supermarket')
+        .eq('company_id', currentCompany.id)
+        .is('archived_at', null);
+      if (!active) return;
+      if (error) {
+        setSupermarketError('No se pudo sincronizar el estado de supermercado.');
+        return;
+      }
+      setSupermarketDriverIds(new Set((data ?? []).filter((row: any) => Boolean(row.at_supermarket)).map((row: any) => String(row.id))));
+    };
+
+    void refreshSupermarket();
+    const channel = db
+      .channel(`centralgo-supermarket-${currentCompany.id}-${crypto.randomUUID()}`)
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'drivers',
+        filter: `company_id=eq.${currentCompany.id}`,
+      }, (payload) => {
+        if (!active) return;
+        const row = payload.new as { id?: string; at_supermarket?: boolean };
+        if (!row.id) return;
+        setSupermarketDriverIds((current) => {
+          const next = new Set(current);
+          if (row.at_supermarket) next.add(row.id as string);
+          else next.delete(row.id as string);
+          return next;
+        });
+      })
+      .subscribe();
+
+    return () => {
+      active = false;
+      void db.removeChannel(channel);
     };
   }, [currentCompany.id]);
 
@@ -371,6 +426,37 @@ export const OperatorConsole: React.FC = () => {
       try { window.localStorage.setItem(`${PRIORITY_HOLD_KEY}:${currentCompany.id}`, JSON.stringify(next)); } catch { /* preference remains for this session */ }
       return next;
     });
+  };
+
+  const toggleSupermarketStatus = async (driver: Driver) => {
+    if (supermarketBusyId) return;
+    const nextValue = !supermarketDriverIds.has(driver.id);
+    setSupermarketBusyId(driver.id);
+    setSupermarketError('');
+    setSupermarketDriverIds((current) => {
+      const next = new Set(current);
+      if (nextValue) next.add(driver.id);
+      else next.delete(driver.id);
+      return next;
+    });
+
+    try {
+      const { error } = await requireSupabase().rpc('centralgo_operator_set_driver_supermarket', {
+        p_driver_id: driver.id,
+        p_at_supermarket: nextValue,
+      });
+      if (error) throw error;
+    } catch (error) {
+      setSupermarketDriverIds((current) => {
+        const next = new Set(current);
+        if (nextValue) next.delete(driver.id);
+        else next.add(driver.id);
+        return next;
+      });
+      setSupermarketError(error instanceof Error ? error.message : 'No fue posible actualizar el estado de supermercado.');
+    } finally {
+      setSupermarketBusyId(null);
+    }
   };
 
   const activeTrips = useMemo(() => {
@@ -674,6 +760,7 @@ export const OperatorConsole: React.FC = () => {
               const waitingIndex = availableDrivers.findIndex((item) => item.id === driver.id);
               const dragging = dragDriverId === driver.id;
               const vehicle = driver.vehicleId ? vehicleById.get(driver.vehicleId) : undefined;
+              const atSupermarket = supermarketDriverIds.has(driver.id);
               return (
                 <div
                   key={driver.id}
@@ -720,6 +807,17 @@ export const OperatorConsole: React.FC = () => {
                     >
                       <Pin className="h-3.5 w-3.5" />
                     </button>
+                    <button
+                      type="button"
+                      disabled={supermarketBusyId === driver.id}
+                      aria-pressed={atSupermarket}
+                      onClick={() => void toggleSupermarketStatus(driver)}
+                      className={`grid h-8 w-8 place-items-center rounded-lg border transition disabled:opacity-50 ${atSupermarket ? 'border-amber-200/70 bg-amber-400 text-zinc-950 shadow-sm shadow-amber-500/20' : 'border-zinc-700 bg-zinc-900 text-zinc-400 hover:border-amber-400/45 hover:text-amber-200'}`}
+                      title={atSupermarket ? 'Móvil marcado EN SUPERMERCADO · toca para quitar' : 'Marcar este móvil como EN SUPERMERCADO'}
+                      aria-label={`${atSupermarket ? 'Quitar' : 'Marcar'} supermercado para el móvil ${driver.unitNumber}`}
+                    >
+                      {supermarketBusyId === driver.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShoppingCart className="h-3.5 w-3.5" />}
+                    </button>
                   </span>
                   <GripVertical className={`h-4 w-4 shrink-0 ${disconnected ? 'text-rose-400/35' : (paused || inTrip) ? 'text-amber-400/30' : 'text-zinc-700'}`} />
                   <span role="tooltip" className={`pointer-events-none absolute right-[calc(100%+8px)] top-1/2 z-50 hidden w-56 -translate-y-1/2 rounded-xl border bg-zinc-950 p-3 text-left shadow-2xl shadow-black/60 group-hover:block group-focus-visible:block ${disconnected ? 'border-rose-400/35' : (paused || inTrip) ? 'border-amber-400/30' : 'border-emerald-400/25'}`}>
@@ -727,6 +825,7 @@ export const OperatorConsole: React.FC = () => {
                     <span className="mt-1 block truncate text-[9px] text-zinc-400">{driver.phone || 'Sin teléfono registrado'}</span>
                     <span className="mt-1 block truncate text-[9px] text-zinc-500">{vehicle?.licensePlate ? `Patente ${vehicle.licensePlate} · ` : ''}{driver.currentLocation.address || 'Ubicación sin dirección'}</span>
                     <span className={`mt-2 block border-t border-zinc-800 pt-2 text-[9px] font-black ${disconnected ? 'text-rose-300' : (paused || inTrip) ? 'text-amber-300' : 'text-emerald-300'}`}>● {disconnected ? 'DESCONECTADO' : paused ? 'PAUSA' : inTrip ? 'EN CARRERA' : DRIVER_STATUS_LABELS[driver.status]}</span>
+                    {atSupermarket && <span className="mt-1 block rounded-md border border-amber-300/30 bg-amber-400/10 px-1.5 py-1 text-[8px] font-black text-amber-200">CARRITO · EN SUPERMERCADO</span>}
                   </span>
                 </div>
               );
@@ -748,9 +847,10 @@ export const OperatorConsole: React.FC = () => {
               </button>
             </div>
           )}
+          {supermarketError && <div className="border-t border-rose-500/20 bg-rose-500/[0.07] px-3 py-2 text-[8px] font-bold text-rose-200">{supermarketError}</div>}
           <div className="flex items-center justify-between gap-2 rounded-b-2xl border-t border-zinc-800 bg-zinc-950/40 px-3 py-2 text-[8px] font-bold text-zinc-500">
             <span>En fila {queueDrivers.length} · Libres {availableDrivers.length}</span>
-            <span>Sin app {noAppDriverCount}</span>
+            <span className="flex items-center gap-2"><span className="inline-flex items-center gap-1 text-amber-300"><ShoppingCart className="h-3 w-3" />{supermarketDriverIds.size}</span><span>Sin app {noAppDriverCount}</span></span>
           </div>
         </aside>
 
