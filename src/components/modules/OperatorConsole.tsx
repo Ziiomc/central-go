@@ -292,12 +292,16 @@ export const OperatorConsole: React.FC = () => {
   ), [trips]);
 
   const availableDrivers = useMemo(() => queueItems
-    .filter((item) => item.status === 'available' && isQueueConnected(item) && !activeTripDriverIds.has(item.driverId))
+    .filter((item) => Boolean(item.unitNumber.trim()) && item.status === 'available' && isQueueConnected(item) && !activeTripDriverIds.has(item.driverId))
     .sort((a, b) => a.queueOrder - b.queueOrder || a.unitNumber.localeCompare(b.unitNumber, 'es', { numeric: true }))
-    .map((item) => drivers.find((driver) => driver.id === item.driverId))
+    .map((item) => {
+      const driver = drivers.find((candidate) => candidate.id === item.driverId);
+      return driver ? { ...driver, unitNumber: item.unitNumber } : undefined;
+    })
     .filter((driver): driver is Driver => Boolean(driver)), [activeTripDriverIds, drivers, queueItems]);
 
   const queueDrivers = useMemo(() => queueItems
+    .filter((item) => Boolean(item.unitNumber.trim()))
     .filter((item) => activeTripDriverIds.has(item.driverId) || item.serviceEnabled || item.status === 'offline')
     .sort((a, b) => {
       const disconnected = (item: DispatchQueueItem) => item.status === 'offline'
@@ -308,17 +312,21 @@ export const OperatorConsole: React.FC = () => {
       if (aDisconnected && bDisconnected) return a.unitNumber.localeCompare(b.unitNumber, 'es', { numeric: true });
       return sortDispatchQueueByConnection(a, b);
     })
-    .map((item) => drivers.find((driver) => driver.id === item.driverId))
+    .map((item) => {
+      const driver = drivers.find((candidate) => candidate.id === item.driverId);
+      return driver ? { ...driver, unitNumber: item.unitNumber } : undefined;
+    })
     .filter((driver): driver is Driver => Boolean(driver)), [activeTripDriverIds, drivers, queueItems]);
 
   const queuePositionByDriverId = useMemo(() => {
     const positionHolders = queueItems
-      .filter((item) => item.serviceEnabled && item.status !== 'offline' && item.status !== 'sos')
+      .filter((item) => Boolean(item.unitNumber.trim()) && item.serviceEnabled && item.status !== 'offline' && item.status !== 'sos')
       .sort(sortDispatchQueueByConnection);
     return new Map(positionHolders.map((item, index) => [item.driverId, index + 1]));
   }, [queueItems]);
 
   const manualDriversManageable = useMemo(() => queueItems
+    .filter((item) => Boolean(item.unitNumber.trim()))
     .filter((item) => !activeTripDriverIds.has(item.driverId))
     .filter((item) => item.operationMode === 'traditional' || !isQueueConnected(item))
     .filter((item) => !['en_route', 'in_trip', 'sos'].includes(item.status))
@@ -330,7 +338,7 @@ export const OperatorConsole: React.FC = () => {
     return manualDriversManageable.find((item) => item.unitNumber.trim().toLowerCase() === unit) ?? null;
   }, [manualDriversManageable, manualSearch]);
 
-  const noAppDriverCount = useMemo(() => queueItems.filter((item) => !item.userId).length, [queueItems]);
+  const noAppDriverCount = useMemo(() => queueItems.filter((item) => Boolean(item.unitNumber.trim()) && !item.userId).length, [queueItems]);
 
   const restorePriorityHold = async (driverId: string, preferredIndex: number) => {
     let currentQueue = await loadDispatchQueue(currentCompany.id);
