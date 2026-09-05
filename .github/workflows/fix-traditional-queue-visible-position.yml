@@ -1,0 +1,38 @@
+name: Finalize queue visible positions
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/fix-traditional-queue-visible-position.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Keep every active slot holder in visible numbering
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('src/components/modules/OperatorConsole.tsx')
+          text = path.read_text(encoding='utf-8')
+          old = """    const positionHolders = queueItems\n      .filter((item) => item.serviceEnabled && item.status !== 'offline' && item.status !== 'sos')\n      .filter((item) => item.operationMode === 'app' || item.status === 'available')\n      .sort(sortDispatchQueueByConnection);"""
+          new = """    const positionHolders = queueItems\n      .filter((item) => item.serviceEnabled && item.status !== 'offline' && item.status !== 'sos')\n      .sort(sortDispatchQueueByConnection);"""
+          if old not in text:
+              raise SystemExit('Queue position patch anchor not found')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          PY
+      - name: Commit final queue position fix
+        run: |
+          git rm .github/workflows/fix-traditional-queue-visible-position.yml
+          git config user.name "central-go-automation"
+          git config user.email "central-go-automation@users.noreply.github.com"
+          git add src/components/modules/OperatorConsole.tsx
+          git commit -m "Fix visible position for every active queue slot"
+          git push
