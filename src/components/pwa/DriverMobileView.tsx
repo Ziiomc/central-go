@@ -19,6 +19,24 @@ import{uploadOwnAvatar}from'../../lib/profileMediaRepository';
 import{DriverPriorityCounter}from'./DriverPriorityCounter';
 
 const GPS_WANTED_KEY = 'centralgo-driver-gps-wanted';
+const DRIVER_ACTION_TIMEOUT_MS = 15000;
+
+const withDriverActionTimeout = <T,>(operation: Promise<T>): Promise<T> => new Promise<T>((resolve, reject) => {
+  const timer = window.setTimeout(
+    () => reject(new Error('La conexión tardó demasiado. La app quedó disponible para reintentar.')),
+    DRIVER_ACTION_TIMEOUT_MS,
+  );
+  operation.then(
+    (value) => {
+      window.clearTimeout(timer);
+      resolve(value);
+    },
+    (error) => {
+      window.clearTimeout(timer);
+      reject(error);
+    },
+  );
+});
 
 const formatDuration = (seconds: number) => {
   const totalMinutes = Math.max(0, Math.round(seconds / 60));
@@ -48,6 +66,7 @@ export const DriverMobileView: React.FC = () => {
 
   const driver = drivers.find((item) => item.userId === currentUser.id);
   const [isGpsActive, setIsGpsActive] = useState(false);
+  const [gpsStarting, setGpsStarting] = useState(false);
   const [gpsText, setGpsText] = useState('GPS iniciando…');
   const [installHint, setInstallHint] = useState('');
   const [standalone, setStandalone] = useState(() => isPWAStandalone());
@@ -70,6 +89,7 @@ export const DriverMobileView: React.FC = () => {
 
   const gpsWatchId = useRef<number | null>(null);
   const gpsPollId = useRef<number | null>(null);
+  const gpsActivationTimerRef = useRef<number | null>(null);
   const lastGpsSent = useRef<{ at: number; lat: number; lng: number } | null>(null);
   const lastRadioNotificationId = useRef<string | null>(null);
   const radioHistoryTimerRef = useRef<number | null>(null);
@@ -167,6 +187,14 @@ export const DriverMobileView: React.FC = () => {
     void loadFareDestinations(currentCompany.id).then((items) => setTariffs(items.filter((item) => item.active))).catch(() => setTariffs([]));
   }, [profileOpen, currentCompany.id]);
 
+  const finishGpsStarting = () => {
+    if (gpsActivationTimerRef.current !== null) {
+      window.clearTimeout(gpsActivationTimerRef.current);
+      gpsActivationTimerRef.current = null;
+    }
+    setGpsStarting(false);
+  };
+
   const sendGpsPosition = (position: GeolocationPosition, force = false) => {
     if (!driver) return;
     const { latitude, longitude, accuracy, speed } = position.coords;
@@ -180,6 +208,7 @@ export const DriverMobileView: React.FC = () => {
       : Infinity;
     const shouldSend = force || !last || now - last.at >= 7000 || metersApprox >= 10;
 
+    finishGpsStarting();
     setIsGpsActive(true);
     setGpsText(`GPS EN VIVO · ±${Math.round(accuracy)} m${speed != null ? ` · ${Math.round(speed * 3.6)} km/h` : ''}`);
 
@@ -195,9 +224,11 @@ export const DriverMobileView: React.FC = () => {
     navigator.geolocation.getCurrentPosition(
       (position) => sendGpsPosition(position, force),
       (error) => {
+        finishGpsStarting();
         if (error.code === 1) {
           setIsGpsActive(false);
           setGpsText('Ubicación bloqueada · habilítala en permisos del sitio');
+          setActionError('GPS bloqueado. Habilita Ubicación precisa para Central GO en los permisos del iPhone o navegador.');
           localStorage.setItem(GPS_WANTED_KEY, '0');
         } else if (!isGpsActive) {
           setGpsText('Buscando señal GPS…');
@@ -212,6 +243,7 @@ export const DriverMobileView: React.FC = () => {
     if (gpsPollId.current !== null) window.clearInterval(gpsPollId.current);
     gpsWatchId.current = null;
     gpsPollId.current = null;
+    finishGpsStarting();
     setIsGpsActive(false);
     setGpsText('GPS detenido');
     if (rememberOff) localStorage.setItem(GPS_WANTED_KEY, '0');
@@ -220,17 +252,18 @@ export const DriverMobileView: React.FC = () => {
   const startGpsTracking = async () => {
     if (!navigator.geolocation || !driver) return;
     localStorage.setItem(GPS_WANTED_KEY, '1');
-    if (!radioReady) void enableRadioAlerts();
     setGpsText('Solicitando ubicación precisa…');
 
     if (gpsWatchId.current === null) {
       gpsWatchId.current = navigator.geolocation.watchPosition(
         (position) => sendGpsPosition(position),
         (error) => {
+          finishGpsStarting();
           if (error.code === 1) {
             stopGpsTracking(false);
             localStorage.setItem(GPS_WANTED_KEY, '0');
             setGpsText('Ubicación bloqueada · habilítala en permisos del sitio');
+            setActionError('GPS bloqueado. Habilita Ubicación precisa para Central GO en los permisos del iPhone o navegador.');
           } else {
             setGpsText('Reconectando GPS…');
           }
@@ -243,16 +276,24 @@ export const DriverMobileView: React.FC = () => {
     if (gpsPollId.current === null) {
       gpsPollId.current = window.setInterval(() => {
         if (document.visibilityState === 'visible' && localStorage.getItem(GPS_WANTED_KEY) === '1') requestFreshPosition(false);
-      }, 10000);
+      }, 15000);
     }
   };
 
   const activateGpsFromHeader = async () => {
     if (!navigator.geolocation || !driver) {
       setGpsText('GPS no disponible');
+      setActionError('Este dispositivo o navegador no tiene GPS disponible.');
       return;
     }
+    if (gpsStarting) return;
+    setActionError('');
     localStorage.setItem(GPS_WANTED_KEY, '1');
+    setGpsStarting(true);
+    gpsActivationTimerRef.current = window.setTimeout(() => {
+      gpsActivationTimerRef.current = null;
+      setGpsStarting(false);
+    }, 13000);
     if (isGpsActive) {
       requestFreshPosition(true);
       return;
@@ -267,10 +308,7 @@ export const DriverMobileView: React.FC = () => {
 
     const resume = () => {
       if (localStorage.getItem(GPS_WANTED_KEY) !== '1') return;
-      if (document.visibilityState === 'visible') {
-        void startGpsTracking();
-        requestFreshPosition(true);
-      }
+      if (document.visibilityState === 'visible') void startGpsTracking();
     };
     document.addEventListener('visibilitychange', resume);
     window.addEventListener('focus', resume);
@@ -292,6 +330,7 @@ export const DriverMobileView: React.FC = () => {
       window.removeEventListener('pwa-installable', installable);
       if (gpsWatchId.current !== null && navigator.geolocation) navigator.geolocation.clearWatch(gpsWatchId.current);
       if (gpsPollId.current !== null) window.clearInterval(gpsPollId.current);
+      if (gpsActivationTimerRef.current !== null) window.clearTimeout(gpsActivationTimerRef.current);
       if (radioHistoryTimerRef.current !== null) window.clearTimeout(radioHistoryTimerRef.current);
       if (radioToastTimerRef.current !== null) window.clearTimeout(radioToastTimerRef.current);
     };
@@ -313,11 +352,12 @@ export const DriverMobileView: React.FC = () => {
       if (pendingAction === 'reject-offer') return;
       const expiredOffer = incomingOffer;
       setPendingAction('reject-offer');
-      void Promise.resolve(rejectTripOffer(expiredOffer.id, 'Oferta no aceptada dentro de 15 segundos'))
+      void withDriverActionTimeout(Promise.resolve(rejectTripOffer(expiredOffer.id, 'Oferta no aceptada dentro de 15 segundos')))
         .then(() => setIncomingOffer(null))
         .catch((error) => {
           setActionError(error instanceof Error ? error.message : 'No fue posible rechazar la oferta. Inténtalo nuevamente.');
           setOfferTimer(15);
+          window.dispatchEvent(new CustomEvent('centralgo:driver-resync'));
         })
         .finally(() => setPendingAction(null));
       return;
@@ -355,7 +395,7 @@ export const DriverMobileView: React.FC = () => {
     setPendingAction(key);
     setActionError('');
     try {
-      await action();
+      await withDriverActionTimeout(Promise.resolve().then(action));
       onSuccess?.();
       return true;
     } catch (error) {
@@ -369,7 +409,6 @@ export const DriverMobileView: React.FC = () => {
 
   const acceptOffer = async () => {
     if (!incomingOffer) return;
-    if (!radioReady) void enableRadioAlerts();
     const offerId = incomingOffer.id;
     await runDriverAction('accept-offer', () => Promise.resolve(updateTripStatus(offerId, 'en_route')), () => setIncomingOffer(null));
   };
@@ -404,7 +443,6 @@ export const DriverMobileView: React.FC = () => {
   };
 
   const setStatus = async (status: 'available' | 'paused' | 'offline') => {
-    if (!radioReady) void enableRadioAlerts();
     const changed = await runDriverAction(`status-${status}`, () => Promise.resolve(toggleDriverAvailability(driver.id, status)));
     if (!changed) return;
     if (status === 'offline') stopGpsTracking();
@@ -488,8 +526,16 @@ export const DriverMobileView: React.FC = () => {
             </div>
           </div>
           <div className="flex items-center gap-1.5">
-            <button type="button" onClick={() => void activateGpsFromHeader()} className={`grid h-11 w-11 touch-manipulation place-items-center rounded-xl border transition active:scale-95 ${isGpsActive ? 'border-blue-400/45 bg-blue-500/15 text-blue-200 shadow-[0_0_18px_rgba(59,130,246,0.16)]' : 'border-amber-400/40 bg-amber-500/10 text-amber-200'}`} aria-label={isGpsActive ? 'GPS activo. Actualizar ubicación' : 'Activar GPS'} title={isGpsActive ? 'GPS activo' : 'Activar GPS'}>
+            <button
+              type="button"
+              onClick={() => void activateGpsFromHeader()}
+              aria-pressed={isGpsActive}
+              aria-label={isGpsActive ? 'GPS activo. Actualizar ubicación' : gpsStarting ? 'Activando GPS' : 'Activar GPS'}
+              title={isGpsActive ? 'GPS activo' : gpsStarting ? 'Activando GPS…' : 'GPS inactivo'}
+              className={`grid h-11 w-11 touch-manipulation place-items-center rounded-xl border transition active:scale-95 ${isGpsActive ? 'border-blue-300/70 bg-gradient-to-br from-blue-400 via-blue-500 to-blue-700 text-white shadow-[0_0_20px_rgba(59,130,246,0.32)]' : 'border-zinc-600 bg-gradient-to-br from-zinc-600 via-zinc-700 to-zinc-800 text-zinc-200 shadow-[0_6px_16px_rgba(0,0,0,0.24)]'} ${gpsStarting && !isGpsActive ? 'animate-pulse' : ''}`}
+            >
               <Navigation className="h-5 w-5" />
+              <span className="sr-only" aria-live="polite">{gpsText}</span>
             </button>
             <button onClick={() => setProfileOpen(true)} className="flex h-11 w-11 touch-manipulation items-center justify-center overflow-hidden rounded-full border border-zinc-700 bg-zinc-950 text-zinc-300" aria-label="Perfil y analíticas">
               {driver.photoUrl||currentUser.avatarUrl?<img src={driver.photoUrl||currentUser.avatarUrl} alt="Mi perfil" className="h-full w-full object-cover"/>:<UserCircle2 className="h-5 w-5" />}
@@ -517,15 +563,6 @@ export const DriverMobileView: React.FC = () => {
             {radioHistoryOpen && <div className="border-t border-zinc-800 px-3 py-2 text-[11px] text-zinc-200">{newestRadioMessage.message}</div>}
           </section>
         )}
-
-        <section className={`rounded-xl border p-3 ${isGpsActive ? 'border-blue-500/25 bg-blue-500/[0.05]' : 'border-amber-500/25 bg-amber-500/[0.05]'}`}>
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex min-w-0 items-center gap-2"><Navigation className={`h-4 w-4 ${isGpsActive ? 'text-blue-300' : 'text-amber-300'}`} /><div className="min-w-0"><p className="truncate text-[11px] font-bold text-zinc-100">{gpsText}</p><p className="truncate text-[8px] text-zinc-400">{driver.currentLocation.address || 'Ubicación pendiente'}</p></div></div>
-            <span className={`shrink-0 rounded-lg border px-2 py-1 text-[8px] font-black ${isGpsActive ? 'border-blue-400/30 bg-blue-400/10 text-blue-200' : 'border-amber-400/30 bg-amber-400/10 text-amber-200'}`}>{isGpsActive ? 'GPS ACTIVO' : 'REVISAR GPS'}</span>
-          </div>
-          {!isGpsActive && <p className="mt-2 text-[8px] leading-relaxed text-amber-100/80">Toca el icono GPS del encabezado para volver a solicitar ubicación. Si el navegador bloqueó el permiso, habilita Ubicación en los permisos del sitio o de la app.</p>}
-          {isIOSDevice() && <p className="mt-2 text-[8px] leading-relaxed text-zinc-400">iPhone: mantén Ubicación Precisa habilitada. Al volver desde Mapas, Central GO fuerza una nueva lectura automáticamente.</p>}
-        </section>
 
         <section className="rounded-xl border border-zinc-800 bg-[#121215] p-1.5">
           <div className="grid grid-cols-3 gap-1.5">
@@ -560,7 +597,7 @@ export const DriverMobileView: React.FC = () => {
           </section>
         )}
 
-        {!activeTrip && !incomingOffer && <section className="rounded-xl border border-zinc-800 bg-[#121215] px-4 py-4 text-center"><Navigation className="mx-auto h-7 w-7 text-blue-400" /><h3 className="mt-2 text-[12px] font-black">Esperando asignación</h3><p className="mt-1 text-[10px] text-zinc-500">{isGpsActive ? 'Ubicación GPS activa para la central.' : 'Activa GPS para aparecer en el mapa.'}</p></section>}
+        {!activeTrip && !incomingOffer && <section className="rounded-xl border border-zinc-800 bg-[#121215] px-4 py-4 text-center"><Navigation className={`mx-auto h-7 w-7 ${isGpsActive ? 'text-blue-400' : 'text-zinc-600'}`} /><h3 className="mt-2 text-[12px] font-black">Esperando asignación</h3><p className="mt-1 text-[10px] text-zinc-500">{isGpsActive ? 'Ubicación GPS activa para la central.' : gpsStarting ? 'Activando ubicación GPS…' : 'Activa GPS desde el botón superior para aparecer en el mapa.'}</p></section>}
 
         <section className="border-t border-zinc-800 pt-2">{driver.sosActive ? <button disabled={Boolean(pendingAction)} onClick={() => void closeSos()} className="flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-500/40 bg-zinc-800 py-3 text-[10px] font-black text-emerald-300 disabled:opacity-40"><ShieldAlert className="h-4 w-4" />{pendingAction==='close-sos'?'Confirmando…':'SOS activo · cerrar emergencia'}</button> : <button disabled={Boolean(pendingAction)} onClick={() => setSosConfirmOpen(true)} className="flex w-full items-center justify-center gap-2 rounded-xl bg-red-600 py-3.5 text-[11px] font-black shadow-lg disabled:opacity-40"><ShieldAlert className="h-5 w-5" />SOS DE EMERGENCIA</button>}</section>
       </div>
