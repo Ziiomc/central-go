@@ -24,96 +24,32 @@ jobs:
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
-
           path = Path('src/components/modules/OperatorConsole.tsx')
           text = path.read_text(encoding='utf-8')
-
-          old = """  const availableDrivers = useMemo(() => queueItems
-    .filter((item) => item.status === 'available' && isQueueConnected(item) && !activeTripDriverIds.has(item.driverId))
-    .sort((a, b) => a.queueOrder - b.queueOrder || a.unitNumber.localeCompare(b.unitNumber, 'es', { numeric: true }))
-    .map((item) => drivers.find((driver) => driver.id === item.driverId))
-    .filter((driver): driver is Driver => Boolean(driver)), [activeTripDriverIds, drivers, queueItems]);
-
-  const queueDrivers = useMemo(() => queueItems
-    .filter((item) => activeTripDriverIds.has(item.driverId) || item.serviceEnabled || item.status === 'offline')
-    .sort((a, b) => {
-      const disconnected = (item: DispatchQueueItem) => item.status === 'offline'
-        || (item.operationMode === 'app' && item.status === 'available' && !isQueueConnected(item));
-      const aDisconnected = disconnected(a);
-      const bDisconnected = disconnected(b);
-      if (aDisconnected !== bDisconnected) return aDisconnected ? 1 : -1;
-      if (aDisconnected && bDisconnected) return a.unitNumber.localeCompare(b.unitNumber, 'es', { numeric: true });
-      return sortDispatchQueueByConnection(a, b);
-    })
-    .map((item) => drivers.find((driver) => driver.id === item.driverId))
-    .filter((driver): driver is Driver => Boolean(driver)), [activeTripDriverIds, drivers, queueItems]);
-
-  const queuePositionByDriverId = useMemo(() => {
-    const positionHolders = queueItems
-      .filter((item) => item.serviceEnabled && item.status !== 'offline' && item.status !== 'sos')
-      .sort(sortDispatchQueueByConnection);
-    return new Map(positionHolders.map((item, index) => [item.driverId, index + 1]));
-  }, [queueItems]);"""
-
-          new = """  const availableDrivers = useMemo(() => queueItems
-    .filter((item) => Boolean(item.unitNumber.trim()) && item.status === 'available' && isQueueConnected(item) && !activeTripDriverIds.has(item.driverId))
-    .sort((a, b) => a.queueOrder - b.queueOrder || a.unitNumber.localeCompare(b.unitNumber, 'es', { numeric: true }))
-    .map((item) => {
-      const driver = drivers.find((candidate) => candidate.id === item.driverId);
-      return driver ? { ...driver, unitNumber: item.unitNumber } : undefined;
-    })
-    .filter((driver): driver is Driver => Boolean(driver)), [activeTripDriverIds, drivers, queueItems]);
-
-  const queueDrivers = useMemo(() => queueItems
-    .filter((item) => Boolean(item.unitNumber.trim()))
-    .filter((item) => activeTripDriverIds.has(item.driverId) || item.serviceEnabled || item.status === 'offline')
-    .sort((a, b) => {
-      const disconnected = (item: DispatchQueueItem) => item.status === 'offline'
-        || (item.operationMode === 'app' && item.status === 'available' && !isQueueConnected(item));
-      const aDisconnected = disconnected(a);
-      const bDisconnected = disconnected(b);
-      if (aDisconnected !== bDisconnected) return aDisconnected ? 1 : -1;
-      if (aDisconnected && bDisconnected) return a.unitNumber.localeCompare(b.unitNumber, 'es', { numeric: true });
-      return sortDispatchQueueByConnection(a, b);
-    })
-    .map((item) => {
-      const driver = drivers.find((candidate) => candidate.id === item.driverId);
-      return driver ? { ...driver, unitNumber: item.unitNumber } : undefined;
-    })
-    .filter((driver): driver is Driver => Boolean(driver)), [activeTripDriverIds, drivers, queueItems]);
-
-  const queuePositionByDriverId = useMemo(() => {
-    const positionHolders = queueItems
-      .filter((item) => Boolean(item.unitNumber.trim()) && item.serviceEnabled && item.status !== 'offline' && item.status !== 'sos')
-      .sort(sortDispatchQueueByConnection);
-    return new Map(positionHolders.map((item, index) => [item.driverId, index + 1]));
-  }, [queueItems]);"""
-
-          if old not in text:
-              raise SystemExit('No se encontro el bloque principal de fila esperado')
+          old = "    .filter((item) => item.status === 'available' && isQueueConnected(item) && !activeTripDriverIds.has(item.driverId))"
+          new = "    .filter((item) => Boolean(item.unitNumber.trim()) && item.status === 'available' && isQueueConnected(item) && !activeTripDriverIds.has(item.driverId))"
+          if old not in text: raise SystemExit('Filtro de disponibles no encontrado')
           text = text.replace(old, new, 1)
-
-          old2 = """  const manualDriversManageable = useMemo(() => queueItems
-    .filter((item) => !activeTripDriverIds.has(item.driverId))
-    .filter((item) => item.operationMode === 'traditional' || !isQueueConnected(item))
-    .filter((item) => !['en_route', 'in_trip', 'sos'].includes(item.status))
-    .sort((a, b) => a.unitNumber.localeCompare(b.unitNumber, 'es', { numeric: true })), [activeTripDriverIds, queueItems]);"""
-          new2 = """  const manualDriversManageable = useMemo(() => queueItems
-    .filter((item) => Boolean(item.unitNumber.trim()))
-    .filter((item) => !activeTripDriverIds.has(item.driverId))
-    .filter((item) => item.operationMode === 'traditional' || !isQueueConnected(item))
-    .filter((item) => !['en_route', 'in_trip', 'sos'].includes(item.status))
-    .sort((a, b) => a.unitNumber.localeCompare(b.unitNumber, 'es', { numeric: true })), [activeTripDriverIds, queueItems]);"""
-          if old2 not in text:
-              raise SystemExit('No se encontro el bloque de gestion manual esperado')
-          text = text.replace(old2, new2, 1)
-
-          old3 = "const noAppDriverCount = useMemo(() => queueItems.filter((item) => !item.userId).length, [queueItems]);"
-          new3 = "const noAppDriverCount = useMemo(() => queueItems.filter((item) => Boolean(item.unitNumber.trim()) && !item.userId).length, [queueItems]);"
-          if old3 not in text:
-              raise SystemExit('No se encontro el contador sin app esperado')
-          text = text.replace(old3, new3, 1)
-
+          old = "  const queueDrivers = useMemo(() => queueItems\n    .filter((item) => activeTripDriverIds.has(item.driverId) || item.serviceEnabled || item.status === 'offline')"
+          new = "  const queueDrivers = useMemo(() => queueItems\n    .filter((item) => Boolean(item.unitNumber.trim()))\n    .filter((item) => activeTripDriverIds.has(item.driverId) || item.serviceEnabled || item.status === 'offline')"
+          if old not in text: raise SystemExit('Filtro principal de fila no encontrado')
+          text = text.replace(old, new, 1)
+          old = "    .map((item) => drivers.find((driver) => driver.id === item.driverId))"
+          new = "    .map((item) => {\n      const driver = drivers.find((candidate) => candidate.id === item.driverId);\n      return driver ? { ...driver, unitNumber: item.unitNumber } : undefined;\n    })"
+          if text.count(old) < 2: raise SystemExit('Mapeo de movil esperado no encontrado dos veces')
+          text = text.replace(old, new, 2)
+          old = "      .filter((item) => item.serviceEnabled && item.status !== 'offline' && item.status !== 'sos')"
+          new = "      .filter((item) => Boolean(item.unitNumber.trim()) && item.serviceEnabled && item.status !== 'offline' && item.status !== 'sos')"
+          if old not in text: raise SystemExit('Numeracion visible de fila no encontrada')
+          text = text.replace(old, new, 1)
+          old = "  const manualDriversManageable = useMemo(() => queueItems\n    .filter((item) => !activeTripDriverIds.has(item.driverId))"
+          new = "  const manualDriversManageable = useMemo(() => queueItems\n    .filter((item) => Boolean(item.unitNumber.trim()))\n    .filter((item) => !activeTripDriverIds.has(item.driverId))"
+          if old not in text: raise SystemExit('Gestion manual no encontrada')
+          text = text.replace(old, new, 1)
+          old = "const noAppDriverCount = useMemo(() => queueItems.filter((item) => !item.userId).length, [queueItems]);"
+          new = "const noAppDriverCount = useMemo(() => queueItems.filter((item) => Boolean(item.unitNumber.trim()) && !item.userId).length, [queueItems]);"
+          if old not in text: raise SystemExit('Contador sin app no encontrado')
+          text = text.replace(old, new, 1)
           path.write_text(text, encoding='utf-8')
           PY
 
@@ -318,23 +254,17 @@ jobs:
 
           rollback;
           SQL
-
           python3 - <<'PY'
           from pathlib import Path
           path = Path('.github/workflows/operator-chaos.yml')
           text = path.read_text(encoding='utf-8')
-          anchor = """      - name: Romper la app como usuarios torpes
-        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/operator-chaos-misuse.sql
-"""
-          replacement = anchor + """      - name: Impedir moviles activos sin numero
-        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/blank-mobile-queue-regression.sql
-"""
-          if anchor not in text:
-              raise SystemExit('No se encontro el paso final del workflow de caos')
-          path.write_text(text.replace(anchor, replacement, 1), encoding='utf-8')
+          anchor = "      - name: Romper la app como usuarios torpes\n        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/operator-chaos-misuse.sql\n"
+          addition = "      - name: Impedir moviles activos sin numero\n        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/blank-mobile-queue-regression.sql\n"
+          if anchor not in text: raise SystemExit('Paso final del workflow de caos no encontrado')
+          path.write_text(text.replace(anchor, anchor + addition, 1), encoding='utf-8')
           PY
 
-      - name: Validar TypeScript, contratos y build
+      - name: Validar TypeScript contratos y build
         shell: bash
         run: |
           set -euo pipefail
