@@ -314,7 +314,6 @@ export const OperatorConsole: React.FC = () => {
   const queuePositionByDriverId = useMemo(() => {
     const positionHolders = queueItems
       .filter((item) => item.serviceEnabled && item.status !== 'offline' && item.status !== 'sos')
-      .filter((item) => item.operationMode === 'app' || item.status === 'available')
       .sort(sortDispatchQueueByConnection);
     return new Map(positionHolders.map((item, index) => [item.driverId, index + 1]));
   }, [queueItems]);
