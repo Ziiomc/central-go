@@ -71,3 +71,5 @@ jobs:
           done
       - name: Romper la app como usuarios torpes
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/operator-chaos-misuse.sql
+      - name: Impedir moviles activos sin numero
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/blank-mobile-queue-regression.sql
